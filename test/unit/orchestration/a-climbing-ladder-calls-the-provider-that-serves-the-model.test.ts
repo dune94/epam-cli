@@ -110,7 +110,12 @@ describe('a climbing ladder calls the provider that serves the model', () => {
     // Found 2026-09-30: every run of this file appended six "model call produced no usable
     // output" episodes for story S-1 to orchestrations/agents/kb/healing-events.jsonl — the
     // engine's knowledge base, which real agents read. A test's failures belong in its own dir.
-    const engineKb = join(__dirname, '../../../orchestrations/agents/kb/healing-events.jsonl');
+    // ASKED of the store, never reconstructed: where episodes land when no KB_ROOT and no project
+    // is declared — the engine's own knowledge base.
+    const prevProject = process.env.EPAM_PROJECT_CONFIG_DIR; delete process.env.EPAM_PROJECT_CONFIG_DIR;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const engineKb: string = require(join(__dirname, '../../../orchestrations/scripts/lib/kb-store.js'))._paths().episodes;
+    if (prevProject !== undefined) process.env.EPAM_PROJECT_CONFIG_DIR = prevProject;
     const before = existsSync(engineKb) ? readFileSync(engineKb, 'utf8') : null;
     const s = setup();
     invoke(s);

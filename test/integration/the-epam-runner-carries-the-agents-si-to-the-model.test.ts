@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { MiniMockServer } from './lib/mini-mockserver';
+import { vendorEdge } from '../mock-agent/harness';
 
 const ROOT = join(__dirname, '../../');
 const HUB = join(ROOT, 'orchestrations/scripts/llm-handler.sh');
@@ -32,12 +33,9 @@ const SETS = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/provider-
 const SET = Object.keys(SETS).find((s) => EPAM_PROVIDERS.includes(s)) as string;
 const LADDERS = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config', SETS[SET].settingsFile), 'utf8')).ladders;
 const MODEL = LADDERS[Object.keys(LADDERS)[0]].startModel as string;
-// Every epam-routed provider points at the stand-in vendor, so wherever the hub routes MODEL, the
-// request is recorded.
-const VENDOR_ENV = (url: string) => Object.fromEntries(EPAM_PROVIDERS.flatMap((p) => {
-  const P = p.toUpperCase().replace(/-/g, '_');
-  return [[`${P}_BASE_URL`, url], [`${P}_API_KEY`, 'stand-in']];
-}));
+// The vendor edge exactly as the £0 harness builds it (test/mock-agent/harness.ts vendorEdge — one
+// definition): every vendor this set declares a credential for answers at the stand-in.
+const VENDOR_ENV = (url: string) => vendorEdge({ install: ROOT, config: { EPAM_PROVIDER_SET: SET }, agent: { url } } as never);
 const firstLine = (s: string) => s.split('\n').find((l) => l.trim().length > 20) as string;
 
 const mock = new MiniMockServer();

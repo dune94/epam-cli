@@ -15,3 +15,14 @@ export function currentPromptDigest(): string {
   if (typeof d !== 'string' || d.length < 32) throw new Error('promptInputsDigest returned no digest — a fixture built on it would prove nothing');
   return d;
 }
+
+/**
+ * A CODELINE AS A COMPLETED PROVISIONING LEAVES IT — written by the builder's own
+ * writeCompletionMarker, so whatever a completion records (the digest, and since 2026-09-30 the
+ * minted agents it was built with) is what the fixture holds. Never retyped here.
+ */
+export function completeCodeline(projectConfigDir: string, codeline: string): void {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const { writeCompletionMarker } = require(BUILDER);
+  writeCompletionMarker({ outDir: join(projectConfigDir, 'prompts'), codeline, provisioned: 1 });
+}

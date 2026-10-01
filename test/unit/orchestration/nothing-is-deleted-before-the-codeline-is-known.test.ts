@@ -21,7 +21,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { engineSource } from '../../lib/engine-source';
-import { currentPromptDigest } from '../../helpers/prompt-marker';
+import { currentPromptDigest, completeCodeline } from '../../helpers/prompt-marker';
 
 const RESET = join(__dirname, '../../../orchestrations/scripts/pre-run-reset.sh');
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
@@ -76,9 +76,7 @@ function project(opts: { marker?: string | null } = {}) {
   }
   writeFileSync(join(cfg, 'prompts', 'roster-review.json'), JSON.stringify({ body: 'THE COMPLETED BODY' }));
   writeFileSync(join(cfg, '.prompt-cache', 'roster-review.json'), JSON.stringify({ base: 'a', reviewed: true }));
-  if (opts.marker !== null) {
-    writeFileSync(join(cfg, '.prompt-cache', `.complete-${opts.marker || CODELINE}`), currentPromptDigest());
-  }
+  if (opts.marker !== null) completeCodeline(cfg, opts.marker || CODELINE);
   return { root, cfg };
 }
 
@@ -153,7 +151,7 @@ describe('pre-run-reset defers what it cannot decide', () => {
 });
 
 /** Drives the real _run_agent_mint with a recording NODE_BIN, and keeps the fixture for inspection. */
-function invokeMint(opts: { marker: string | null; prdCodelines?: string[]; pending: boolean }) {
+function invokeMint(opts: { marker: string | null; prdCodelines?: string[]; pending: boolean; handMarker?: boolean; afterComplete?: (cfg: string) => void }) {
   const dir = mkdtempSync(join(tmpdir(), 'order-mint-'));
   dirs.push(dir);
   const cfg = join(dir, 'projects', 'metrolinx');
@@ -167,7 +165,11 @@ function invokeMint(opts: { marker: string | null; prdCodelines?: string[]; pend
     writeFileSync(join(cfg, f), JSON.stringify({ from: 'the previous run' }));
   }
   writeFileSync(join(cfg, 'prompts', 'roster-review.json'), JSON.stringify({ body: 'PREVIOUS' }));
-  if (opts.marker) writeFileSync(join(cfg, '.prompt-cache', `.complete-${opts.marker}`), currentPromptDigest());
+  // A COMPLETED CODELINE is what the builder's completion leaves; a hand-written marker is what an
+  // install can carry without one (committed markers beside another codeline's agents, 2026-09-30).
+  if (opts.marker && opts.handMarker) writeFileSync(join(cfg, '.prompt-cache', `.complete-${opts.marker}`), currentPromptDigest());
+  else if (opts.marker) completeCodeline(cfg, opts.marker);
+  if (opts.afterComplete) opts.afterComplete(cfg);
   if (opts.pending) writeFileSync(join(cfg, '.prompt-cache', '.reset-pending'), '');
   writeFileSync(join(cfg, 'prd.json'), JSON.stringify({
     phases: [], stories: [],
@@ -227,6 +229,26 @@ describe('the mint settles the deferred decision, once the codeline is known', (
     expect(has(r.cfg, join('prompts', 'roster-review.json'))).toBe(true);
     expect(r.mintCalls, 'the mint ran for a codeline that had already completed').toBe(0);
     expect(has(r.cfg, PENDING), 'the deferred decision was never marked settled').toBe(false);
+  });
+
+  it('RESTORES the codeline\'s OWN minted agents when another codeline\'s mint left its files on disk', () => {
+    // Live AMSD-2974 run 3 (2026-09-30): next.gotransit.com's marker made the mint skip while the
+    // registries on disk had been minted for secure.gotransit.com; the roster review rejected an
+    // investigator briefed for the wrong codeline. The marker vouched for agents it never saw.
+    const r = invokeMint({ marker: CODELINE, prdCodelines: [CODELINE], pending: true,
+      afterComplete: (cfg) => { for (const f of REGISTRIES) writeFileSync(join(cfg, f), JSON.stringify({ from: 'another codeline\'s mint' })); } });
+    expect(r.mintCalls, `the mint ran for a codeline that had completed:\n${r.out.slice(-1500)}`).toBe(0);
+    for (const f of REGISTRIES) {
+      expect(readFileSync(join(r.cfg, f), 'utf8'), `${f} is another codeline's — the marker vouched for agents it never recorded`)
+        .toBe(JSON.stringify({ from: 'the previous run' }));
+    }
+  });
+
+  it('a marker that recorded NO minted agents is not a completed codeline — the mint runs', () => {
+    // The committed markers an install can carry beside agents minted for another codeline.
+    const r = invokeMint({ marker: CODELINE, prdCodelines: [CODELINE], pending: true, handMarker: true });
+    expect(r.mintCalls, `a marker with no recorded agents skipped the mint:\n${r.out.slice(-1500)}`).toBe(1);
+    for (const f of REGISTRIES) expect(has(r.cfg, f), `${f} of unknown origin survived`).toBe(false);
   });
 
   it('DELETES the assets when the detected codeline is a DIFFERENT one', () => {

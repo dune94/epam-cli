@@ -230,6 +230,17 @@ describe('the mechanism, driven end to end against a real tree', () => {
     ].join('\n')).toContain('THIS_INSTALL');
   });
 
+  it('A CODELINE\'S RECORDED AGENTS SURVIVE — the install\'s own, never the ref\'s', () => {
+    // The minted agents a codeline's completion recorded (project-prompt-builder.js, 2026-09-30) are
+    // what lets that codeline skip the mint later. Overwritten by an update, the marker would vouch
+    // for agents some other run minted — AMSD-2974 run 3, rebuilt by hand into a republish.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const b = require(join(__dirname, '../../../orchestrations/scripts/lib/project-prompt-builder.js'));
+    const p = join(b.mintedSnapshotDir('orchestrations/projects/metrolinx', 'next.gotransit.com'), b.MINTED_FILES[0]);
+    const { out } = roundTrip({ [p]: '{"agents":{"THIS_INSTALL":{}}}' }, { [p]: '{"agents":{"FROM_THE_REF":{}}}' });
+    expect(out[p], 'the update replaced this install\'s recorded agents for the codeline with the ref\'s').toContain('THIS_INSTALL');
+  });
+
   it('and a FRESH install still receives the ref\'s cache', () => {
     // The other end: excluding the path outright would leave a first install with no cache at
     // all, which is why this is on the preserve list and not the tar --exclude list.

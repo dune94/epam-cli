@@ -966,6 +966,58 @@ function codelinePromptsComplete({ projectConfigDir, codeline, templatesDir, reg
 }
 
 /**
+ * THE MINT'S OUTPUTS — the files a codeline's agents live in. Defined HERE, once: the mint's clean
+ * slate (lib/mint-and-spec.sh, via mintedFiles) clears exactly these, and a completion records
+ * exactly these. Per project on disk; per codeline in the cache, as the prompts are.
+ */
+const MINTED_FILES = ['roster.json', 'project-roles.json', 'project-investigators.json', 'agent-profiles.json'];
+
+function mintedSnapshotDir(projectConfigDir, codeline) {
+  return path.join(String(projectConfigDir || ''), '.prompt-cache', codelineSegment(codeline) || '_', 'minted');
+}
+
+function hasMintedSnapshot({ projectConfigDir, codeline } = {}) {
+  const d = mintedSnapshotDir(projectConfigDir, codeline);
+  return fs.existsSync(d) && fs.readdirSync(d).some((f) => MINTED_FILES.includes(f));
+}
+
+/**
+ * Record the minted files on disk as THIS codeline's (replacing any earlier record). None on disk
+ * records none — the prompts may still be complete, but their agents can then never be reused.
+ */
+function snapshotMinted({ projectConfigDir, codeline }) {
+  const d = mintedSnapshotDir(projectConfigDir, codeline);
+  fs.rmSync(d, { recursive: true, force: true });
+  fs.mkdirSync(d, { recursive: true });
+  let n = 0;
+  for (const f of MINTED_FILES) {
+    const src = path.join(projectConfigDir, f);
+    if (fs.existsSync(src)) { fs.copyFileSync(src, path.join(d, f)); n += 1; }
+  }
+  if (!n) fs.rmSync(d, { recursive: true, force: true });
+  return n;
+}
+
+/**
+ * Put THIS codeline's recorded agents on disk — every minted file it recorded, and none another
+ * codeline left behind. Returns false (touching nothing) when the codeline recorded none.
+ */
+function restoreMinted({ projectConfigDir, codeline } = {}) {
+  if (!hasMintedSnapshot({ projectConfigDir, codeline })) return false;
+  const d = mintedSnapshotDir(projectConfigDir, codeline);
+  for (const f of MINTED_FILES) {
+    const rec = path.join(d, f); const dst = path.join(projectConfigDir, f);
+    if (fs.existsSync(rec)) fs.copyFileSync(rec, dst); else fs.rmSync(dst, { force: true });
+  }
+  return true;
+}
+
+/** The mint's clean slate: every minted file, removed. */
+function clearMinted({ projectConfigDir } = {}) {
+  for (const f of MINTED_FILES) fs.rmSync(path.join(String(projectConfigDir || ''), f), { force: true });
+}
+
+/**
  * WHERE THE COMPLETION MARKER LIVES — beside the cache, never inside prompts/.
  *
  * pre-run-reset deletes and recreates prompts/ on any run that is not reusing, so a marker in
@@ -1015,6 +1067,10 @@ function writeCompletionMarker({ outDir, codeline, provisioned, templatesDir, re
     if (!(Number(provisioned) > 0)) return;
     const p = _markerPath(outDir, String(codeline).trim());
     fs.mkdirSync(path.dirname(p), { recursive: true });
+    // The agents this codeline was provisioned with, recorded beside its prompts. The mint keeps a
+    // codeline's agents only by restoring this record (codeline_minted_restore) — a marker alone
+    // says the prompts are complete, never whose agents are on disk.
+    snapshotMinted({ projectConfigDir: path.join(outDir, '..'), codeline: String(codeline).trim() });
     // The digest of what was built from — never an empty file (see promptInputsDigest).
     fs.writeFileSync(p, promptInputsDigest({ templatesDir, registryFile }) + '\n');
   } catch { /* an optimisation must never fail the run it optimises */ }
@@ -1042,6 +1098,7 @@ function clearCompletionMarker({ outDir } = {}) {
 
 module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList, rolesIdentity, GEN_BODY_SLOT,
   writeCompletionMarker, clearCompletionMarker, promptInputsDigest, codelinePromptsComplete,
+  MINTED_FILES, mintedSnapshotDir, hasMintedSnapshot, restoreMinted, clearMinted,
   // Exported so the codeline keying is assertable without provisioning: a segment that escapes
   // the cache directory is a defect no end-to-end assertion would localise.
   codelineSegment, migrateFlatEntries, codelineFromPrd,

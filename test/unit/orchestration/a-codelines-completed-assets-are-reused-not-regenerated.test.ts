@@ -39,7 +39,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { currentPromptDigest } from '../../helpers/prompt-marker';
+import { completeCodeline } from '../../helpers/prompt-marker';
 
 const RESET = join(__dirname, '../../../orchestrations/scripts/pre-run-reset.sh');
 const dirs: string[] = [];
@@ -68,11 +68,9 @@ function project(opts: { marker?: string | null } = {}) {
   writeFileSync(join(cfg, '.prompt-cache', 'roster-review.json'),
     JSON.stringify({ base: 'aaa', roles: 'bbb', reviewed: true }));
 
-  // The marker is a FILENAME: .complete-<codeline>, empty. Its name is the claim.
-  if (opts.marker !== null) {
-    const cl = typeof opts.marker === 'string' ? opts.marker : CODELINE;
-    writeFileSync(join(cfg, '.prompt-cache', `.complete-${cl}`), currentPromptDigest());
-  }
+  // A COMPLETED codeline, as the builder's own completion leaves it: the marker and the agents it
+  // was provisioned with (2026-09-30). Never a hand-written marker.
+  if (opts.marker !== null) completeCodeline(cfg, typeof opts.marker === 'string' ? opts.marker : CODELINE);
   return { root, cfg };
 }
 

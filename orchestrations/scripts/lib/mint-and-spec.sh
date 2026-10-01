@@ -182,8 +182,9 @@ _run_agent_mint() {
   if [ -n "$_pending" ] && [ -f "$_pending" ]; then
     if [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
        && [ -n "$_detected_cl" ] \
-       && codeline_prompts_complete "$_detected_cl"; then
-      log "[mint] deferred decision settled: ${_detected_cl} completed its agents and prompts — kept"
+       && codeline_prompts_complete "$_detected_cl" \
+       && codeline_minted_restore "$_detected_cl"; then
+      log "[mint] deferred decision settled: ${_detected_cl} completed its agents and prompts — kept (its own recorded agents restored)"
     elif [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
        && [ -n "$_detected_cl" ] \
        && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$_detected_cl")" ] \
@@ -198,7 +199,8 @@ _run_agent_mint() {
       EPAM_SKIP_AGENT_MINT=1
     elif [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
        && [ -n "$_detected_cl" ] \
-       && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$_detected_cl")" ]; then
+       && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$_detected_cl")" ] \
+       && codeline_minted_restore "$_detected_cl"; then
       # STALE, NOT FOREIGN. The marker names this codeline, so the roster is this codeline's own
       # (the mint's paid work) and is kept; only the prompts are built from inputs that have since
       # changed, and the prompt builder rebuilds exactly those (regintel 20260920T232518Z, $5.73).
@@ -220,10 +222,7 @@ _run_agent_mint() {
       EPAM_SKIP_AGENT_MINT=1
     else
       log "[mint] deferred decision settled: this run is not ${_detected_cl:-<unresolved>}'s completed codeline — clearing the previous run's agents and prompts"
-      rm -f "$EPAM_PROJECT_CONFIG_DIR/roster.json" \
-            "$EPAM_PROJECT_CONFIG_DIR/project-roles.json" \
-            "$EPAM_PROJECT_CONFIG_DIR/project-investigators.json" \
-            "$EPAM_PROJECT_CONFIG_DIR/agent-profiles.json" 2>/dev/null || true
+      codeline_minted_clear
       rm -rf "$EPAM_PROJECT_CONFIG_DIR/prompts" 2>/dev/null || true
       mkdir -p "$EPAM_PROJECT_CONFIG_DIR/prompts" 2>/dev/null || true
     fi
@@ -237,10 +236,11 @@ _run_agent_mint() {
      && [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
      && [ -n "$_detected_cl" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] \
      && ls "$EPAM_PROJECT_CONFIG_DIR/prompts/"*.json >/dev/null 2>&1; then
-      if codeline_prompts_complete "$_detected_cl"; then
+      if codeline_prompts_complete "$_detected_cl" && codeline_minted_restore "$_detected_cl"; then
           log "[mint] codeline ${_detected_cl} is already provisioned from the current templates — the mint is skipped; EPAM_REGENERATE_CODELINE_ASSETS=1 forces a re-mint"
           EPAM_SKIP_AGENT_MINT=1
-      elif [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$_detected_cl")" ]; then
+      elif [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$_detected_cl")" ] \
+           && codeline_minted_restore "$_detected_cl"; then
           log "[mint] codeline ${_detected_cl}: the prompt inputs changed since its prompts were built — keeping the roster, rebuilding the prompts"
           EPAM_SKIP_AGENT_MINT=1
           EPAM_REBUILD_PROMPTS=1

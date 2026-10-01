@@ -95,6 +95,18 @@ describe('the mocking agent drives the seeded brownfield project at £0', () => 
     const clone = codelines()[0]?.path;
     const commits = spawnSync('git', ['-C', clone, 'log', '--oneline'], { encoding: 'utf8' }).stdout.trim().split('\n');
     expect(commits.length, 'the codeline holds no committed work beyond the seed').toBeGreaterThan(1);
+    // THE COMPLETION RECORDED THE CODELINE'S OWN AGENTS (2026-09-30): what lets a later run on this
+    // codeline keep them, and only them. Read through the builder's own functions.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const builder = require(join(install, 'orchestrations/scripts/lib/project-prompt-builder.js'));
+    const cache = join(projDir, '.prompt-cache');
+    const recorded = (existsSync(cache) ? readdirSync(cache, { withFileTypes: true }) : []).filter((d) => d.isDirectory())
+      .map((d) => builder.mintedSnapshotDir(projDir, d.name) as string).filter((d) => existsSync(d));
+    expect(recorded.length, `the completion recorded no minted agents for the codeline — journal: ${journal}`).toBe(1);
+    for (const f of builder.MINTED_FILES as string[]) {
+      if (!existsSync(join(projDir, f))) continue;
+      expect(readFileSync(join(recorded[0], f), 'utf8'), `${f} on disk is not what the completion recorded`).toBe(readFileSync(join(projDir, f), 'utf8'));
+    }
     // …and through the resume, the writer included.
     writeFileSync(join(journal, 'si-missing.json'), JSON.stringify(agent.siMissing, null, 1));
     expect(agent.siMissing, `calls without their SI or task — journal: ${journal}`).toEqual([]);

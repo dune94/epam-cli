@@ -16,7 +16,7 @@
  *     git status). Each marker is read from the host itself, never spelled here.
  * Nothing expected is written here: every value is read from the install's declarations and roster.
  */
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
@@ -148,6 +148,26 @@ export function hostFindings(call: Call, orchestrationsDir: string): string[] {
     let subjects: string[] = [];
     try { subjects = execFileSync('git', ['-C', cwd, 'log', '--format=%s', '-5'], { encoding: 'utf8' }).split('\n').filter((x) => x.length > 12); } catch { /* not a repo */ }
     const hit = subjects.find((x) => text.includes(x)); if (hit) out.push(`the runner's git status in the request ("${hit.slice(0, 50)}")`);
+  }
+  return out;
+}
+
+/**
+ * NO ABSOLUTE LOCAL PATH IN AN SI OR A PROMPT — relative paths only (operator, 2026-10-01: "hard
+ * coded local paths are not generated into prompts or SI text. This is not permitted").
+ * A token is a local path when it is absolute and its first directory exists on THIS machine — so
+ * nothing is listed here, and a URL, an API route or a relative path is never taken for one.
+ */
+export function localPathFindings(call: Call): string[] {
+  const out: string[] = [];
+  const system = String(call.req.system || '');
+  const prompt = call.req.messages.filter((m) => m.role === 'user').map((m) => m.text || '').join('\n');
+  const local = (text: string) => [...text.matchAll(/(?<![\w.:/~-])\/([\w.-]+)\/[^\s"'`)\]},;]+/g)]
+    .filter((m) => { try { return statSync(`/${m[1]}`).isDirectory(); } catch { return false; } })
+    .map((m) => m[0]);
+  for (const [where, text] of [['SI', system], ['prompt', prompt]] as const) {
+    const hits = [...new Set(local(text))];
+    if (hits.length) out.push(`absolute local path in the ${where}: ${hits.slice(0, 3).join(', ')}${hits.length > 3 ? ` (+${hits.length - 3})` : ''}`);
   }
   return out;
 }

@@ -7,7 +7,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { siFindings, hostFindings, personaInPrompt } from './si-check';
+import { tmpdir, homedir } from 'node:os';
+import { siFindings, hostFindings, personaInPrompt, localPathFindings } from './si-check';
 import type { Call } from './agent';
 
 const ORCH = join(__dirname, '../../orchestrations');
@@ -77,5 +78,12 @@ describe('the SI check', () => {
     expect(personaInPrompt(call(RULES, `ROSTER UNDER REVIEW:\n${reg[a].si}\n${reg[b].si}`, a), ORCH)).toEqual([]);
     // Its own SI ALONE in the prompt is a pasted identity.
     expect(personaInPrompt(call(RULES, `${reg[a].si}\n\nTHE PROMPT`, a), ORCH).length).toBe(1);
+  });
+  it('names an absolute local path in the SI or the prompt — relative paths only (operator, 2026-10-01)', () => {
+    const local = join(tmpdir(), 'some-run', 'codelines', 'repo');
+    expect(localPathFindings(call(`Never write outside ${local}.`, 'THE PROMPT')).join(' ')).toMatch(/SI/);
+    expect(localPathFindings(call('SI', `Read ${join(homedir(), 'x', 'src', 'a.ts')} first`)).join(' ')).toMatch(/prompt/);
+    // Not local paths: a relative path, a URL, an API route, markup.
+    expect(localPathFindings(call('SI', 'Read src/hello.ts and https://example.com/docs/a then GET /rest/api/3/issue, </div>'))).toEqual([]);
   });
 });

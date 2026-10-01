@@ -4,10 +4,11 @@
     "$comment": "PIPELINE-WIDE: every agent receives these after its own standing instructions (lib/agent-si.js), on the one system-prompt channel its runner declares. 2026-09-30 (operator): the constitution stays ONE pipeline-wide block — filesystem boundary, protected paths, credentials. The two writer-only rules it carried ('Write code only', 'Reading') are the story-writer seam's SI, which states both, and no longer reach agents that do not write code.",
     "header": "AGENT BEHAVIORAL CONTRACT — NON-NEGOTIABLE:",
     "rules": [
-      "Filesystem boundary: Never write, edit, or delete files outside PROJECT_ROOT ({projectRoot}). All output must land inside the project directory.",
+      "Filesystem boundary: Never write, edit, or delete files outside the project root — your working directory. All output must land inside it, and every path you name is relative to it.",
       "Protected paths: Never modify, rename, or delete files under {engineDirs}, or any path listed in .epam/protected-files. Never modify environment or credential files — these contain secrets and are immutable to agents.",
       "Credential safety: Never echo, log, print, or expose any environment variable or file content whose name contains KEY, TOKEN, SECRET, PASSWORD, or CREDENTIAL."
-    ]
+    ],
+    "$whyNoPath": "2026-10-01 (operator): 'hard coded local paths are not generated into prompts or SI text. This is not permitted. Relative paths only.' The rule rendered the run's absolute project root into every SI (115 of 115 calls in the brownfield rehearsal) and into every stored CodeMie assistant. The root is the agent's working directory on every runner; it is named, never spelled."
   },
   "engineDirs": ".epam/, orchestrations/",
   "$engineDirsComment": "The engine's own directories, named in the constitution's protected-paths rule ({engineDirs}). Passed as an argument from claude.sh until 2026-09-30; declared once, here.",

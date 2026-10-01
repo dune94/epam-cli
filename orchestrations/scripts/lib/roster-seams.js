@@ -70,12 +70,16 @@ const produce = async ({ canonicalCopyPath, outPath, refusal, attempt }) => {
         return Object.keys(_reg.profiles || {}).sort().map((s) => `- ${s}`).join('\n');
       } catch { return ''; }
     })(),
-    __CANONICAL_COPY_PATH__: canonicalCopyPath,
-    // One persona per file, written beside the JSON copy by copyCanonicalForRun; the agent
-    // reads what it specialises and nothing else.
-    __CANONICAL_DIR__: require('./project-roster.js').canonicalCopyDir(LOG_DIR),
+    // THE PERSONAS THEMSELVES, NOT WHERE THEY LIE. Pointed at a folder under the install's logs,
+    // the agent was handed a local path (operator, 2026-10-01: relative paths only) that a CodeMie
+    // web plugin, rooted at the codelines, cannot even reach. The run's own copy, every entry.
+    __CANONICAL_PERSONAS__: (() => {
+      const c = JSON.parse(fs.readFileSync(canonicalCopyPath, 'utf8'));
+      return Object.keys(c).filter((n) => typeof c[n] === 'string' && c[n].trim())
+        .map((n) => `--- AGENT: ${n}\n${c[n].trim()}`).join('\n\n');
+    })(),
     __PROJECT_CONTEXT__: [
-      `Project config: ${projectConfigDir}`,
+      `Project: ${path.basename(String(projectConfigDir || ''))}`,
       `Tickets in scope: ${stories.map((t) => `${t.jiraKey || t.id}: ${t.title || ''}`).join(' | ')}`,
       mintedDetail.length
         ? `Agents this project minted: ${mintedDetail.map((mm) => `${mm.name} [${mm.kind}]`).join(', ')}`

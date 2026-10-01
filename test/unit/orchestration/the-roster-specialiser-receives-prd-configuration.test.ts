@@ -54,8 +54,7 @@ describe('roster-specialisation — prd.configuration contract', () => {
   it('rendered prompt carries configuration values when prd declares them', () => {
     const cfgJson = JSON.stringify({ sourceRepoReadOnly: '/home/user/workshop', protectedPaths: ['dial/'] }, null, 2);
     const values: Record<string, string> = {
-      __CANONICAL_COPY_PATH__: '/tmp/canonical.json',
-      __CANONICAL_DIR__: '/tmp/canonical',
+      __CANONICAL_PERSONAS__: '--- AGENT: an-agent\nWhat it does.',
       __PROJECT_CONTEXT__: 'ctx',
       __CODELINE_CONTEXT__: '- regintel-build (/repo)',
       __STACK__: 'python',
@@ -73,8 +72,7 @@ describe('roster-specialisation — prd.configuration contract', () => {
 
   it('rendered prompt is valid when __PRD_CONFIGURATION_BLOCK__ is empty — no configuration declared', () => {
     const values: Record<string, string> = {
-      __CANONICAL_COPY_PATH__: '/tmp/canonical.json',
-      __CANONICAL_DIR__: '/tmp/canonical',
+      __CANONICAL_PERSONAS__: '--- AGENT: an-agent\nWhat it does.',
       __PROJECT_CONTEXT__: 'ctx',
       __CODELINE_CONTEXT__: '- regintel-build (/repo)',
       __STACK__: 'python',

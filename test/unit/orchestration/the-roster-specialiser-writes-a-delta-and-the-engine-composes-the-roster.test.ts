@@ -160,7 +160,9 @@ describe('buildProjectRoster, end to end, with a specialiser that writes only a 
 
   it('the contract the agent is handed says so: no digest asked for, one persona per file, the delta is the ANSWER', () => {
     const tpl = JSON.parse(readFileSync(join(ROOT, 'orchestrations/prompts/templates/roster-specialisation.json'), 'utf8'));
-    expect(tpl.placeholders).toContain('__CANONICAL_DIR__');
+    // The personas are IN the prompt — a folder under the install is a local path (2026-10-01).
+    expect(tpl.placeholders).toContain('__CANONICAL_PERSONAS__');
+    expect(tpl.placeholders).not.toContain('__CANONICAL_DIR__');
     expect(tpl.body).not.toMatch(/derivedFromSha256.*sha256 of/i);
     expect(tpl.body).not.toMatch(/EVERY AGENT IN THE CANONICAL ROSTER MUST APPEAR/);
     expect(tpl.body).toMatch(/adopted verbatim/);

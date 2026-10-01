@@ -5218,8 +5218,6 @@ async function reviewProjectRoster({
   if (_cur.length) _batches.push(_cur);
 
   const _renderBatch = (batch) => renderEngineTemplate('project-roster-review', {
-    __ROSTER_PATH__: String(rosterPath || ''),
-    __CANONICAL_PATH__: String(canonicalPath || ''),
     // THE SAME LINE THE SPECIALISER WAS GIVEN — codelines plus the paths the tickets declare —
     // so a claim is judged against the declaration the brief was written from, not against
     // whatever PRD copy the reviewer can find on the machine (run 20260916T234139Z's reviewer

@@ -87,7 +87,7 @@ describe('the survey reaches the roster specialiser', () => {
 
   it('THE RENDERED PROMPT CARRIES THE OBSERVATIONS — the artefact, not the plumbing', () => {
     const values: Record<string, string> = {
-      __CANONICAL_COPY_PATH__: '/tmp/canonical.json', __CANONICAL_DIR__: '/tmp/canonical',
+      __CANONICAL_PERSONAS__: '--- AGENT: an-agent\nWhat it does.',
 
       __PROJECT_CONTEXT__: 'ctx',
       __CODELINE_CONTEXT__: '- gotransit.web (/repo)',
@@ -106,7 +106,7 @@ describe('the survey reaches the roster specialiser', () => {
 
   it('A RUN THAT SUPPLIES NO SURVEY SLOT IS REFUSED — wiring cannot rot silently', () => {
     const values: Record<string, string> = {
-      __CANONICAL_COPY_PATH__: '/tmp/c.json', __CANONICAL_DIR__: '/tmp/c',
+      __CANONICAL_PERSONAS__: '--- AGENT: an-agent\nWhat it does.',
       __PROJECT_CONTEXT__: 'ctx', __CODELINE_CONTEXT__: '- x (/repo)',
       __STACK__: 'node', __PREVIOUS_REFUSAL__: '', __DECLARED_SEAMS__: '- spec-agent',
     };

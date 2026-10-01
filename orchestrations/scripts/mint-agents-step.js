@@ -1339,7 +1339,7 @@ if (require.main !== module) return;
       projectConfigDir,
       mode: promptMode,
       projectContext: [
-        `Project config: ${projectConfigDir}`,
+        `Project: ${path.basename(String(projectConfigDir || ''))}`,
         `Tickets in scope: ${stories.map((t) => `${t.jiraKey || t.id}: ${t.title || ''}`).join(' | ')}`,
       ].join('\n'),
       // The same text the reviewer is handed, so the generator and its judge see one context.

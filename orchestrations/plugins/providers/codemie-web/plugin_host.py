@@ -38,14 +38,15 @@ def _signalling_client(ready_file: str):
 
 
 def _tools(mode: str, root: str) -> tuple:
+    # Both modes also host the pipeline's own tools the runner declared (plugin_ro.hosted_tools).
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from plugin_ro import ro_tools, hosted_tools
     if mode == "ro":
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from plugin_ro import ro_tools
-        return ro_tools(root), None
+        return ro_tools(root) + hosted_tools(root), None
     if mode == "rw":
         from toolkits.development.toolkit import FileSystemAndCommandToolkit
         os.environ["PLUGIN_LABEL"] = os.path.basename(root)
-        return FileSystemAndCommandToolkit().get_tools(root), int(os.getenv("COMMAND_LINE_TOOL_TIMEOUT", "300"))
+        return FileSystemAndCommandToolkit().get_tools(root) + hosted_tools(root), int(os.getenv("COMMAND_LINE_TOOL_TIMEOUT", "300"))
     raise ValueError(f"unknown plugin mode '{mode}'")
 
 

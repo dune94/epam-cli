@@ -39,6 +39,9 @@
         ],
         "bash": [
           "_run_command_line_tool"
+        ],
+        "codegraph_query": [
+          "codegraph_query"
         ]
       },
       "$whyToolNames": "The CodeMie Plugin tools behind each pipeline tool name (the runner's vocabulary, as every runner declares one).",
@@ -48,7 +51,8 @@
           "provides": [
             "read_file",
             "list_files",
-            "search"
+            "search",
+            "codegraph_query"
           ]
         },
         {
@@ -58,11 +62,16 @@
             "list_files",
             "search",
             "write_file",
-            "bash"
+            "bash",
+            "codegraph_query"
           ]
         }
       ],
-      "$whyPlugins": "Which local CodeMie Plugin serves a grant, in order: the FIRST whose `provides` covers every granted tool this runner declares (toolNames). No grant is the runner's full set — the LAST plugin — as on the claude runner, where a seam with no grant keeps the default tool set. A granted tool this runner does not declare is dropped and said aloud. ro = the pipeline's read-only toolkit (plugin_ro.py); rw = the codemie-plugins development toolkit."
+      "$whyPlugins": "Which local CodeMie Plugin serves a grant, in order: the FIRST whose `provides` covers every granted tool this runner declares (toolNames). No grant is the runner's full set — the LAST plugin — as on the claude runner, where a seam with no grant keeps the default tool set. A granted tool this runner does not declare is dropped and said aloud. ro = the pipeline's read-only toolkit (plugin_ro.py); rw = the codemie-plugins development toolkit.",
+      "hostedToolPlugins": [
+        "plugins/codegraph-plugin.js"
+      ],
+      "$whyHostedToolPlugins": "The pipeline's own ToolPlugins (paths relative to orchestrations/) hosted by this set's local CodeMie plugin, so a CodeMie web assistant gets the same tool — same name, schema and execution — as any other runner. Without it codegraph_query was dropped on this set and the detective had list/read/search only (operator, 2026-10-01: 'without this the pipeline will not work at all')."
     }
   }
 }

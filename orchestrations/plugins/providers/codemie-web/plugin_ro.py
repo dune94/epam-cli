@@ -7,6 +7,7 @@ file tools, confined to root_dir by get_validated_relative_path).
 Hosted by plugin_host.py (`ro` mode), which plugins.js (this directory) starts and stops; never run by
 hand in a pipeline.
 """
+import json
 import os
 import re
 import subprocess
@@ -121,6 +122,65 @@ class GitFileList(RecursiveFileRetrieval):
         root = Path(self.root_dir).resolve()
         files = [_rel(p, root) for p in searchable_files(base) if p.is_file() or p.is_symlink()]
         return "\n".join(files) or f"No files found in directory {dir_path}"
+
+
+# ── THE PIPELINE'S OWN TOOLS, hosted here ───────────────────────────────────────────────────────
+# A ToolPlugin module (orchestrations/plugins/*.js) is the one implementation of a pipeline tool. The
+# runner declares which ones this plugin hosts (hostedToolPlugins) and passes their paths in
+# EPAM_CODEMIE_HOSTED_TOOLS; each tool keeps its own name, description and input schema, and every
+# call is executed by its own `execute`, from this plugin's root. Nothing about a tool is written here.
+
+_LIST_JS = """const p = require(process.argv[1]);
+process.stdout.write(JSON.stringify((p.tools || []).map((t) => ({ name: t.name, description: t.description,
+  schema: (t.definition && t.definition.inputSchema) || t.inputSchema || { type: 'object', properties: {} } }))));"""
+_EXEC_JS = """const p = require(process.argv[1]); const t = (p.tools || []).find((x) => x.name === process.argv[2]);
+Promise.resolve(t.execute(JSON.parse(process.argv[3]))).then((r) => process.stdout.write(JSON.stringify(r || {})),
+  (e) => process.stdout.write(JSON.stringify({ content: String(e && e.message || e), isError: true })));"""
+_JSON_TYPES = {"string": str, "integer": int, "number": float, "boolean": bool}
+
+
+def _node() -> str:
+    return os.environ.get("NODE_BIN") or "node"
+
+
+def _hosted_tool(module: str, spec: dict, root: str):
+    from pydantic import create_model
+    props = (spec.get("schema") or {}).get("properties") or {}
+    required = set((spec.get("schema") or {}).get("required") or [])
+    fields = {}
+    for key, p in props.items():
+        typ = _JSON_TYPES.get(p.get("type"), str)
+        desc = p.get("description", "")
+        fields[key] = (typ, Field(..., description=desc)) if key in required else (Optional[typ], Field(None, description=desc))
+    args_model = create_model(f"{spec['name']}_Input", __base__=RemoteInput, **fields)
+
+    def _run(self, *args, **kwargs) -> str:
+        payload = {k: v for k, v in kwargs.items() if v is not None and k in props}
+        r = subprocess.run([_node(), "-e", _EXEC_JS, module, spec["name"], json.dumps(payload)],
+                           cwd=root, capture_output=True, text=True, check=False)
+        try:
+            res = json.loads(r.stdout or "{}")
+        except ValueError:
+            return f"Error: {spec['name']} produced no result ({(r.stderr or '').strip()[:300]})"
+        text = str(res.get("content", ""))
+        return f"Error: {text}" if res.get("isError") and not text.startswith("Error") else text
+
+    cls = type(f"Hosted_{spec['name']}", (RemoteTool,), {
+        "__module__": __name__,
+        "__annotations__": {"name": str, "description": str, "args_schema": Type[RemoteInput]},
+        "name": spec["name"], "description": spec.get("description", ""), "args_schema": args_model, "_run": _run,
+    })
+    return cls()
+
+
+def hosted_tools(root: str) -> list:
+    """Every tool of every ToolPlugin module the runner declared for this plugin to host."""
+    modules = json.loads(os.environ.get("EPAM_CODEMIE_HOSTED_TOOLS") or "[]")
+    out = []
+    for module in modules:
+        listed = subprocess.run([_node(), "-e", _LIST_JS, module], capture_output=True, text=True, check=True)
+        out.extend(_hosted_tool(module, spec, root) for spec in json.loads(listed.stdout or "[]"))
+    return out
 
 
 def ro_tools(root: str) -> list:

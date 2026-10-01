@@ -41,6 +41,13 @@ function obliging(call: Call): Turn {
   if (results.length && !/LOOP-FOREVER/.test(prompt)) return { kind: 'text', text: `TOOL-RESULTS: ${results.join(' | ')}` };
   const byParams = (re: RegExp[]) => call.req.tools.find((t) => { const p = Object.keys(t.params?.properties || {}); return re.every((r) => p.some((k) => r.test(k))); });
   // Checked before WRITE/READ: their names contain those words.
+  const cg = /CODEGRAPH (\w+) (.+)$/m.exec(prompt);
+  if (cg) {
+    const tool = call.req.tools.find((t) => /codegraph/i.test(t.name));
+    if (!tool) return { kind: 'text', text: `NO-CODEGRAPH-TOOL (offered: ${call.req.tools.map((t) => t.name).join(',')})` };
+    const field = Object.keys(tool.params?.properties || {}).find((k) => k !== 'mode' && k !== 'codeline' && k !== 'args' && new RegExp(k, 'i').test(cg[1] === 'explore' ? 'terms' : 'symbol'));
+    return { kind: 'tools', calls: [{ id: newCallId(), name: tool.name, input: { mode: cg[1], [field || 'args']: cg[2].trim() } }] };
+  }
   const long = /LONG (\d+)/.exec(prompt);
   if (long) return { kind: 'text', text: JSON.stringify({ items: Array.from({ length: Number(long[1]) }, (_, i) => `entry-${i}`) }) };
   const big = /BIGWRITE (\S+) (\d+)/.exec(prompt);
@@ -307,6 +314,20 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
     expect(chat, 'the loop never reached the stand-in').toBeTruthy();
     // A step is a model turn or a tool turn (LangGraph's agent and tools nodes).
     expect(chat!.toolCalls.length * 2, 'the loop ran past the platform\'s step limit').toBeLessThanOrEqual(LIMITS.agentSteps);
+  }, 300_000);
+
+  it('the code-graph tool reaches a CodeMie assistant: the detective queries the codeline\'s symbol index', async () => {
+    // Operator, 2026-10-01: "without this the pipeline will not work at all". The runner dropped
+    // codegraph_query on this set ("granted but not declared by this runner"), so the detective had
+    // list/read/search only. A real repository, a real CodeGraph index, the real runner.
+    const repo = join(dir, 'graphed'); mkdirSync(join(repo, 'src'), { recursive: true });
+    writeFileSync(join(repo, 'src', 'toast.ts'), 'export function computeToastDismissDelay(ms: number) { return Math.max(ms, 5000); }\nexport function renderToast() { return computeToastDismissDelay(3000); }\n');
+    execSync(`git -C ${JSON.stringify(repo)} init -q && git -C ${JSON.stringify(repo)} add -A`);
+    const r = await call('CODEGRAPH callers computeToastDismissDelay', { EPAM_AGENT_NAME: READ_ONLY_SEAM, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search,codegraph_query', PROJECT_ROOT: repo });
+    expect(r.stderr, 'the runner still drops the code-graph tool').not.toMatch(/dropped:.*codegraph_query/);
+    expect(r.status, r.stderr.slice(-1500)).toBe(0);
+    expect(r.stdout, 'the assistant was not offered the code-graph tool').not.toMatch(/NO-CODEGRAPH-TOOL/);
+    expect(r.stdout, 'the code graph did not answer from the codeline').toMatch(/renderToast/);
   }, 300_000);
 
   it('an answer with nothing in it is a failure the ladder can act on, not a success', async () => {

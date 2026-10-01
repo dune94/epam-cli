@@ -32,7 +32,7 @@ function declaration(env = process.env) {
   const file = activeSetFile();
   const runners = (file && (readSetFile(file) || {}).runners) || {};
   const own = Object.values(runners).find((r) => r && Array.isArray(r.plugins)) || {};
-  return { toolNames: own.toolNames || {}, plugins: own.plugins || [] };
+  return { toolNames: own.toolNames || {}, plugins: own.plugins || [], hostedToolPlugins: own.hostedToolPlugins || [] };
 }
 
 /**
@@ -78,7 +78,10 @@ async function invoke(a, env = process.env) {
     // Reading may span the run's estate (--read-root, see runner.sh); writing never leaves the codeline.
     const root = mode === 'ro' && a['read-root'] && fs.existsSync(a['read-root']) ? a['read-root'] : a.root;
     a.pluginRoot = root;
-    integration = await ensurePlugin(c, { codeline: a.codeline, mode, root }, env);
+    // THE PIPELINE'S OWN TOOLS, hosted by the local plugin beside its file tools (declared:
+    // hostedToolPlugins, paths relative to orchestrations/).
+    const hosted = declaration(env).hostedToolPlugins.map((m) => path.join(__dirname, '..', '..', '..', m));
+    integration = await ensurePlugin(c, { codeline: a.codeline, mode, root }, { ...env, EPAM_CODEMIE_HOSTED_TOOLS: JSON.stringify(hosted) });
   }
   // THE AGENT'S STANDING INSTRUCTIONS, as the hub resolved them for this call (lib/agent-si.js).
   const siFile = env.EPAM_SI_FILE || '';

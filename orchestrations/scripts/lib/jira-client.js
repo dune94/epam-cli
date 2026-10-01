@@ -233,21 +233,47 @@ function adfExtract(body) {
   return { text, urls };
 }
 
+// ── ADF: the description as LINES, and its criteria by STRUCTURE ─────────────────────────────
+// A paragraph or heading is one line (its inline text, joined as before); a list item is "- " plus
+// its text, however deep the list sits. The flattener this replaces read two levels — a list's items
+// are three — so a bullet list arrived as an empty line: AMSD-2974's seven criteria, live 2026-10-01.
+const _inline = (n) => (n.content || []).map((t) => (typeof t.text === 'string' ? t.text : _inline(t))).join(' ');
+function _adfLines(nodes, out, bullet) {
+  for (const n of (Array.isArray(nodes) ? nodes : [])) {
+    if (!n || typeof n !== 'object') continue;
+    if (n.type === 'paragraph' || n.type === 'heading') out.push({ node: n, line: (bullet || '') + _inline(n) });
+    else if (n.type === 'listItem') _adfLines(n.content, out, '- ');
+    else _adfLines(n.content, out, bullet);
+  }
+  return out;
+}
+// THE CRITERIA SECTION, BY STRUCTURE: the heading naming acceptance criteria — wherever the words sit
+// in it ("5. Acceptance Criteria & Expected Outcome") — and every line up to the next heading.
+function _adfCriteria(doc) {
+  const lines = _adfLines(doc.content, []);
+  const at = lines.findIndex((l) => l.node.type === 'heading' && /acceptance criteria/i.test(l.line));
+  if (at < 0) return null;
+  const out = [];
+  for (const l of lines.slice(at + 1)) {
+    if (l.node.type === 'heading') break;
+    const c = l.line.replace(/^[-*•]\s*/, '').replace(/^\d+[.)]\s*/, '').replace(/\s+/g, ' ').trim();
+    if (c.length > 5) out.push(c);
+  }
+  return out;
+}
+
 function normalizeIssue(issue) {
   const f = issue.fields || {};
+  const isAdf = !!(f.description && Array.isArray(f.description.content));
   const descText = typeof f.description === 'string'
     ? f.description
-    : f.description && Array.isArray(f.description.content)
-      ? f.description.content.map(n =>
-          (n.content || []).map(t => t.text || '').join(' ')
-        ).join('\n')
-      : '';
+    : isAdf ? _adfLines(f.description.content, []).map((l) => l.line).join('\n') : '';
   const labels = Array.isArray(f.labels) ? f.labels : [];
   const codeline = labels.find(l => l.startsWith('codeline-'))
     ? labels.find(l => l.startsWith('codeline-')).replace('codeline-', '')
     : null;
   const storyIdLabel = labels.find(l => l.startsWith('storyId:'));
-  const acceptanceCriteria = extractAcFromText(descText);
+  const acceptanceCriteria = (isAdf && _adfCriteria(f.description)) || extractAcFromText(descText);
 
   // Merge ACs from [EPAM-AC-ADDITION] comments a HUMAN or another tool posted
   // to the ticket. This project never posts these itself, but still reads

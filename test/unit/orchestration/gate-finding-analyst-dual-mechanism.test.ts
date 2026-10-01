@@ -35,18 +35,14 @@ describe('gate-finding-analyst — lint-gate variant', () => {
     return ORCH_SRC.slice(i, i + 300);
   }
 
-  it('still calls epam run directly (not through ai-run.sh, not through run_orch_prompt)', () => {
-    // The --provider VALUE changed 2026-09-03 (see change-log/SEAM-CONSISTENCY-ANALYSIS.md):
-    // this call used to hardcode ${ORCH_GATE_PROVIDER:-openrouter}, which bypassed
-    // EPAM_PROVIDER_SET entirely — src/ has no awareness of it at all, so nothing downstream
-    // caught a stale or wrong vendor the way llm-handler.sh's own resolve_primary_provider()
-    // does for calls that route through it. The flag is now conditional
-    // (${_gate_provider:+--provider "$_gate_provider"}, resolved just above this call) so an
-    // unroutable value is corrected and an unset one omits the flag rather than passing "" —
-    // but the architectural fact this test protects is unchanged: epam run direct, not ai-run.sh.
+  it('goes through the hub to the set\'s configured provider — never epam run directly', () => {
+    // Operator, 2026-10-01: every LLM call goes through the configured provider, no exceptions. The
+    // direct `epam run` had no codemie-web provider at all, so on that set this call could not reach
+    // CodeMie web. Proven by execution the same day: on codemie-web the call reached the CodeMie API.
     const site = callStatement();
-    expect(site).toMatch(/timeout "\$\{EPAM_GATE_TIMEOUT_SECS:-1200\}" epam run \$\{_gate_provider:\+--provider "\$_gate_provider"\}/);
-    expect(site).not.toMatch(/ai-run\.sh/);
+    expect(site).toMatch(/bash "\$SCRIPT_DIR\/llm-handler\.sh" \$\{_gate_provider:\+--provider "\$_gate_provider"\}/);
+    expect(site).toMatch(/EPAM_AGENT_NAME="gate-finding-analyst"/);
+    expect(ORCH_SRC).not.toMatch(/bin\/epam\}" run/);
   });
 
   it('IF this call is ever routed through ai-run.sh, it MUST also set AI_GATE_ALLOW_TOOLS=1', () => {

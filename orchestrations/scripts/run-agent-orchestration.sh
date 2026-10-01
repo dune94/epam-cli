@@ -4011,11 +4011,12 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                 # file) without also adding AI_GATE_ALLOW_TOOLS=1, it will
                 # silently lose tool access the same way codeline-bridge-agent
                 # did. See gate-finding-analyst-dual-mechanism.test.ts.
+                # EVERY LLM CALL GOES THROUGH THE HUB, to the set's configured provider — no exceptions
+                # (operator, 2026-10-01). These four called `epam run` directly, which has no codemie-web.
                 _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                 _lga_raw="$(echo "$_lga_prompt" | \
-                    "${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" run ${_gate_provider:+--provider "$_gate_provider"} \
-                        --model "${_lga_model}" \
-                        --json - 2>>"$_lint_rem_log" || echo "")"
+                    AI_GATE_ALLOW_TOOLS=1 EPAM_AGENT_NAME="gate-finding-analyst" AI_MODEL="${_lga_model}" \
+                        bash "$SCRIPT_DIR/llm-handler.sh" ${_gate_provider:+--provider "$_gate_provider"} 2>>"$_lint_rem_log" || echo "")"
                 if [ -n "$_lga_raw" ]; then
                     _lint_finding_raw="$_lga_raw"
                 else
@@ -4065,9 +4066,8 @@ if m:
                     fi
                     _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                     _lrem_raw="$(echo "$_lrem_prompt" | \
-                        "${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" run ${_gate_provider:+--provider "$_gate_provider"} \
-                            --model "${_lrem_model}" \
-                            --json - 2>>"$_lint_rem_log" || echo "")"
+                        AI_GATE_ALLOW_TOOLS=1 EPAM_AGENT_NAME="story-ac-remediator" AI_MODEL="${_lrem_model}" \
+                            bash "$SCRIPT_DIR/llm-handler.sh" ${_gate_provider:+--provider "$_gate_provider"} 2>>"$_lint_rem_log" || echo "")"
                     if [ -n "$_lrem_raw" ]; then
                         _lint_ac_raw="$_lrem_raw"
                     else
@@ -4090,16 +4090,14 @@ if m:
                 info "  [lint-gate:augmentor] Recording lint anti-pattern in profile..."
                 _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                 _laug_raw="$(echo "$_lint_finding_raw" | \
-                    "${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" run ${_gate_provider:+--provider "$_gate_provider"} \
-                        --model "$(seam_model_or_fail "gate-finding-analyst")" \
-                        --json - 2>>"$_lint_rem_log" || echo "")"
+                    AI_GATE_ALLOW_TOOLS=1 EPAM_AGENT_NAME="gate-finding-analyst" AI_MODEL="$(seam_model_or_fail "gate-finding-analyst")" \
+                        bash "$SCRIPT_DIR/llm-handler.sh" ${_gate_provider:+--provider "$_gate_provider"} 2>>"$_lint_rem_log" || echo "")"
                 if [ -z "$_laug_raw" ]; then
                     warning "  [lint-gate:augmentor] attempt 1 returned no output — retrying"
                     _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                     echo "$_lint_finding_raw" | \
-                        "${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" run ${_gate_provider:+--provider "$_gate_provider"} \
-                            --model "$(seam_model_or_fail "story-ac-remediator")" \
-                            --json - 2>>"$_lint_rem_log" || true
+                        AI_GATE_ALLOW_TOOLS=1 EPAM_AGENT_NAME="story-ac-remediator" AI_MODEL="$(seam_model_or_fail "story-ac-remediator")" \
+                            bash "$SCRIPT_DIR/llm-handler.sh" ${_gate_provider:+--provider "$_gate_provider"} 2>>"$_lint_rem_log" || true
                 fi
             else
                 warning "  [lint-gate:analyst] Could not map lint failure to a story — skipping AC remediation"

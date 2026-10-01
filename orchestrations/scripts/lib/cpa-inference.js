@@ -44,7 +44,8 @@ const AI_PROVIDER = process.env.AI_PROVIDER
 // The seam declares its own timeout (invocation-profiles.json: cpa-inference timeoutSecs), and
 // seamInvocationEnv resolves it. This carried a 120000 literal — 40% of the declared 300s — so the
 // declaration was decorative and the call was cut short by a number nobody chose.
-const TIMEOUT_MS = (function () {
+// NO CLOCK ENDS AN AGENT (operator, hard rule, 2026-10-01: "never abort a run due to a timeout — ever").
+const TIMEOUT_MS = undefined; void (function () {
   const explicit = Number(process.env.CPA_TIMEOUT_MS);
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
   try {

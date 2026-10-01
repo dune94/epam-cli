@@ -122,7 +122,7 @@ fi
 
 _started=$(date +%s)
 set +e
-_out=$(timeout "${EPAM_CODEGRAPH_REINDEX_TIMEOUT_SECS}" codegraph init "$REPO" 2>&1)
+_out=$(codegraph init "$REPO" 2>&1)
 _rc=$?
 set -e
 _elapsed=$(( $(date +%s) - _started ))

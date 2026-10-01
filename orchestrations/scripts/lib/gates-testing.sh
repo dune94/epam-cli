@@ -686,7 +686,7 @@ $_spec_file_excerpts"
                 # repro test, the invalidated-tests step, the review and the build gate had all
                 # passed. Uncapped, every earlier run paid the same peak out of the host.
                 ( cd "$PROJECT_ROOT" && run_test_bounded "$(resolve_test_workers)" \
-                    timeout "${EPAM_TEST_TIMEOUT_SECS}" \
+                    \
                     sh -c "$(_codeline_test_command "$PROJECT_ROOT")" ) > "${oracle_json}.txt" 2>&1
             fi
             local _oracle_rc=$?
@@ -2138,7 +2138,7 @@ run_unit_tests_gate() {
     if [ -n "$_ut_install_dir" ] && [ -n "$_ut_install_cmd" ] && [ ! -d "$PROJECT_ROOT/$_ut_install_dir" ]; then
         log "  ${_ut_install_dir} missing — running: ${_ut_install_cmd}"
         local install_output install_exit=0
-        install_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_INSTALL_TIMEOUT_SECS}" sh -c "$_ut_install_cmd" 2>&1) || install_exit=$?
+        install_output=$(cd "$PROJECT_ROOT" && sh -c "$_ut_install_cmd" 2>&1) || install_exit=$?
         echo "$install_output" >> "$gate_log"
         if [ "$install_exit" -eq 124 ]; then
             error "  '${_ut_install_cmd}' TIMED OUT after ${EPAM_INSTALL_TIMEOUT_SECS}s — cannot run the tests"
@@ -2159,7 +2159,7 @@ run_unit_tests_gate() {
     # package.json" — a message about the engine's expectation, not about the project.
     log "  Running: ${_ut_test_cmd}"
     local vitest_output vitest_exit=0
-    vitest_output=$(cd "$PROJECT_ROOT" && run_test_bounded "$(resolve_test_workers)" timeout "${EPAM_TEST_TIMEOUT_SECS}" sh -c "$_ut_test_cmd" 2>&1) || vitest_exit=$?
+    vitest_output=$(cd "$PROJECT_ROOT" && run_test_bounded "$(resolve_test_workers)" sh -c "$_ut_test_cmd" 2>&1) || vitest_exit=$?
     echo "$vitest_output" >> "$gate_log"
 
     if [ "$vitest_exit" -eq 0 ]; then
@@ -2244,7 +2244,7 @@ run_unit_tests_gate() {
         # directly, so on a project using any other runner the verification of the fix ran a
         # different thing from the check that found the failure — or nothing at all.
         vitest_exit=0
-        vitest_output=$(cd "$PROJECT_ROOT" && run_test_bounded "$(resolve_test_workers)" timeout "${EPAM_TEST_TIMEOUT_SECS}" sh -c "$_ut_test_cmd" 2>&1) || vitest_exit=$?
+        vitest_output=$(cd "$PROJECT_ROOT" && run_test_bounded "$(resolve_test_workers)" sh -c "$_ut_test_cmd" 2>&1) || vitest_exit=$?
         echo "=== Post-bug-fix test run (round $bug_round): ${_ut_test_cmd} ===" >> "$gate_log"
         echo "$vitest_output" >> "$gate_log"
 

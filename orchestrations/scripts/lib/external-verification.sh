@@ -268,7 +268,7 @@ run_dependency_check() {
     if [ -n "$_hook" ]; then
         info "  [dependency-check] Running preInstallHook..."
         _hook_timeout="${EPAM_DEP_HOOK_TIMEOUT_SECS}"
-        if ( cd "$project_root" && timeout "$_hook_timeout" bash -c "$_hook" ); then
+        if ( cd "$project_root" && bash -c "$_hook" ); then
             info "  [dependency-check] preInstallHook complete"
         else
             _hook_rc=$?
@@ -415,7 +415,7 @@ run_dependency_check() {
         # `timeout` reports 124; collapsing that into a generic failure loses the one detail that
         # tells an operator the registry is unreachable rather than the package wrong.
         local _install_rc=0
-        ( cd "$project_root" && timeout "$_timeout" bash -c "$_cmd" 2>&1 ) || _install_rc=$?
+        ( cd "$project_root" && bash -c "$_cmd" 2>&1 ) || _install_rc=$?
         if [ "$_install_rc" -eq 124 ]; then
             warning "  [dependency-scan] install of '${_pkg}' TIMED OUT after ${_timeout}s"
         elif [ "$_install_rc" -ne 0 ]; then
@@ -1026,7 +1026,7 @@ run_external_verification() {
         # shipped in the first version of this fix and was caught by its own
         # test suite: the TIMED OUT branch never fired).
         local _install_output
-        _install_output=$(cd "$PROJECT_ROOT" && timeout "$_install_timeout" bash -c "${_orch_env_unset_prefix}${_dep_env_prefix}${_dep_provision}" 2>&1)
+        _install_output=$(cd "$PROJECT_ROOT" && bash -c "${_orch_env_unset_prefix}${_dep_env_prefix}${_dep_provision}" 2>&1)
         local _install_rc=$?
         if [ "$_install_rc" -eq 124 ]; then
             warning "  provisioning TIMED OUT after ${_install_timeout}s — test may still fail"
@@ -1120,7 +1120,7 @@ run_external_verification() {
     # The declared command runs INSIDE the codeline's declared environment (runEnvironment in
     # .epam/dependency-check.json): the environment's own runner answers, not the host's.
     local _test_env_prefix; _test_env_prefix=$(_project_run_env_prefix "$PROJECT_ROOT")
-    test_output=$(cd "$PROJECT_ROOT" && timeout "$_test_timeout" bash -c "${_orch_env_unset_prefix}${_test_env_prefix}${_bounded_cmd}" 2>&1) || test_exit=$?
+    test_output=$(cd "$PROJECT_ROOT" && bash -c "${_orch_env_unset_prefix}${_test_env_prefix}${_bounded_cmd}" 2>&1) || test_exit=$?
 
     if [ "$test_exit" -eq 124 ]; then
         warning "External verification TIMED OUT for $story_id after ${_test_timeout}s (test command: $test_cmd)"
@@ -1249,7 +1249,7 @@ verify_codeline_suite() {
     local _bounded; _bounded="$(_bounded_test_command "$whole_cmd")"
     local _env_prefix; _env_prefix=$(_project_run_env_prefix "$PROJECT_ROOT")
     local whole_out whole_exit=0
-    whole_out=$(cd "$PROJECT_ROOT" && timeout "$_test_timeout" bash -c "${_env_prefix}${_bounded}" 2>&1) || whole_exit=$?
+    whole_out=$(cd "$PROJECT_ROOT" && bash -c "${_env_prefix}${_bounded}" 2>&1) || whole_exit=$?
     if [ "$whole_exit" -eq 0 ]; then
         success "  Codeline suite green after $story_id"
         return 0

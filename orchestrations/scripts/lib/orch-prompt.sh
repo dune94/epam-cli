@@ -130,7 +130,6 @@ run_orch_prompt() (
         EPAM_AGENT_NAME="$agent_type" \
         EPAM_STORY_ID="${EPAM_STORY_ID:-$story_id}" \
         ORCH_JSON_RESULT="$json_result_file" \
-        timeout "${_gate_timeout}" \
         "$AI_RUNNER_CMD" --provider "$gate_provider" "${model_args[@]}" || _rc=$?
     if [ "$_rc" -eq 124 ]; then
         warning "run_orch_prompt: gate agent timed out after ${_gate_timeout}s (${agent_type}/${story_id}) — treating as failure"

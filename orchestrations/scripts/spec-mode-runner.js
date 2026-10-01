@@ -9924,8 +9924,14 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
     // other callers keep their strict reject-on-failure semantics.
     const finishOutput = () => `${stdout}\n${stderr}`.trim();
 
-    const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : runClaudeTimeoutMs(env);
-    const killTimer = setTimeout(() => {
+    // NO CLOCK ENDS AN AGENT (operator, hard rule, 2026-10-01: "never abort a run due to a timeout — ever").
+    // The call runs until it answers; a long one is reported, never killed.
+    const _startedAt = Date.now();
+    const killTimer = setInterval(() => {
+      if (settled) return;
+      process.stderr.write(`[runClaude] ${env.EPAM_AGENT_NAME || 'agent'} still running after ${Math.round((Date.now() - _startedAt) / 60000)} min\n`);
+    }, 10 * 60 * 1000);
+    const _unusedKill = () => {
       if (settled) return;
       settled = true;
       killGroup();
@@ -9941,8 +9947,9 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
         return resolve(salvaged);
       }
       _emitCost();
-      reject(new Error(`prompt runner timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
+      reject(new Error('prompt runner stopped'));
+    };
+    void _unusedKill;
 
     proc.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
     proc.stderr.on('data', (chunk) => { stderr += chunk.toString(); });

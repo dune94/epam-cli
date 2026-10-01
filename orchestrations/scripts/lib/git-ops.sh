@@ -289,13 +289,13 @@ git_add_client_outputs() {
     # Held in a variable rather than passed straight through, so the success path stays silent:
     # an ignored-path warning is normal and must not print on every story.
     local _add_stderr
-    _add_stderr=$(timeout "$_timeout" git -C "$_repo" add -A -- "${_excludes[@]}" 2>&1)
+    _add_stderr=$(git -C "$_repo" add -A -- "${_excludes[@]}" 2>&1)
     local _rc=$?
 
     # Belt and braces, run unconditionally: if the pathspec form above failed for any
     # reason, anything engine-owned that slipped into the index comes straight back out.
     # This is what makes the no-fallback rule safe rather than merely strict.
-    timeout "$_timeout" git -C "$_repo" reset -q -- "${_resets[@]}" 2>/dev/null || true
+    git -C "$_repo" reset -q -- "${_resets[@]}" 2>/dev/null || true
 
     # ASK THE INDEX, NOT THE EXIT CODE.
     #
@@ -324,7 +324,7 @@ git_add_client_outputs() {
     local _staged _pending
     # wc -l, not `grep -c . || echo 0`: on empty input grep prints 0 AND exits 1, so the
     # fallback appends a second 0 and the numeric comparison below errors out.
-    _staged=$(timeout "$_timeout" git -C "$_repo" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+    _staged=$(git -C "$_repo" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
     if [ "${_staged:-0}" -gt 0 ]; then
         return 0
     fi
@@ -351,7 +351,7 @@ git_add_client_outputs() {
     # rather than degenerating into a regex that matches everything.
     local _ex_re
     _ex_re=$("${NODE_BIN:-node}" "$(dirname "${BASH_SOURCE[0]}")/handlers/repo-exclude-patterns.js" regex 2>/dev/null || echo "")
-    _pending=$(timeout "$_timeout" git -C "$_repo" status --porcelain 2>/dev/null \
+    _pending=$(git -C "$_repo" status --porcelain 2>/dev/null \
         | sed 's/^...//' \
         | sed 's/^.* -> //' \
         | engine_paths_filter \
@@ -359,7 +359,7 @@ git_add_client_outputs() {
         | wc -l | tr -d ' ')
     if [ "$_rc" -ne 0 ] && [ "${_pending:-0}" -eq 0 ]; then
         # git could not even report status: the repository is genuinely unusable.
-        if ! timeout "$_timeout" git -C "$_repo" status --porcelain >/dev/null 2>&1; then
+        if ! git -C "$_repo" status --porcelain >/dev/null 2>&1; then
             _git_add_report_failure "$_repo" "$_rc" "$_add_stderr" "the repository is unusable — git cannot even report status"
             return "$_rc"
         fi
@@ -496,18 +496,18 @@ record_story_changes() {
     mkdir -p "$LOG_DIR" 2>/dev/null || return 1
 
     local _sha _subject _when
-    _sha=$(timeout "$_t" git -C "$root" rev-parse HEAD 2>/dev/null) || return 1
+    _sha=$(git -C "$root" rev-parse HEAD 2>/dev/null) || return 1
     [ -n "$_sha" ] || return 1
-    _subject=$(timeout "$_t" git -C "$root" log -1 --format=%s "$_sha" 2>/dev/null)
-    _when=$(timeout "$_t" git -C "$root" log -1 --format=%aI "$_sha" 2>/dev/null)
+    _subject=$(git -C "$root" log -1 --format=%s "$_sha" 2>/dev/null)
+    _when=$(git -C "$root" log -1 --format=%aI "$_sha" 2>/dev/null)
 
     local _names _stat _diff
-    _names=$(timeout "$_t" git -C "$root" diff --name-only "${_sha}^" "$_sha" 2>/dev/null) \
-        || _names=$(timeout "$_t" git -C "$root" show --pretty=format: --name-only "$_sha" 2>/dev/null)
-    _stat=$(timeout "$_t" git -C "$root" diff --stat "${_sha}^" "$_sha" 2>/dev/null) \
-        || _stat=$(timeout "$_t" git -C "$root" show --pretty=format: --stat "$_sha" 2>/dev/null)
-    _diff=$(timeout "$_t" git -C "$root" diff "${_sha}^" "$_sha" 2>/dev/null) \
-        || _diff=$(timeout "$_t" git -C "$root" show --pretty=format: "$_sha" 2>/dev/null)
+    _names=$(git -C "$root" diff --name-only "${_sha}^" "$_sha" 2>/dev/null) \
+        || _names=$(git -C "$root" show --pretty=format: --name-only "$_sha" 2>/dev/null)
+    _stat=$(git -C "$root" diff --stat "${_sha}^" "$_sha" 2>/dev/null) \
+        || _stat=$(git -C "$root" show --pretty=format: --stat "$_sha" 2>/dev/null)
+    _diff=$(git -C "$root" diff "${_sha}^" "$_sha" 2>/dev/null) \
+        || _diff=$(git -C "$root" show --pretty=format: "$_sha" 2>/dev/null)
 
     # BOUNDED. A pathological story must not write an unbounded diff into the evidence. Over the
     # cap the diff is dropped WHOLE and said to be dropped — never truncated mid-hunk into
@@ -588,7 +588,7 @@ commit_completed_story() {
     fi
 
     local _changed_count
-    _changed_count=$(timeout "$_git_timeout" git -C "$_commit_root" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+    _changed_count=$(git -C "$_commit_root" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
     if [ "${_changed_count:-0}" -eq 0 ]; then
         return 0
     fi
@@ -618,7 +618,7 @@ commit_completed_story() {
         if [ "$_scan_rc" -ne 0 ]; then
             warning "  [commit_completed_story] $_scan_output"
             warning "  [commit_completed_story] Refusing to commit for ${story_id} — unstaging (SECRET_SCAN)"
-            timeout "$_git_timeout" git -C "$_commit_root" reset 2>/dev/null || true
+            git -C "$_commit_root" reset 2>/dev/null || true
             return 1
         fi
     fi
@@ -647,7 +647,7 @@ commit_completed_story() {
     # it; both were updated in the SAME change (see their own comments).
     set +e
     local _commit_output
-    _commit_output=$(timeout "$_git_timeout" git -C "$_commit_root" commit -m "${story_id}: story complete (${_changed_count} file(s))" 2>&1)
+    _commit_output=$(git -C "$_commit_root" commit -m "${story_id}: story complete (${_changed_count} file(s))" 2>&1)
     local _commit_rc=$?
     set -e
     if [ "$_commit_rc" -eq 0 ]; then

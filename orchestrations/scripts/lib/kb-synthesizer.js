@@ -239,8 +239,8 @@ function _seamDeclared() {
     out = env.EPAM_MAX_OUTPUT_TOKENS;
   } catch (e) { /* undeclared: the caller sees undefined and fails with the reason */ }
   return {
-    timeoutMs: (Number.isFinite(explicitT) && explicitT > 0) ? explicitT
-      : ((Number.isFinite(secs) && secs > 0) ? secs * 1000 : undefined),
+    // NO CLOCK ENDS AN AGENT (operator, hard rule, 2026-10-01: "never abort a run due to a timeout — ever").
+    timeoutMs: (void explicitT, void secs, undefined),
     maxOutputTokens: explicitO || out,
   };
 }

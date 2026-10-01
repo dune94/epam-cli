@@ -25,7 +25,8 @@
  */
 'use strict';
 
-const TIMEOUT_MS = 12000;
+// NO CLOCK ENDS AN AGENT (operator, hard rule, 2026-10-01: "never abort a run due to a timeout — ever").
+const TIMEOUT_MS = 0;
 // No literal fallback: see lib/seam-model.js.
 const { resolveOrRefuse } = require('./seam-model.js');
 

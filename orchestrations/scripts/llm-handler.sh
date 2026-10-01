@@ -771,7 +771,6 @@ if [ "${EPAM_PLAN_EXECUTE:-1}" = "1" ] && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ];
     EPAM_MAX_TOOL_CALLS=0 \
     ORCH_JSON_RESULT="$_plan_json" \
     PROMPT_FILE="$_plan_file" \
-    timeout "${EPAM_PLAN_TIMEOUT_SECS}" \
     bash "$0" ${PRIMARY_PROVIDER:+--provider "$PRIMARY_PROVIDER"} ${AI_MODEL:+--model "$AI_MODEL"} \
       < "$_plan_file" 2>/dev/null || true
   )"
@@ -912,24 +911,12 @@ last_err=""
 # a child that ignores a TERM sent only to its parent, and this comment says so
 # rather than claiming a load-bearing role the tests do not demonstrate.
 _ai_attempt_timeout() {
-  # THE SEAM'S DECLARED BUDGET, THEN THE OPERATOR OVERRIDE, THEN THE FLOOR.
-  # invocation-profiles.json gives each seam a timeoutSecs and seam-invocation exports it as
-  # EPAM_TIMEOUT_SECS. This watchdog read only EPAM_CALL_ATTEMPT_TIMEOUT_SECS, which nothing sets,
-  # so 36 of 39 seams declared more than 240s and every one of them was killed at 240 — by SIGTERM,
-  # which emits no stderr, so it surfaced as "failed with no error output" and burned all three
-  # ladder attempts on the same silent kill.
-  local _secs="${EPAM_CALL_ATTEMPT_TIMEOUT_SECS:-${EPAM_TIMEOUT_SECS}}" _rc=0
-  local _o _e
+  # NO CLOCK ENDS AN AGENT (operator, hard rule, 2026-10-01: "never abort a run due to a timeout — ever").
+  # The call runs until it answers. Output still goes through files, so a surviving child never
+  # holds the caller's pipe open.
+  local _rc=0 _o _e
   _o="$(mktemp)"; _e="$(mktemp)"
-  set -m
-  ( "$@" ) >"$_o" 2>"$_e" &
-  local _work=$!
-  set +m
-  ( sleep "$_secs"; kill -TERM "-${_work}" 2>/dev/null || kill -TERM "$_work" 2>/dev/null ) >/dev/null 2>&1 &
-  local _watch=$!
-  wait "$_work" 2>/dev/null; _rc=$?
-  kill "-${_watch}" 2>/dev/null || kill "$_watch" 2>/dev/null
-  wait "$_watch" 2>/dev/null || true
+  ( "$@" ) >"$_o" 2>"$_e"; _rc=$?
   cat "$_o"; cat "$_e" >&2
   rm -f "$_o" "$_e"
   return "$_rc"

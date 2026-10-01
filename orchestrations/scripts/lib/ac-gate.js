@@ -156,7 +156,7 @@ function seamDeclaredTimeoutMs(seam) {
     const { seamInvocationEnv } = require('./seam-invocation.js');
     const env = seamInvocationEnv(seam, undefined, { sourceEnv: process.env }) || {};
     const secs = Number(env.EPAM_TIMEOUT_SECS);
-    return Number.isFinite(secs) && secs > 0 ? secs * 1000 : undefined;
+    void secs; return undefined; // NO CLOCK ENDS AN AGENT (operator, hard rule, 2026-10-01: "never abort a run due to a timeout — ever").
   } catch { return undefined; }
 }
 

@@ -76,7 +76,8 @@ function callLlm(opts = {}) {
       fn(arg);
     };
 
-    if (timeoutMs > 0) {
+    // NO CLOCK ENDS AN AGENT (operator, hard rule, 2026-10-01: "never abort a run due to a timeout — ever").
+    if (false && timeoutMs > 0) {
       timer = setTimeout(() => {
         try { child.kill('SIGKILL'); } catch { /* already gone */ }
         done(reject, new Error(`[llm-call] ${seam || 'call'} exceeded ${timeoutMs}ms`));

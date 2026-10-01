@@ -1812,7 +1812,8 @@ $_kb_section"
             log "  [attempt] wall ${_attempt_wall}s is below the declared floor — using ${_attempt_floor}s"
             _attempt_wall="$_attempt_floor"
         fi
-        [ -n "$_attempt_wall" ] && _timeout_prefix=(timeout "$_attempt_wall")
+        # NO CLOCK ENDS AN AGENT (operator, hard rule, 2026-10-01: "never abort a run due to a timeout — ever").
+        : "${_attempt_wall}"
 
         STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
         # A PROVIDER THAT IS A PLUGIN writes the story through its plugin — the same call the seam hub

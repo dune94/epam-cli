@@ -612,8 +612,9 @@ run_story_with_watchdog() {
         warning "[orch] timeouts.secondsPerIteration is not configured — the story wall cannot be derived and stays at ${timeout_secs}s"
     fi
 
+    # NO CLOCK ENDS AN AGENT (operator, hard rule, 2026-10-01: "never abort a run due to a timeout — ever").
     set +e
-    timeout "$timeout_secs" "$CLAUDE_SH" "$story_id" 2>&1 | tee "$log_file"
+    "$CLAUDE_SH" "$story_id" 2>&1 | tee "$log_file"
     _rc=${PIPESTATUS[0]}
     set -e
 
@@ -681,7 +682,7 @@ run_story_with_watchdog() {
             fi
             warning "Watchdog: $story_id timed out after ${timeout_secs}s — attempt ${_lad_attempt}/${_lad_max}, rung ${_rung_before} → ${_rung_after}, with a ${retry_timeout_secs}s budget..."
             set +e
-            timeout "$retry_timeout_secs" "$CLAUDE_SH" "$story_id" 2>&1 | tee -a "$log_file"
+            "$CLAUDE_SH" "$story_id" 2>&1 | tee -a "$log_file"
             _rc=${PIPESTATUS[0]}
             set -e
         done

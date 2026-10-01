@@ -299,7 +299,8 @@ invoke_agent() {
     # `timeout` bounds a hung provider. No shell site had one before; a stuck call
     # simply held the pipeline open indefinitely.
     local -a _timeout_cmd=()
-    command -v timeout >/dev/null 2>&1 && _timeout_cmd=(timeout --signal=TERM --kill-after=30 "$_timeout")
+    # NO CLOCK ENDS AN AGENT (operator, hard rule, 2026-10-01: "never abort a run due to a timeout — ever").
+    : "${_timeout}"
 
     # Built as an explicit `env` argument list, NOT as `VAR=v cmd` prefixes: bash only
     # treats a LITERAL `VAR=v` word as an assignment, so `${x:+VAR=v}` silently becomes

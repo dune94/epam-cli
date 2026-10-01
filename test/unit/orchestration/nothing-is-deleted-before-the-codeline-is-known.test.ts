@@ -141,6 +141,15 @@ describe('pre-run-reset defers what it cannot decide', () => {
       + 'leaves the next one unable to tell a deferral from a completed reset').toBe(true);
   });
 
+  it('with the codeline KNOWN, the reset puts back that codeline\'s OWN agents — not what another codeline left', () => {
+    const { cfg } = project({ marker: CODELINE });
+    for (const f of REGISTRIES) writeFileSync(join(cfg, f), JSON.stringify({ from: 'another codeline\'s mint' }));
+    runReset(cfg, { EPAM_CODELINE_ID: CODELINE });
+    for (const f of REGISTRIES) {
+      expect(readFileSync(join(cfg, f), 'utf8'), `${f} is another codeline's after a known-codeline reuse`).toBe(JSON.stringify({ from: 'the completed run' }));
+    }
+  });
+
   it('THE OTHER END — a knowable codeline still settles immediately, as before', () => {
     const { cfg } = project({ marker: CODELINE });
     runReset(cfg, { EPAM_CODELINE_ID: CODELINE });
@@ -242,6 +251,33 @@ describe('the mint settles the deferred decision, once the codeline is known', (
       expect(readFileSync(join(r.cfg, f), 'utf8'), `${f} is another codeline's — the marker vouched for agents it never recorded`)
         .toBe(JSON.stringify({ from: 'the previous run' }));
     }
+  });
+
+  const foreign = (cfg: string) => { for (const f of REGISTRIES) writeFileSync(join(cfg, f), JSON.stringify({ from: 'another codeline\'s mint' })); };
+  // A marker whose inputs changed since: the builder's own marker, its digest no longer current.
+  const staleMarker = (cfg: string) => writeFileSync(join(cfg, '.prompt-cache', `.complete-${CODELINE}`), 'a-digest-of-inputs-that-have-since-changed\n');
+  const ownAgents = (r: { cfg: string; out: string }) => {
+    for (const f of REGISTRIES) {
+      expect(readFileSync(join(r.cfg, f), 'utf8'), `${f} is another codeline's:\n${r.out.slice(-1200)}`).toBe(JSON.stringify({ from: 'the previous run' }));
+    }
+  };
+
+  it('NO DEFERRED DECISION (a resume of the reset, a preset codeline): a completed codeline still restores its own agents and skips the mint', () => {
+    const r = invokeMint({ marker: CODELINE, prdCodelines: [CODELINE], pending: false, afterComplete: foreign });
+    expect(r.mintCalls, r.out.slice(-1200)).toBe(0);
+    ownAgents(r);
+  });
+
+  it('NO DEFERRED DECISION, prompt inputs changed: its own agents are restored, the prompts rebuilt, nothing minted', () => {
+    const r = invokeMint({ marker: CODELINE, prdCodelines: [CODELINE], pending: false, afterComplete: (cfg) => { foreign(cfg); staleMarker(cfg); } });
+    expect(r.mintCalls, r.out.slice(-1200)).toBe(0);
+    ownAgents(r);
+  });
+
+  it('DEFERRED, prompt inputs changed: its own agents are restored, nothing minted', () => {
+    const r = invokeMint({ marker: CODELINE, prdCodelines: [CODELINE], pending: true, afterComplete: (cfg) => { foreign(cfg); staleMarker(cfg); } });
+    expect(r.mintCalls, r.out.slice(-1200)).toBe(0);
+    ownAgents(r);
   });
 
   it('a marker that recorded NO minted agents is not a completed codeline — the mint runs', () => {

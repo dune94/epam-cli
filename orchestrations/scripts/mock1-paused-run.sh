@@ -141,7 +141,9 @@ export ORCH_RUN_ID
 RUN_DIR="$PROJECT_CONFIG_DIR/runs/$ORCH_RUN_ID"
 WORKSPACE="${SEED_ONLY_DIR:-$MOCK_WORKSPACE_ROOT/$ORCH_RUN_ID/workspace}"
 CODELINE_ROOT="$WORKSPACE/codelines"
-CLONE="$CODELINE_ROOT/mock-hello-world"
+# MOCK1_CODELINE_NAME names the clone, so a rehearsal can switch codelines within one project
+# (A -> B -> A: a codeline keeps its own agents and prompts). Unset, the name is unchanged.
+CLONE="$CODELINE_ROOT/${MOCK1_CODELINE_NAME:-mock-hello-world}"
 SYNTH_PRD="$WORKSPACE/synthesized-prd.json"
 # The PRD above does not exist yet — ingest writes it — so the project is declared, not read.
 # DECLARED BY THE CONFIG DIR ALREADY RESOLVED ABOVE, not written here: an engine script naming

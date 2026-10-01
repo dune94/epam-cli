@@ -280,6 +280,19 @@ describe('the mint settles the deferred decision, once the codeline is known', (
     ownAgents(r);
   });
 
+  it('a kept codeline runs on ITS OWN prompts — another codeline\'s prompts on disk are replaced', () => {
+    // A -> B -> A: prompts/ is one directory per project, so after B it holds B's prompts.
+    const r = invokeMint({ marker: CODELINE, prdCodelines: [CODELINE], pending: true, afterComplete: (cfg) => {
+      foreign(cfg);
+      rmSync(join(cfg, 'prompts'), { recursive: true, force: true }); mkdirSync(join(cfg, 'prompts'));
+      writeFileSync(join(cfg, 'prompts', 'roster-review.json'), JSON.stringify({ body: 'ANOTHER CODELINE\'S' }));
+      writeFileSync(join(cfg, 'prompts', 'only-the-other-codeline-has-this.json'), '{}');
+    } });
+    expect(r.mintCalls, r.out.slice(-1200)).toBe(0);
+    expect(readFileSync(join(r.cfg, 'prompts', 'roster-review.json'), 'utf8'), 'the kept codeline is on another codeline\'s prompt').toBe(JSON.stringify({ body: 'PREVIOUS' }));
+    expect(existsSync(join(r.cfg, 'prompts', 'only-the-other-codeline-has-this.json')), 'another codeline\'s prompt survived into the kept codeline').toBe(false);
+  });
+
   it('a marker that recorded NO minted agents is not a completed codeline — the mint runs', () => {
     // The committed markers an install can carry beside agents minted for another codeline.
     const r = invokeMint({ marker: CODELINE, prdCodelines: [CODELINE], pending: true, handMarker: true });

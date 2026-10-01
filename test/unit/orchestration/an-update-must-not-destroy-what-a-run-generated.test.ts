@@ -241,6 +241,14 @@ describe('the mechanism, driven end to end against a real tree', () => {
     expect(out[p], 'the update replaced this install\'s recorded agents for the codeline with the ref\'s').toContain('THIS_INSTALL');
   });
 
+  it('A CODELINE\'S RECORDED PROMPTS SURVIVE — the install\'s own, never the ref\'s', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const b = require(join(__dirname, '../../../orchestrations/scripts/lib/project-prompt-builder.js'));
+    const p = join(b.recordedPromptsDir('orchestrations/projects/metrolinx', 'next.gotransit.com'), 'roster-review.json');
+    const { out } = roundTrip({ [p]: '{"body":"THIS_INSTALL"}' }, { [p]: '{"body":"FROM_THE_REF"}' });
+    expect(out[p], 'the update replaced this install\'s recorded prompts for the codeline with the ref\'s').toContain('THIS_INSTALL');
+  });
+
   it('and a FRESH install still receives the ref\'s cache', () => {
     // The other end: excluding the path outright would leave a first install with no cache at
     // all, which is why this is on the preserve list and not the tar --exclude list.

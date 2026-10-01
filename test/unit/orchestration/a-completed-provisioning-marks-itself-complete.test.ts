@@ -85,17 +85,27 @@ describe('the completion marker', () => {
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
-  it('clears EVERY codeline\'s marker when provisioning starts', () => {
-    const { root, out, cache, marker } = outDir();
+  it('clears only THE PROVISIONING codeline\'s marker — another codeline\'s completion survives', () => {
+    // A -> B -> A (2026-10-01): clearing every marker on the way in made B's provisioning erase A's
+    // completion, so A's next run minted and built everything again. A codeline's completion now
+    // records its own agents and prompts, so another codeline's claim stays true while B rewrites.
+    const { root, out, marker } = outDir();
     try {
-      // Two codelines are two files. clearCompletionMarker removes ALL of them on the way in,
-      // so a stale claim for another codeline cannot survive a provisioning run.
       writeCompletionMarker({ outDir: out, codeline: 'a', provisioned: 10 });
       writeCompletionMarker({ outDir: out, codeline: 'b', provisioned: 39 });
-      expect(existsSync(marker('a'))).toBe(true);
-      expect(existsSync(marker('b'))).toBe(true);
+      clearCompletionMarker({ outDir: out, codeline: 'b' });
+      expect(existsSync(marker('b')), 'the provisioning codeline\'s own claim survived its rewrite').toBe(false);
+      expect(existsSync(marker('a')), 'another codeline\'s completion was erased by this codeline\'s provisioning').toBe(true);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it('with NO codeline named, clears every marker — no claim can be proven unaffected', () => {
+    const { root, out, marker } = outDir();
+    try {
+      writeCompletionMarker({ outDir: out, codeline: 'a', provisioned: 10 });
+      writeCompletionMarker({ outDir: out, codeline: 'b', provisioned: 39 });
       clearCompletionMarker({ outDir: out });
-      expect(existsSync(marker('a')), 'a previous codeline\'s claim survived the clear').toBe(false);
+      expect(existsSync(marker('a'))).toBe(false);
       expect(existsSync(marker('b'))).toBe(false);
     } finally { rmSync(root, { recursive: true, force: true }); }
   });

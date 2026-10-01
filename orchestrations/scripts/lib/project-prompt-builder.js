@@ -534,7 +534,12 @@ async function buildProjectPrompts({
   // From here on this run is rewriting the project's prompts. If it dies partway, a marker
   // left by the LAST run still reads 'complete', and the NEXT run would inherit a
   // half-written set as finished. Cleared on the way in, rewritten only on the way out.
-  clearCompletionMarker({ outDir });
+  // The operator's explicit id still wins; otherwise the run's own detected scope decides.
+  const safeCodeline = codelineSegment(process.env.EPAM_CODELINE_ID)
+    || codelineSegment(codelineFromPrd(process.env.PRD_FILE));
+  // ONLY THIS CODELINE'S CLAIM: another codeline's completion records its own agents and prompts,
+  // so it stays true while this one rewrites prompts/ (A -> B -> A, 2026-10-01).
+  clearCompletionMarker({ outDir, codeline: safeCodeline });
 
   // ── Bootstrap: verbatim, byte for byte ──────────────────────────────────
   const copied = [];
@@ -622,8 +627,6 @@ async function buildProjectPrompts({
   // reduced to a single safe path segment before it names a directory — 'a/b' and '../x' must not
   // decide where this process writes.
   // The operator's explicit id still wins; otherwise the run's own detected scope decides.
-  const safeCodeline = codelineSegment(process.env.EPAM_CODELINE_ID)
-    || codelineSegment(codelineFromPrd(process.env.PRD_FILE));
   const cacheDir = safeCodeline ? path.join(cacheRoot, safeCodeline) : cacheRoot;
   // MIGRATION, not discard. Entries written before this change sit flat at the cache root and
   // record no codeline, so they can only be attributed by the codeline the run declares. Moving
@@ -955,7 +958,7 @@ function promptInputsDigest({ templatesDir, registryFile } = {}) {
  */
 function codelinePromptsComplete({ projectConfigDir, codeline, templatesDir, registryFile } = {}) {
   if (!projectConfigDir || !codeline) return { complete: false, reason: 'no project or codeline named' };
-  const variant = process.env.EPAM_BROWNFIELD === '1' ? '.brownfield' : '';
+  const variant = process.env.EPAM_BROWNFIELD === '1' ? BROWNFIELD_VARIANT : '';
   const p = path.join(projectConfigDir, '.prompt-cache', `.complete-${String(codeline).trim()}${variant}`);
   let stored = '';
   try { stored = fs.readFileSync(p, 'utf8').trim(); } catch { return { complete: false, reason: `no completion marker at ${p}` }; }
@@ -971,6 +974,14 @@ function codelinePromptsComplete({ projectConfigDir, codeline, templatesDir, reg
  * exactly these. Per project on disk; per codeline in the cache, as the prompts are.
  */
 const MINTED_FILES = ['roster.json', 'project-roles.json', 'project-investigators.json', 'agent-profiles.json'];
+
+/** The marker-name suffix of a brownfield provisioning (kept in step with lib/prompt-variant.sh). */
+const BROWNFIELD_VARIANT = '.brownfield';
+
+/** Where a codeline's completion records the prompts it installed — beside its recorded agents. */
+function recordedPromptsDir(projectConfigDir, codeline) {
+  return path.join(String(projectConfigDir || ''), '.prompt-cache', codelineSegment(codeline) || '_', 'prompts');
+}
 
 function mintedSnapshotDir(projectConfigDir, codeline) {
   return path.join(String(projectConfigDir || ''), '.prompt-cache', codelineSegment(codeline) || '_', 'minted');
@@ -1009,6 +1020,15 @@ function restoreMinted({ projectConfigDir, codeline } = {}) {
     const rec = path.join(d, f); const dst = path.join(projectConfigDir, f);
     if (fs.existsSync(rec)) fs.copyFileSync(rec, dst); else fs.rmSync(dst, { force: true });
   }
+  // AND ITS PROMPTS: prompts/ is one directory per project, so another codeline's may be on disk.
+  // Exactly the recorded set — none another codeline left behind.
+  const rp = recordedPromptsDir(projectConfigDir, codeline);
+  if (fs.existsSync(rp)) {
+    const out = path.join(projectConfigDir, 'prompts');
+    fs.rmSync(out, { recursive: true, force: true });
+    fs.mkdirSync(out, { recursive: true });
+    for (const f of fs.readdirSync(rp).filter((n) => n.endsWith('.json'))) fs.copyFileSync(path.join(rp, f), path.join(out, f));
+  }
   return true;
 }
 
@@ -1039,7 +1059,7 @@ function _markerPath(outDir, codeline) {
   //
   // Greenfield's name is unchanged, byte for byte, so no marker already on disk is invalidated.
   // Kept in step with prompt_marker_key in lib/prompt-variant.sh, which the shell call sites use.
-  const variant = process.env.EPAM_BROWNFIELD === '1' ? '.brownfield' : '';
+  const variant = process.env.EPAM_BROWNFIELD === '1' ? BROWNFIELD_VARIANT : '';
   return path.join(outDir, '..', '.prompt-cache', `.complete-${codeline}${variant}`);
 }
 
@@ -1071,6 +1091,10 @@ function writeCompletionMarker({ outDir, codeline, provisioned, templatesDir, re
     // codeline's agents only by restoring this record (codeline_minted_restore) — a marker alone
     // says the prompts are complete, never whose agents are on disk.
     snapshotMinted({ projectConfigDir: path.join(outDir, '..'), codeline: String(codeline).trim() });
+    const rp = recordedPromptsDir(path.join(outDir, '..'), String(codeline).trim());
+    fs.rmSync(rp, { recursive: true, force: true });
+    fs.mkdirSync(rp, { recursive: true });
+    for (const f of fs.readdirSync(outDir).filter((n) => n.endsWith('.json'))) fs.copyFileSync(path.join(outDir, f), path.join(rp, f));
     // The digest of what was built from — never an empty file (see promptInputsDigest).
     fs.writeFileSync(p, promptInputsDigest({ templatesDir, registryFile }) + '\n');
   } catch { /* an optimisation must never fail the run it optimises */ }
@@ -1084,21 +1108,26 @@ function writeCompletionMarker({ outDir, codeline, provisioned, templatesDir, re
  * and the NEXT run inherits a half-written set as though it were finished. Cleared on the way in,
  * rewritten only on the way out.
  */
-function clearCompletionMarker({ outDir } = {}) {
+function clearCompletionMarker({ outDir, codeline } = {}) {
   try {
     if (!outDir) return;
-    // Every marker, whatever codeline it names: this run is about to rewrite the prompts, so no
-    // previous completion claim survives it.
     const dir = path.join(outDir, '..', '.prompt-cache');
+    // THIS CODELINE'S CLAIM, in either variant: its prompts are being rewritten. Another codeline's
+    // completion recorded its own agents and prompts, and the mint restores them when it keeps
+    // that codeline — so its claim stays true. With no codeline named, no claim is provably
+    // unaffected: every one goes.
+    const cl = String(codeline || '').trim();
+    const mine = cl ? [`.complete-${cl}`, `.complete-${cl}${BROWNFIELD_VARIANT}`] : null;
     for (const n of (fs.existsSync(dir) ? fs.readdirSync(dir) : [])) {
-      if (n.startsWith('.complete-')) fs.rmSync(path.join(dir, n), { force: true });
+      if (!n.startsWith('.complete-')) continue;
+      if (!mine || mine.includes(n)) fs.rmSync(path.join(dir, n), { force: true });
     }
   } catch { /* best effort, same reasoning as above */ }
 }
 
 module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList, rolesIdentity, GEN_BODY_SLOT,
   writeCompletionMarker, clearCompletionMarker, promptInputsDigest, codelinePromptsComplete,
-  MINTED_FILES, mintedSnapshotDir, hasMintedSnapshot, restoreMinted, clearMinted,
+  MINTED_FILES, mintedSnapshotDir, recordedPromptsDir, hasMintedSnapshot, restoreMinted, clearMinted,
   // Exported so the codeline keying is assertable without provisioning: a segment that escapes
   // the cache directory is a defect no end-to-end assertion would localise.
   codelineSegment, migrateFlatEntries, codelineFromPrd,

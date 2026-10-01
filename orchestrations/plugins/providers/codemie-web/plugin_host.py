@@ -45,7 +45,8 @@ def _tools(mode: str, root: str) -> tuple:
         return ro_tools(root) + hosted_tools(root), None
     if mode == "rw":
         from toolkits.development.toolkit import FileSystemAndCommandToolkit
-        os.environ["PLUGIN_LABEL"] = os.path.basename(root)
+        from plugin_ro import plugin_label
+        os.environ["PLUGIN_LABEL"] = plugin_label(root)
         return FileSystemAndCommandToolkit().get_tools(root) + hosted_tools(root), int(os.getenv("COMMAND_LINE_TOOL_TIMEOUT", "300"))
     raise ValueError(f"unknown plugin mode '{mode}'")
 

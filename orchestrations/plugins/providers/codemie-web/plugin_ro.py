@@ -16,6 +16,16 @@ from pathlib import Path
 from typing import Optional, Type
 
 from codemie.toolkit import RemoteInput, RemoteTool
+
+
+def plugin_label(root: str) -> str:
+    """The label a plugin answers to: its root folder's name, made safe for CodeMie's addressing.
+
+    CodeMie sends a tool request to "<key>.<session>.<label>.<tool>" and splits it on dots, so a label
+    with a dot is never matched — every tool call to next.upexpress.com's plugin was refused
+    "Invalid label" (AMSD-2974, 2026-10-01). Anything but letters, digits, "_" and "-" becomes "-".
+    """
+    return re.sub(r"[^A-Za-z0-9_-]", "-", os.path.basename(os.path.normpath(root))) or "root"
 from pydantic import Field
 from toolkits.core.file_system_tools import ListDirectoryTool, ReadFileTool, RecursiveFileRetrieval
 from toolkits.core.utils import get_relative_path

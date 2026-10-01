@@ -118,10 +118,36 @@ const produce = async ({ canonicalCopyPath, outPath, refusal, attempt }) => {
   // an agent that quietly has nothing, and this one's whole job is to read the codeline and
   // write a file.
   if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
-  const reply = await spec.runClaude(
-    promptExec, prompt,
-    path.join(LOG_DIR, 'roster-specialiser.log'),
-    seamEnv, { costAgent: 'roster-specialiser' });
+  const ask = (text, log) => spec.runClaude(promptExec, text, path.join(LOG_DIR, log), seamEnv, { costAgent: 'roster-specialiser' });
+  // THE ROSTER IN TURNS ON A SET THAT CUTS LONG ANSWERS. A runner that declares `limits` returns at
+  // most one turn's worth of text and reports the cut answer as a success — live 2026-10-01 (AMSD-2974,
+  // codemie-web) the whole delta in one answer was cut three times and the mint refused the run. So one
+  // turn names the agents and one turn per agent writes its entry; the engine merges them. A set with
+  // no declared budget is asked once, as before.
+  const budget = require('./project-prompt-builder.js').answerBudgetChars();
+  let reply;
+  if (Number.isFinite(budget)) {
+    const { extractDeltaJson } = require('./project-roster.js');
+    const namesReply = String(await ask(prompt + renderEngineTemplate('roster-specialisation-plan', {}), 'roster-specialiser.log') || '');
+    let names = [];
+    try {
+      const m = namesReply.match(/\{[\s\S]*\}/);
+      const parsed = m ? JSON.parse(m[0]) : null;
+      names = Array.isArray(parsed && parsed.agents) ? parsed.agents.filter((n) => typeof n === 'string' && n.trim()) : [];
+    } catch { names = []; }
+    const agents = {};
+    for (const name of names) {
+      const part = String(await ask(prompt + renderEngineTemplate('roster-specialisation-one',
+        { __AGENT__: name, __BUDGET_CHARS__: String(budget) }), `roster-specialiser-${name}.log`) || '');
+      const d = extractDeltaJson(part);
+      if (d && d.agents && d.agents[name]) agents[name] = d.agents[name];
+    }
+    // WHOLE OR NOTHING: an agent the specialiser named but whose entry did not parse leaves no roster,
+    // so the attempt is refused and retried — never a roster quietly missing an agent it chose.
+    reply = names.length && Object.keys(agents).length === names.length ? JSON.stringify({ agents }) : '';
+  } else {
+    reply = await ask(prompt, 'roster-specialiser.log');
+  }
   // THE ENGINE PERFORMS THE WRITE. The delta is the seam's ANSWER — the same delivery the
   // prompt-builder seam uses — so the agent needs no write tool, and a rehearsal that answers
   // from a recording or a contract stand-in delivers exactly what a live model does. Delivered

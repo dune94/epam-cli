@@ -1,0 +1,14 @@
+{
+  "$why": [
+    "THE ROSTER IN TURNS — one agent's entry per turn, on a set that cuts long answers. See",
+    "roster-specialisation-plan. Chosen by lib/roster-seams.js."
+  ],
+  "id": "roster-specialisation-one",
+  "description": "Appended to the roster specialiser's prompt on a budgeted set: answer with one named agent's entry.",
+  "version": 1,
+  "placeholders": [
+    "__AGENT__",
+    "__BUDGET_CHARS__"
+  ],
+  "body": "\n\n## THIS TURN: ONE AGENT ONLY — __AGENT__\nYour answers on this platform are limited to about __BUDGET_CHARS__ characters, so the roster is built one agent per turn. In THIS turn answer with the JSON object described above containing ONLY the entry for \"__AGENT__\" — {\"agents\": {\"__AGENT__\": { ... }}} — and keep the whole answer within that limit.\n"
+}

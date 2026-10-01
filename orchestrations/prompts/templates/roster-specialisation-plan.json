@@ -1,0 +1,12 @@
+{
+  "$why": [
+    "THE ROSTER IN TURNS, ON A SET THAT CUTS LONG ANSWERS (its runner declares `limits`). Live 2026-10-01,",
+    "AMSD-2974 on codemie-web: the whole delta in one answer was cut by CodeMie and refused three times. This turn",
+    "asks only for the names; roster-specialisation-one asks for each entry. Chosen by lib/roster-seams.js."
+  ],
+  "id": "roster-specialisation-plan",
+  "description": "Appended to the roster specialiser's prompt on a budgeted set: answer with the agent names only.",
+  "version": 1,
+  "placeholders": [],
+  "body": "\n\n## THIS TURN: NAMES ONLY\nYour answers on this platform are limited in length, so the roster is built one agent per turn. In THIS turn answer ONLY with the names of the agents you will specialise or add — nothing else, no personas:\n\n{\"agents\": [\"<agent name>\", \"<agent name>\"]}\n\nEach named agent is then asked for in its own turn.\n"
+}

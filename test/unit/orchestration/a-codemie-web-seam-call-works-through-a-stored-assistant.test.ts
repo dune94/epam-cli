@@ -38,8 +38,22 @@ let dir = ''; let agent: MockAgent; let cm: MockCodeMie; let venv = ''; let code
 function obliging(call: Call): Turn {
   const prompt = call.req.messages.find((m) => m.role === 'user')?.text || '';
   const results = call.req.messages.filter((m) => m.role === 'tool').map((m) => m.text);
-  if (results.length) return { kind: 'text', text: `TOOL-RESULTS: ${results.join(' | ')}` };
+  if (results.length && !/LOOP-FOREVER/.test(prompt)) return { kind: 'text', text: `TOOL-RESULTS: ${results.join(' | ')}` };
   const byParams = (re: RegExp[]) => call.req.tools.find((t) => { const p = Object.keys(t.params?.properties || {}); return re.every((r) => p.some((k) => r.test(k))); });
+  // Checked before WRITE/READ: their names contain those words.
+  const long = /LONG (\d+)/.exec(prompt);
+  if (long) return { kind: 'text', text: JSON.stringify({ items: Array.from({ length: Number(long[1]) }, (_, i) => `entry-${i}`) }) };
+  const big = /BIGWRITE (\S+) (\d+)/.exec(prompt);
+  if (big) {
+    const tool = byParams([/path/i, /content|text/i]);
+    if (!tool) return { kind: 'text', text: 'NO-WRITE-TOOL' };
+    const p = Object.keys(tool.params.properties);
+    return { kind: 'tools', calls: [{ id: newCallId(), name: tool.name, input: { [p.find((k) => /path/i.test(k))!]: big[1], [p.find((k) => /content|text/i.test(k))!]: 'x'.repeat(Number(big[2])) } }] };
+  }
+  if (/LOOP-FOREVER/.test(prompt)) {
+    const tool = call.req.tools.find((t) => /read/i.test(t.name) && Object.keys(t.params?.properties || {}).some((k) => /path/i.test(k)));
+    if (tool) return { kind: 'tools', calls: [{ id: newCallId(), name: tool.name, input: { [Object.keys(tool.params.properties).find((k) => /path/i.test(k))!]: 'sentinel.txt' } }] };
+  }
   const w = /WRITE (\S+) (\S+)/.exec(prompt); const r = /READ (\S+)/.exec(prompt);
   if (w) {
     const tool = byParams([/path/i, /content|text/i]);
@@ -263,6 +277,37 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
     expect(q.stdout, q.stdout.slice(0, 600)).toMatch(/TOOL-RESULTS: .*no matches/);
     rmSync(outside, { recursive: true, force: true });
   }, 180_000);
+
+  // CODEMIE'S OWN LIMITS — measured, declared once (config/codemie-web.json platformLimits), enforced
+  // by the stand-in so a rehearsal meets what a live run meets (AMSD-2974 run 3, 2026-09-30).
+  const LIMITS = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/codemie-web.json'), 'utf8')).platformLimits;
+  const budgetChars = Math.floor(LIMITS.visibleTokensObservedMin * LIMITS.charsPerTokenObserved);
+
+  it('a final answer past the turn budget comes back CUT — and CodeMie still calls it a success', async () => {
+    const r = await call(`LONG ${budgetChars}`, { EPAM_AGENT_NAME: 'plan-reviewer', EPAM_MAX_TOOL_CALLS: '0' });
+    expect(r.status, r.stderr.slice(-1500)).toBe(0);
+    expect(r.json.is_error).toBe(false);
+    expect(r.stdout.trimEnd().length, 'the answer was not cut at the platform\'s budget').toBeLessThanOrEqual(budgetChars);
+    expect(r.stdout.length, 'nothing came back').toBeGreaterThan(0);
+  }, 180_000);
+
+  it('a tool call past the turn budget FAILS the chat, as CodeMie\'s token-limit error does — nothing is written', async () => {
+    const r = await call(`BIGWRITE big-write.txt ${budgetChars * 2}`, { EPAM_AGENT_NAME: 'story-writer', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,write_file,bash' });
+    expect(r.status, `${r.stdout.slice(0, 300)}\n${r.stderr.slice(-1500)}\n${JSON.stringify(cm.chats.slice(-3).map((c) => ({ a: c.assistant, tools: c.tools.length, calls: c.toolCalls.length, status: c.status })))}`).not.toBe(0);
+    expect(r.json.is_error).toBe(true);
+    expect(existsSync(join(codeline, 'big-write.txt'))).toBe(false);
+  }, 180_000);
+
+  it('an agent loop past the platform\'s step limit FAILS the chat', async () => {
+    const before = cm.chats.length;
+    const r = await call('LOOP-FOREVER', { EPAM_AGENT_NAME: READ_ONLY_SEAM, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search' });
+    expect(r.status).not.toBe(0);
+    expect(r.json.is_error).toBe(true);
+    const chat = cm.chats.slice(before).find((c) => c.assistant.endsWith(READ_ONLY_SEAM));
+    expect(chat, 'the loop never reached the stand-in').toBeTruthy();
+    // A step is a model turn or a tool turn (LangGraph's agent and tools nodes).
+    expect(chat!.toolCalls.length * 2, 'the loop ran past the platform\'s step limit').toBeLessThanOrEqual(LIMITS.agentSteps);
+  }, 300_000);
 
   it('an answer with nothing in it is a failure the ladder can act on, not a success', async () => {
     const r = await call('SAY-NOTHING', { EPAM_AGENT_NAME: 'plan-reviewer' });

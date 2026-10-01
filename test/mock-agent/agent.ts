@@ -45,7 +45,7 @@ export class MockAgent {
   private mounts: ((method: string, path: string, raw: string, res: ServerResponse) => boolean)[] = [];
   port = 0;
 
-  constructor(orchestrationsDir: string, readonly journal: string, readonly knownStories: () => string[] = () => [], readonly modes: string[] = []) {
+  constructor(readonly orchestrationsDir: string, readonly journal: string, readonly knownStories: () => string[] = () => [], readonly modes: string[] = []) {
     this.decl = new Declarations(orchestrationsDir);
     mkdirSync(journal, { recursive: true });
     this.server = createServer((req, res) => this.handle(req, res));

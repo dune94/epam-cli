@@ -19,7 +19,7 @@
 import { createServer as netServer, type Server as NetServer, type Socket } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import type { ServerResponse } from 'node:http';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { MockAgent } from './agent';
 
@@ -141,7 +141,21 @@ export class MockCodeMie {
   private seq = 0;
 
   /** `models`: the catalog — what the install's ladder can climb to, so a missing rung is the install's fault. */
+  /**
+   * CODEMIE'S OWN LIMITS, as measured and declared once (config/codemie-web.json platformLimits) — so a
+   * rehearsal meets the cut, the step limit and the silent success a live run meets (AMSD-2974 run 3,
+   * 2026-09-30). An install that declares none cannot be rehearsed on this set: refused, not guessed.
+   */
+  readonly limits: { visibleTokensObservedMin: number; charsPerTokenObserved: number; agentSteps: number };
+  private get budgetChars() { return Math.floor(this.limits.visibleTokensObservedMin * this.limits.charsPerTokenObserved); }
+
   constructor(private agent: MockAgent, private journal: string, private models: string[], readonly user = 'rehearsal@codemie.local') {
+    const cfg = join(agent.orchestrationsDir, 'config/codemie-web.json');
+    const declared = existsSync(cfg) ? JSON.parse(readFileSync(cfg, 'utf8')).platformLimits : undefined;
+    if (!declared || !(declared.visibleTokensObservedMin > 0) || !(declared.charsPerTokenObserved > 0) || !(declared.agentSteps > 0)) {
+      throw new Error(`[mock-codemie] ${cfg} declares no platformLimits — CodeMie's limits cannot be rehearsed`);
+    }
+    this.limits = declared;
     this.engine = new PluginEngine((u) => this.integrations.some((i) => i.key === u), (l) => this.note(l));
     mkdirSync(journal, { recursive: true });
     agent.mount((m, p, raw, res) => this.route(m, p, raw, res));
@@ -207,13 +221,20 @@ export class MockCodeMie {
       const integ = this.integrations.find((i) => i.id === tk.settings?.id);
       if (!integ) return done(422, { error: { message: `the assistant's Plugin toolkit names integration ${tk.settings?.id}, which does not exist` } });
       try { tools = tools.concat(JSON.parse((await this.engine.request(`${integ.key}.list`, Buffer.alloc(0), 30_000)).toString('utf8'))); } catch (e) {
-        return done(200, { generated: '', success: false, agentError: { message: `Plugin '${integ.alias}' is not connected: ${(e as Error).message}` }, toolErrors: [] });
+        return done(200, { generated: '', success: false, agent_error: { message: `Plugin '${integ.alias}' is not connected: ${(e as Error).message}` }, tool_errors: [], tokens_used: null });
       }
     }
     record.tools = tools.map((t) => t.name);
     const messages: any[] = [{ role: 'system', content: a.system_prompt || '' }, { role: 'user', content: String(b.text || '') }];
     const toolErrors: string[] = [];
-    for (let turn = 0; turn < 100; turn += 1) {
+    // A FAILED RUN, as CodeMie returns one: success:false, the message in `generated`, no agent_error,
+    // no tokens (langgraph_agent._invoke_agent → _build_generation_result(message, success=False)).
+    const failed = (why: string) => done(200, { generated: why, time_elapsed: (Date.now() - t0) / 1000, tokens_used: null, success: false, agent_error: null, tool_errors: toolErrors });
+    // A step is a node LangGraph runs — the model's turn, or the tools' turn (AI_AGENT_RECURSION_LIMIT).
+    let steps = 0;
+    for (;;) {
+      steps += 1;
+      if (steps > this.limits.agentSteps) return failed(`Recursion limit of ${this.limits.agentSteps} reached without hitting a stop condition`);
       const r = await fetch(`${this.agent.url}/v1/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
         model: record.model, stream: false, messages,
         ...(tools.length ? { tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.args_schema || { type: 'object', properties: {} } } })) } : {}),
@@ -223,11 +244,20 @@ export class MockCodeMie {
       if (!r.ok) return done(r.status, { error: { message: `model call failed (${r.status}): ${text.slice(0, 400)}` } });
       const msg = JSON.parse(text).choices?.[0]?.message || {};
       if (!msg.tool_calls?.length) {
-        let generated: unknown = msg.content ?? '';
+        // A FINAL ANSWER PAST THE TURN'S BUDGET IS CUT — and still a success: CodeMie checks for
+        // truncation only on tool-call turns (langgraph_event_adapter.parse_update_type).
+        let generated: unknown = typeof msg.content === 'string' && msg.content.length > this.budgetChars ? msg.content.slice(0, this.budgetChars) : (msg.content ?? '');
         if (b.output_schema && typeof generated === 'string') { try { generated = JSON.parse(generated); } catch { /* CodeMie hands back what the model said */ } }
         record.generated = generated;
-        return done(200, { generated, timeElapsed: (Date.now() - t0) / 1000, tokensUsed: null, success: true, toolErrors });
+        return done(200, { generated, time_elapsed: (Date.now() - t0) / 1000, tokens_used: null, success: true, agent_error: null, tool_errors: toolErrors });
       }
+      // A TOOL CALL PAST THE TURN'S BUDGET was cut mid-arguments: CodeMie refuses to run it
+      // (TokenLimitExceededException) and the chat fails.
+      if (JSON.stringify(msg.tool_calls.map((c: any) => c.function?.arguments || '')).length > this.budgetChars) {
+        return failed('The configured output token limit was reached.');
+      }
+      steps += 1;
+      if (steps > this.limits.agentSteps) return failed(`Recursion limit of ${this.limits.agentSteps} reached without hitting a stop condition`);
       messages.push({ role: 'assistant', content: null, tool_calls: msg.tool_calls });
       for (const call of msg.tool_calls) {
         const tool = tools.find((t) => t.name === call.function?.name);
@@ -239,6 +269,5 @@ export class MockCodeMie {
         messages.push({ role: 'tool', tool_call_id: call.id, content: out.error || out.result });
       }
     }
-    return done(200, { generated: '', success: false, agentError: { message: 'the agent loop reached 100 turns' }, toolErrors });
   }
 }

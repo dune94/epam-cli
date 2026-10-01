@@ -1,0 +1,16 @@
+{
+  "$why": [
+    "THE PIPELINE'S TOOLS AS SHELL COMMANDS, NAMED BY A VARIABLE — NEVER BY A PATH (operator, 2026-10-01:",
+    "'hard coded local paths are not generated into prompts or SI text').",
+    "",
+    "On a set whose runner does not host the pipeline's tools, an agent runs them through its shell. The",
+    "prompt names the variable (prompts/templates/pipeline-tools-command.json); the hub (llm-handler.sh)",
+    "exports each variable as the script beside it, so the agent's shell resolves it and no path is ever",
+    "written into a prompt. Keys are the variables; values are script names under orchestrations/scripts."
+  ],
+  "commands": {
+    "EPAM_CODEGRAPH_TOOL": "codegraph-agent-query.sh",
+    "EPAM_SEARCH_TOOL": "ripgrep-search.sh",
+    "EPAM_PACKAGE_SYMBOL_TOOL": "resolve-package-symbol.sh"
+  }
+}

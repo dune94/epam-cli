@@ -3278,7 +3278,7 @@ function buildGuardVocabularyPrompt({ seam, rule, _statements, manifest, docBloc
     __STORY_TITLE__: (story && story.title) || '',
     __STORY_DESCRIPTION__: String((story && story.description) || ''),
     __CODEGRAPH_SECTION__: codegraphTool && repoPath
-      ? renderEngineTemplate('guard-vocabulary-codegraph', { __REPO_PATH__: repoPath, __CODEGRAPH_TOOL__: codegraphTool })
+      ? renderEngineTemplate('guard-vocabulary-codegraph', { __PIPELINE_TOOLS__: require('./lib/pipeline-tools.js').pipelineToolsBlock() })
       : '',
   });
 }
@@ -6769,8 +6769,9 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
     'code-graph-detective',
     process.env.EPAM_PROJECT_CONFIG_DIR || '',
     {
-      __REPO_PATH__: repoPath,
-      __TOOL_PATH__: toolPath,
+      // ITS TOOLS BY NAME, NEVER A PATH — hosted tools or shell commands, as this set reaches them
+      // (lib/pipeline-tools.js; operator, 2026-10-01: relative paths only).
+      __PIPELINE_TOOLS__: require('./lib/pipeline-tools.js').pipelineToolsBlock(),
       __STORY_TITLE__: story.title || '',
       __STORY_DESCRIPTION__: story.description ? 'Description: ' + String(story.description) + '\n' : '',
       // A BLOCK OR NOTHING — the same shape lib/story-acs-block.sh gives the shell seams. The

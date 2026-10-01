@@ -23,6 +23,7 @@ import { spawnSync, execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { mintProjectPrompts } from '../../helpers/project-prompts';
 
 const ROOT = join(__dirname, '../../../');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -107,7 +108,8 @@ describe('a hook-rejected repro test is a failed attempt', () => {
       ...process.env,
       EPAM_BROWNFIELD: '1', PROJECT_ROOT: fx.proj, PRD_FILE: fx.prd, AI_RUNNER_CMD: fx.stub,
       JIRA_BASELINE_BRANCH: 'develop', LOG_DIR: join(fx.d, 'logs'), NODE_BIN: NODE,
-      EPAM_PROJECT_CONFIG_DIR: join(ROOT, 'orchestrations/projects/metrolinx'),
+      // A project copy of TODAY's templates, not whatever a project's generated copy is on disk.
+      EPAM_PROJECT_CONFIG_DIR: mintProjectPrompts(),
       REPRO_TEST_WRITER_MAX_ATTEMPTS: '3',
       // Skip the target micro-question: only write attempts should reach the stub.
       EPAM_TEST_TARGET_ASK: '0',

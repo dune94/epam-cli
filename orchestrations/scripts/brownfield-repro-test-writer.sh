@@ -428,7 +428,7 @@ _estimation_assessment=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/estimatio
 }
 jq_vals \
   --arg project_root "$PROJECT_ROOT" \
-  --arg script_dir "$SCRIPT_DIR" \
+  --arg pipeline_tools "$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/pipeline-tools.js" --block)" \
   --arg estimation_assessment "$_estimation_assessment" \
   --arg diff_heading "$_diff_heading" \
   --arg example_block "$_example_block" \
@@ -439,7 +439,7 @@ jq_vals \
   --arg target_rel "$_target_rel" \
   --arg typecheck_command "$_typecheck_cmd" \
   --arg vcs "${_vcs:-- The behavior described in the ticket is now correct, and related behavior did not regress}" \
-  '{"__PROJECT_ROOT__":$project_root,"__SCRIPT_DIR__":$script_dir,
+  '{"__PROJECT_ROOT__":$project_root,"__PIPELINE_TOOLS__":$pipeline_tools,
     "__DIFF_HEADING__":$diff_heading,"__EXAMPLE_BLOCK__":$example_block,
     "__EXT__":$ext,"__FIX_DIFF__":$fix_diff,"__PROMPT_ROLE__":$prompt_role,
     "__REQ_PROOF__":$req_proof,"__TARGET_REL__":$target_rel,

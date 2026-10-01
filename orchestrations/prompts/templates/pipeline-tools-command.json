@@ -1,0 +1,13 @@
+{
+  "$why": [
+    "THE PIPELINE'S TOOLS, ON A SET WHERE THE AGENT RUNS THEM THROUGH ITS SHELL.",
+    "Each is named by a variable from config/pipeline-tool-commands.json, which the hub exports — the",
+    "agent's shell resolves it, so no local path is written into the prompt (operator, 2026-10-01).",
+    "Chosen by lib/pipeline-tools.js; the counterpart is pipeline-tools-hosted."
+  ],
+  "id": "pipeline-tools-command",
+  "description": "Tells an agent which pipeline tools it has, on a set where it runs them through its shell.",
+  "version": 1,
+  "placeholders": [],
+  "body": "YOUR TOOLS — run each with your shell tool exactly as written (the variables are already set in your environment, and you work at the repository root):\n  bash \"$EPAM_CODEGRAPH_TOOL\" explore <domain nouns>\n  bash \"$EPAM_CODEGRAPH_TOOL\" query <SymbolName>      # exact definition + signature + import path\n  bash \"$EPAM_CODEGRAPH_TOOL\" callers <SymbolName>\n  bash \"$EPAM_CODEGRAPH_TOOL\" callees <SymbolName>\n  bash \"$EPAM_CODEGRAPH_TOOL\" show <file> [startLine] [endLine]\n  bash \"$EPAM_SEARCH_TOOL\" --string \"<exact symbol>\" [--glob \"*.ts\"]\n  bash \"$EPAM_SEARCH_TOOL\" --file \"<part of a filename>\"\n  bash \"$EPAM_PACKAGE_SYMBOL_TOOL\" \"<package name>\" \"<method or function name>\"   # a third-party symbol's real declared shape and documented usage\n"
+}

@@ -227,6 +227,12 @@ cat > "$PROMPT_FILE"
 # JIRA_CODELINE_ROOT). A path under neither is left as it is, for the rehearsal to name.
 "${NODE_BIN:-node}" "$_SCRIPT_DIR_AIRUN/lib/relative-paths.js" "$PROMPT_FILE" \
     ${_SI_OWNED:+"$EPAM_SI_FILE"} >&2 || true
+# THE PIPELINE'S TOOLS AS NAMED COMMANDS. A prompt names a tool by variable ("$EPAM_CODEGRAPH_TOOL"),
+# never by path (prompts/templates/pipeline-tools-command.json); every runner started from here
+# inherits the variables, so the agent's shell resolves them (config/pipeline-tool-commands.json).
+while IFS='=' read -r _pt_key _pt_val; do
+    [ -n "$_pt_key" ] && export "$_pt_key=$_pt_val"
+done < <("${NODE_BIN:-node}" "$_SCRIPT_DIR_AIRUN/lib/pipeline-tools.js" --env 2>/dev/null)
 
 retryable_failure() {
   local text_lc

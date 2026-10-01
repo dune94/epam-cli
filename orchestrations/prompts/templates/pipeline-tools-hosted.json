@@ -1,0 +1,12 @@
+{
+  "$why": [
+    "THE PIPELINE'S TOOLS, ON A SET THAT ATTACHES THEM TO THE AGENT (its runner declares hostedToolPlugins).",
+    "Chosen by lib/pipeline-tools.js; the counterpart is pipeline-tools-command. No path: the tools are",
+    "attached, and their schemas say the rest (operator, 2026-10-01: relative paths only)."
+  ],
+  "id": "pipeline-tools-hosted",
+  "description": "Tells an agent which pipeline tools it has, on a set that hosts them as tools.",
+  "version": 1,
+  "placeholders": [],
+  "body": "YOUR TOOLS — they are attached to you; call them directly (there are no scripts to run):\n  codegraph_query — mode \"explore\" with terms \"<domain nouns>\"; mode \"query\", \"callers\" or \"callees\" with symbol \"<SymbolName>\"; mode \"show\" with file \"<file>\" and optional startLine/endLine. When more than one codeline is in scope, name the codeline.\n  your search tool — find an exact symbol, or a file by part of its name, across the working tree.\n  resolve_package_symbol — packageName \"<package name>\", symbol \"<method or function name>\": a third-party symbol's real declared shape and the package's documented usage.\n"
+}

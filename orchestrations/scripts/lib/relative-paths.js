@@ -40,3 +40,18 @@ function promptBases(env = process.env) {
 }
 
 module.exports = { relativizeLocalPaths, promptBases };
+
+// CLI: node relative-paths.js <file>... — rewrite each file in place, relative to the call's bases
+// (the hub runs this on every prompt and SI it hands a runner).
+if (require.main === module) {
+  // eslint-disable-next-line global-require
+  const fs = require('fs');
+  const bases = promptBases();
+  for (const f of process.argv.slice(2)) {
+    try {
+      const text = fs.readFileSync(f, 'utf8');
+      const out = relativizeLocalPaths(text, bases);
+      if (out !== text) fs.writeFileSync(f, out);
+    } catch (e) { process.stderr.write(`[relative-paths] ${f}: ${e.message}\n`); process.exitCode = 1; }
+  }
+}

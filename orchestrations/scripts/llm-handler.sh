@@ -221,6 +221,12 @@ if [ -n "${LOG_DIR:-}" ] && [ -z "${EPAM_STREAM_CAPTURE_DIR:-}" ]; then
 fi
 trap 'rm -f "$PROMPT_FILE"; [ -n "$_SI_OWNED" ] && rm -f "$EPAM_SI_FILE"' EXIT
 cat > "$PROMPT_FILE"
+# RELATIVE PATHS ONLY (operator, 2026-10-01). Every call passes here, however its prompt was built —
+# filled from a template, or assembled inline — so here the prompt and the SI have the run's local
+# paths made relative to where the agent works (lib/relative-paths.js; PROJECT_ROOT, then
+# JIRA_CODELINE_ROOT). A path under neither is left as it is, for the rehearsal to name.
+"${NODE_BIN:-node}" "$_SCRIPT_DIR_AIRUN/lib/relative-paths.js" "$PROMPT_FILE" \
+    ${_SI_OWNED:+"$EPAM_SI_FILE"} >&2 || true
 
 retryable_failure() {
   local text_lc

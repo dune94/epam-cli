@@ -79,7 +79,12 @@ beforeAll(async () => {
   cm = await new MockCodeMie(agent, join(dir, 'journal'), MODELS).start();
   venv = CODEMIE ? builtPythonEnv(ROOT, 'codemie-web')!.env : '';
 }, 900_000);
-afterAll(async () => { await cm?.stop(); await agent?.stop(); if (dir) rmSync(dir, { recursive: true, force: true }); });
+afterAll(async () => {
+  // EVERY PLUGIN THIS FILE STARTED STOPS HERE — not only in the test that asserts it. A filtered run
+  // (-t) skipped that test and left a plugin per run alive (7 found, 2026-09-30).
+  if (dir) { try { execSync(`bash -c '. ${JSON.stringify(RUNNER)}; provider_stop'`, { env: baseEnv() }); } catch { /* reported by the test that asserts it */ } }
+  await cm?.stop(); await agent?.stop(); if (dir) rmSync(dir, { recursive: true, force: true });
+});
 
 const baseEnv = () => ({
   ...process.env as Record<string, string>, EPAM_PROVIDER_SET: 'codemie-web', NODE_BIN: process.execPath,

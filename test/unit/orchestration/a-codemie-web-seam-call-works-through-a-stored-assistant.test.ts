@@ -293,9 +293,9 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
     rmSync(outside, { recursive: true, force: true });
   }, 180_000);
 
-  // CODEMIE'S OWN LIMITS — measured, declared once (config/codemie-web.json platformLimits), enforced
+  // CODEMIE'S OWN LIMITS — measured, declared once (the codemie-web runner's `limits`), enforced
   // by the stand-in so a rehearsal meets what a live run meets (AMSD-2974 run 3, 2026-09-30).
-  const LIMITS = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/codemie-web.json'), 'utf8')).platformLimits;
+  const LIMITS = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/llm-defaults.codemie-web.json'), 'utf8')).runners['codemie-web'].limits;
   const budgetChars = Math.floor(LIMITS.visibleTokensObservedMin * LIMITS.charsPerTokenObserved);
 
   it('a final answer past the turn budget comes back CUT — and CodeMie still calls it a success', async () => {

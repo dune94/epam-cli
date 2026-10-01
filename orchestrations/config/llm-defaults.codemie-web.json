@@ -72,7 +72,16 @@
         "plugins/secret-scan-plugin.js",
         "plugins/verification-plugin.js"
       ],
-      "$whyHostedToolPlugins": "The pipeline's own ToolPlugins (paths relative to orchestrations/) hosted by this set's local CodeMie plugin, so a CodeMie web assistant gets the same tools — same names, schemas and execution — as any other runner. Their names are read from the modules (invoke.js declaration), never listed here; a plugin marked readOnly hosts only tools whose own `permission` is 'safe'. Without this every pipeline tool was dropped on this set and the detective had list/read/search only (operator, 2026-10-01: 'without this the pipeline will not work at all')."
+      "$whyHostedToolPlugins": "The pipeline's own ToolPlugins (paths relative to orchestrations/) hosted by this set's local CodeMie plugin, so a CodeMie web assistant gets the same tools — same names, schemas and execution — as any other runner. Their names are read from the modules (invoke.js declaration), never listed here; a plugin marked readOnly hosts only tools whose own `permission` is 'safe'. Without this every pipeline tool was dropped on this set and the detective had list/read/search only (operator, 2026-10-01: 'without this the pipeline will not work at all').",
+      "limits": {
+        "outputTokensPerTurn": 4096,
+        "visibleTokensObservedMin": 1744,
+        "charsPerTokenObserved": 4.42,
+        "agentSteps": 150,
+        "requestSeconds": 300,
+        "$source": "Measured 2026-09-30 (memory pj_codemie_output_truncation_cause). outputTokensPerTurn: one call via `codemie proxy`, claude-opus-5, no max_tokens -> finish_reason length at completion_tokens 4096 (LiteLLM DEFAULT_ANTHROPIC_CHAT_MAX_TOKENS); the assistant API cannot send a limit. visibleTokensObservedMin + charsPerTokenObserved: the shortest cut assistant answer (AMSD-2974 run 3 roster-specialiser, 7,709 chars = 1,744 tokens by count_tokens) — the rest of the turn's budget is spent on something the API does not show. agentSteps: CodeMie AI_AGENT_RECURSION_LIMIT (configs/config.py). requestSeconds: CodeMie LLM_PROXY_TIMEOUT. A final text answer over the budget is cut and still returned success:true (the truncation check runs only on tool-call turns); a tool-call turn over it, or a loop past agentSteps, returns success:false with the message in `generated`.",
+        "$consumers": "project-prompt-builder.js (asks for a template's segments in groups that fit one turn); test/mock-agent/codemie.ts (the rehearsal's CodeMie enforces them)."
+      }
     }
   }
 }

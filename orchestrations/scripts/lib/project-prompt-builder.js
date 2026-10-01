@@ -189,7 +189,65 @@ function rolesIdentity(mintedRoles) {
   return out.sort().join(',');
 }
 
-function renderGeneratorPrompt({ generatorBody, template, projectContext, codelineContext, mintedRoles, refusal }) {
+/**
+ * THE ACTIVE SET'S ANSWER BUDGET, in characters — what one model turn can return on it, as the set
+ * declares (a runner's `limits`: the smallest visible answer measured, at the measured characters
+ * per token). Infinity when no runner of the active set declares one: nothing changes for that set.
+ */
+function answerBudgetChars() {
+  try {
+    // eslint-disable-next-line global-require
+    const { activeSetFile, readSetFile } = require('./llm-settings-resolve.js');
+    const f = activeSetFile();
+    const runners = (f && (readSetFile(f) || {}).runners) || {};
+    const budgets = Object.values(runners).map((r) => r && r.limits)
+      .filter((l) => l && l.visibleTokensObservedMin > 0 && l.charsPerTokenObserved > 0)
+      .map((l) => Math.floor(l.visibleTokensObservedMin * l.charsPerTokenObserved));
+    return budgets.length ? Math.min(...budgets) : Infinity;
+  } catch { return Infinity; }
+}
+
+/**
+ * THE TEMPLATE'S PROSE IN PARTS THAT FIT ONE TURN.
+ *
+ * A unit is one segment, or — when a single segment is itself longer than a turn can return — one
+ * piece of it, split at paragraph breaks (PARAGRAPH, rejoined with the same). Units are grouped so
+ * each group's reply (its markers and wording, at the length shown) stays within the budget. With
+ * no budget declared, or when everything fits, there is one group of the whole segments: the single
+ * call every set made before. Returns { units: [{ seg, text }], groups: [{ from, to }] }.
+ */
+const PARAGRAPH = '\n\n';
+function promptParts(segments, budget) {
+  // eslint-disable-next-line global-require
+  const { formatSegments } = require('./project-prompt-contract.js');
+  const whole = { units: segments.map((text, seg) => ({ seg, text })), groups: [{ from: 0, to: segments.length }] };
+  if (!Number.isFinite(budget) || formatSegments(segments).length <= budget) return whole;
+  const units = [];
+  segments.forEach((text, seg) => {
+    if (formatSegments([text]).length <= budget) { units.push({ seg, text }); return; }
+    let cur = [];
+    for (const para of text.split(PARAGRAPH)) {
+      if (cur.length && formatSegments([[...cur, para].join(PARAGRAPH)]).length > budget) { units.push({ seg, text: cur.join(PARAGRAPH) }); cur = []; }
+      cur.push(para);
+    }
+    units.push({ seg, text: cur.join(PARAGRAPH) });
+  });
+  const groups = []; let from = 0;
+  for (let i = 0; i < units.length; i += 1) {
+    if (i > from && formatSegments(units.slice(from, i + 1).map((u) => u.text)).length > budget) { groups.push({ from, to: i }); from = i; }
+  }
+  groups.push({ from, to: units.length });
+  return { units, groups };
+}
+
+/** The template's segments back from the units' replies: each segment's pieces rejoined as split. */
+function segmentsFromUnits(units, texts, segmentCount) {
+  const out = Array.from({ length: segmentCount }, () => []);
+  units.forEach((u, i) => out[u.seg].push(texts[i]));
+  return out.map((pieces) => pieces.join(PARAGRAPH));
+}
+
+function renderGeneratorPrompt({ generatorBody, template, projectContext, codelineContext, mintedRoles, refusal, part }) {
   let out = generatorBody
     .split('__GEN_TEMPLATE_ID__').join(template.id)
     .split('__GEN_TEMPLATE_DESCRIPTION__').join(template.description || '')
@@ -248,8 +306,14 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
     // a dropped slot silently starves the agent of the evidence that slot carries.
     .split(GEN_BODY_SLOT).join((() => {
       const { splitByPlaceholders, formatSegments } = require('./project-prompt-contract.js');
-      const { segments } = splitByPlaceholders(templateBodyText(template));
-      return formatSegments(segments) + '\n'
+      const all = splitByPlaceholders(templateBodyText(template)).segments;
+      // A PART, when one turn cannot return the whole: only its pieces are shown and asked for,
+      // numbered from 1, and said to be a part so the model words them as part of the whole.
+      const segments = part ? part.texts : all;
+      const where = part && part.of > 1
+        ? `This is part ${part.index + 1} of ${part.of} of the template; the other parts are asked for separately.\n`
+        : '';
+      return where + formatSegments(segments) + '\n'
         + `Reply with the same ${segments.length} markers, in order, each followed by your wording `
         + 'for that segment, and close with the END SEGMENTS marker. Plain text between the '
         + 'markers — no JSON, no escaping, no code fences. A segment may be empty. Do not write '
@@ -752,8 +816,14 @@ async function buildProjectPrompts({
     let installed = false;
 
     for (let attempt = 1; attempt <= Math.max(1, attempts); attempt += 1) {
+      // ONE TURN PER PART: a set that declares an answer budget gets the segments in groups that
+      // fit it (CodeMie web cuts a longer answer and calls it a success — measured 2026-09-30).
+      const _allSegments = require('./project-prompt-contract.js').splitByPlaceholders(templateBodyText(template)).segments;
+      const _plan = promptParts(_allSegments, answerBudgetChars());
+      const _parts = _plan.groups.map((g, index) => ({ index, of: _plan.groups.length, from: g.from, to: g.to,
+        texts: _plan.units.slice(g.from, g.to).map((u) => u.text) }));
       const prompt = renderGeneratorPrompt({
-        generatorBody, template, projectContext, codelineContext, mintedRoles, refusal,
+        generatorBody, template, projectContext, codelineContext, mintedRoles, refusal, part: _parts.length > 1 ? _parts[0] : null,
       });
       // A CALL THAT NEVER CAME BACK IS THE MOST RETRYABLE FAILURE THERE IS.
       //
@@ -771,8 +841,15 @@ async function buildProjectPrompts({
       // contract refusal is fixed in the prompt and a failed call is fixed in the budget or the
       // provider, and collapsing them sends the reader to the wrong file.
       let body;
+      const _replies = [];
       try {
         body = String((await runText(prompt, { id, attempt })) || '');
+        _replies.push(body);
+        for (const part of _parts.slice(1)) {
+          _replies.push(String((await runText(renderGeneratorPrompt({
+            generatorBody, template, projectContext, codelineContext, mintedRoles, refusal, part,
+          }), { id, attempt })) || ''));
+        }
       } catch (err) {
         const why = (err && err.message) || String(err);
         callFailure = why;
@@ -799,7 +876,11 @@ async function buildProjectPrompts({
         // where the JSON form broke — team-lead-review burned five attempts on replies that were
         // complete but unparseable. parseSegmentsReply reads the same marker shape the prompt
         // shows, tolerates a false start by taking the last complete set, and still accepts JSON.
-        assembled = assembleFromSegments(parseSegmentsReply(body, slots.length + 1), slots);
+        // Each part's reply carries its own segments; together, in order, they are the whole.
+        const parsed = _parts.length === 1
+          ? parseSegmentsReply(body, slots.length + 1)
+          : segmentsFromUnits(_plan.units, _parts.flatMap((part, i) => parseSegmentsReply(_replies[i], part.to - part.from)), slots.length + 1);
+        assembled = assembleFromSegments(parsed, slots);
       } catch (err) {
         refusal = `your answer could not be assembled: ${(err && err.message) || String(err)}. `
           + 'Reply with one --- SEGMENT n --- marker per segment shown, in order, each followed by '
@@ -1126,6 +1207,7 @@ function clearCompletionMarker({ outDir, codeline } = {}) {
 }
 
 module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList, rolesIdentity, GEN_BODY_SLOT,
+  PROJECT_PROMPT_GENERATOR_ID, answerBudgetChars, promptParts,
   writeCompletionMarker, clearCompletionMarker, promptInputsDigest, codelinePromptsComplete,
   MINTED_FILES, mintedSnapshotDir, recordedPromptsDir, hasMintedSnapshot, restoreMinted, clearMinted,
   // Exported so the codeline keying is assertable without provisioning: a segment that escapes

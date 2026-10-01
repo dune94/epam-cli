@@ -142,7 +142,7 @@ export class MockCodeMie {
 
   /** `models`: the catalog — what the install's ladder can climb to, so a missing rung is the install's fault. */
   /**
-   * CODEMIE'S OWN LIMITS, as measured and declared once (config/codemie-web.json platformLimits) — so a
+   * CODEMIE'S OWN LIMITS, as measured and declared once (the set's runner `limits`) — so a
    * rehearsal meets the cut, the step limit and the silent success a live run meets (AMSD-2974 run 3,
    * 2026-09-30). An install that declares none cannot be rehearsed on this set: refused, not guessed.
    */
@@ -150,10 +150,13 @@ export class MockCodeMie {
   private get budgetChars() { return Math.floor(this.limits.visibleTokensObservedMin * this.limits.charsPerTokenObserved); }
 
   constructor(private agent: MockAgent, private journal: string, private models: string[], readonly user = 'rehearsal@codemie.local') {
-    const cfg = join(agent.orchestrationsDir, 'config/codemie-web.json');
-    const declared = existsSync(cfg) ? JSON.parse(readFileSync(cfg, 'utf8')).platformLimits : undefined;
+    // THE SET'S OWN DECLARATION: whichever runner of the provider-set registry declares `limits`.
+    const reg = JSON.parse(readFileSync(join(agent.orchestrationsDir, 'config/provider-sets.json'), 'utf8')).sets || {};
+    const cfg = Object.values<any>(reg).map((x) => join(agent.orchestrationsDir, 'config', x.settingsFile))
+      .find((f) => existsSync(f) && Object.values<any>(JSON.parse(readFileSync(f, 'utf8')).runners || {}).some((r) => r && r.limits));
+    const declared = cfg ? Object.values<any>(JSON.parse(readFileSync(cfg, 'utf8')).runners).find((r) => r && r.limits).limits : undefined;
     if (!declared || !(declared.visibleTokensObservedMin > 0) || !(declared.charsPerTokenObserved > 0) || !(declared.agentSteps > 0)) {
-      throw new Error(`[mock-codemie] ${cfg} declares no platformLimits — CodeMie's limits cannot be rehearsed`);
+      throw new Error('[mock-codemie] no runner declares its limits — CodeMie\'s limits cannot be rehearsed');
     }
     this.limits = declared;
     this.engine = new PluginEngine((u) => this.integrations.some((i) => i.key === u), (l) => this.note(l));

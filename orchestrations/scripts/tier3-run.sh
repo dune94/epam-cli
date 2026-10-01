@@ -200,13 +200,15 @@ fi
 # here refused every fresh brownfield launch through this launcher (found by the £0 replay of a
 # Sept 9 brownfield cassette, 2026-09-17). Same rule as preflight-check.sh's _prd_pending_ingest.
 _prd_pending_ingest=0
-if [ -n "${JIRA_URL:-}" ] && [ -n "${JIRA_JQL:-}" ]; then
+# The run's own ticket (pipeline --jira -> JIRA_TICKET) is ingested too — jira-client.js fetches it
+# ahead of any JQL the project pins, so a project needs no pinned JQL to be launched by ticket.
+if [ -n "${JIRA_URL:-}" ] && { [ -n "${JIRA_JQL:-}" ] || [ -n "${JIRA_TICKET:-}" ]; }; then
   _synth_target="${JIRA_SYNTH_PRD_PATH:-$PRD_FILE}"
   [ "$(cd "$(dirname "$_synth_target")" 2>/dev/null && pwd)/$(basename "$_synth_target")" = "$(cd "$(dirname "$PRD_FILE")" 2>/dev/null && pwd)/$(basename "$PRD_FILE")" ] && _prd_pending_ingest=1
 fi
 if [ ! -f "$PRD_FILE" ]; then
   if [ "$_prd_pending_ingest" = "1" ]; then
-    info "no PRD at $PRD_FILE yet — this run's Jira ingest (${JIRA_JQL}) creates it"
+    info "no PRD at $PRD_FILE yet — this run's Jira ingest (${JIRA_TICKET:-${JIRA_JQL}}) creates it"
   else
     fail "no PRD at $PRD_FILE"
   fi

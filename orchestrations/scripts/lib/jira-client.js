@@ -351,6 +351,15 @@ function normalizeIssue(issue) {
  * Returns normalized array ready for AC gate consumption.
  */
 async function getProjectIssues(projectKey, status = null) {
+  // THE RUN'S OWN TICKET FIRST. `pipeline --jira <key>` exports JIRA_TICKET; a project's JIRA_JQL is
+  // its default for runs that name no ticket. Live 2026-09-30: three runs launched for AMSD-2974
+  // fetched a JQL pinned in config.env ("issue = AMSD-1919") because nothing read the ticket.
+  // Quoted as a JQL string, so the value can only ever be a key.
+  const ticket = String(process.env.JIRA_TICKET || '').trim();
+  if (ticket) {
+    const result = await searchIssues(`issue = ${JSON.stringify(ticket)}`, 100);
+    return (result.issues || []).map(normalizeIssue);
+  }
   // JIRA_JQL: fully custom JQL overrides all defaults (e.g. label-based queries for brownfield)
   const customJql = process.env.JIRA_JQL;
   if (customJql) {

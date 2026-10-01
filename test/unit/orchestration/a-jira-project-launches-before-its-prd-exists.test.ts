@@ -25,7 +25,7 @@ function stub(dir: string, name: string, body: string) {
   writeFileSync(join(dir, name), `#!/usr/bin/env bash\n${body}\n`); chmodSync(join(dir, name), 0o755);
 }
 
-function launch(cfg: string[], withPrd: boolean) {
+function launch(cfg: string[], withPrd: boolean, extraEnv: Record<string, string> = {}) {
   const ws = mkdtempSync(join(tmpdir(), 'jira-launch-')); dirs.push(ws);
   const projects = join(ws, 'projects'); const proj = join(projects, 'demo'); mkdirSync(proj, { recursive: true });
   const bins = join(ws, 'bins'); mkdirSync(bins);
@@ -39,7 +39,7 @@ function launch(cfg: string[], withPrd: boolean) {
   stub(bins, 'reset.sh', `echo "reset $*" >> "${record}"; echo PRE_RUN_RESET_STATE_CLEARED; exit 0`);
   const r = spawnSync('bash', [LAUNCHER, '--project', 'demo', '--yes'], {
     encoding: 'utf8', cwd: ws, timeout: 120_000,
-    env: { ...process.env, EPAM_PROJECTS_DIR: projects, EPAM_ORCHESTRATOR_BIN: join(bins, 'orch.sh'), EPAM_PRD_REMEDIATE_BIN: join(bins, 'rem.sh'), EPAM_PREFLIGHT_BIN: join(bins, 'preflight.sh'), PRE_RUN_RESET_SCRIPT: join(bins, 'reset.sh'), EPAM_FREE_RUN: '1', EPAM_PROJECT_OUTPUT_DIR: join(ws, 'logs'), EPAM_RESUME_RUN: '', JIRA_URL: '', JIRA_JQL: '' },
+    env: { ...process.env, EPAM_PROJECTS_DIR: projects, EPAM_ORCHESTRATOR_BIN: join(bins, 'orch.sh'), EPAM_PRD_REMEDIATE_BIN: join(bins, 'rem.sh'), EPAM_PREFLIGHT_BIN: join(bins, 'preflight.sh'), PRE_RUN_RESET_SCRIPT: join(bins, 'reset.sh'), EPAM_FREE_RUN: '1', EPAM_PROJECT_OUTPUT_DIR: join(ws, 'logs'), EPAM_RESUME_RUN: '', JIRA_URL: '', JIRA_JQL: '', JIRA_TICKET: '', ...extraEnv },
   });
   return { r, log: `${r.stdout}\n${r.stderr}`, calls: () => readFileSync(record, 'utf8') };
 }
@@ -52,6 +52,13 @@ describe('a Jira project launches before its PRD exists', () => {
     // The brownfield path hands off to the real orchestrator (no stub hook on that path); it
     // starting — and refusing on the unresolvable fixture scope, as it should — is the proof
     // the launcher's own gates let the run through.
+    expect(t.log, `the orchestrator was never reached:\n${t.log.slice(-1200)}`).toMatch(/\[orch\]/);
+  });
+
+  it('a ticket launched by name (pipeline --jira, JIRA_TICKET) with no pinned JQL and no PRD — the launcher proceeds', () => {
+    // The run's own ticket is what ingest fetches (jira-client.js); a project needs no pinned JQL.
+    const t = launch(['JIRA_URL=https://example.atlassian.net'], false, { JIRA_TICKET: 'X-1' });
+    expect(t.log).not.toMatch(/✗.*no PRD at/);
     expect(t.log, `the orchestrator was never reached:\n${t.log.slice(-1200)}`).toMatch(/\[orch\]/);
   });
 

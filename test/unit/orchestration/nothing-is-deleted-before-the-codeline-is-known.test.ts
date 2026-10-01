@@ -16,7 +16,7 @@
  * function — and it runs before any profile is generated.
  */
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, chmodSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -341,3 +341,25 @@ describe('the mint settles the deferred decision, once the codeline is known', (
     expect(has(r.cfg, join('prompts', 'roster-review.json'))).toBe(true);
   });
 });
+
+/** The shell entry point itself (lib/prompt-variant.sh), sourced and called as the mint calls it. */
+describe('codeline_minted_restore — the shell function every keep path calls', () => {
+  const restore = (cfg: string, codeline: string) => spawnSync('bash', ['-c',
+    `. ${JSON.stringify(join(LIB, 'prompt-variant.sh'))}; codeline_minted_restore ${JSON.stringify(codeline)}`],
+    { encoding: 'utf8', env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: cfg, NODE_BIN: process.execPath } });
+
+  it('returns 1 and touches nothing when the codeline recorded no agents', () => {
+    const { cfg } = project({ marker: null });
+    const before = REGISTRIES.map((f) => readFileSync(join(cfg, f), 'utf8'));
+    expect(restore(cfg, CODELINE).status).toBe(1);
+    expect(REGISTRIES.map((f) => readFileSync(join(cfg, f), 'utf8'))).toEqual(before);
+  });
+
+  it('returns 0 and puts back the codeline\'s own recorded agents', () => {
+    const { cfg } = project({ marker: CODELINE });
+    for (const f of REGISTRIES) writeFileSync(join(cfg, f), JSON.stringify({ from: 'another codeline\'s mint' }));
+    expect(restore(cfg, CODELINE).status).toBe(0);
+    for (const f of REGISTRIES) expect(readFileSync(join(cfg, f), 'utf8')).toBe(JSON.stringify({ from: 'the completed run' }));
+  });
+});
+

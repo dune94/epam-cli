@@ -182,7 +182,8 @@ exit ${o.exitCode ?? 0}
       NODE_V8_COVERAGE: covDir,
       CODELINE_DISCOVERY_AI_RUN_SH_OVERRIDE: stub,
       EPAM_PROJECT_CONFIG_DIR: '',
-      ...(o.env ?? {}),
+      // {WORK} in a value is this run's working folder — so a case can name a path inside it.
+      ...Object.fromEntries(Object.entries(o.env ?? {}).map(([k, v]) => [k, String(v).split('{WORK}').join(work)])),
     },
   });
 

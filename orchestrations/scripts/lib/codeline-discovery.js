@@ -610,15 +610,28 @@ if (require.main !== module) return;
             + 'the ticket genuinely cannot be placed, put THAT part in "unsure" — but a run '
             + 'cannot start with no scope at all.' };
       }
+      // THE PATH AS IT WAS SHOWN. Candidates reach the agent relative to where it works
+      // (lib/relative-paths.js — operator, 2026-10-01: relative paths only), so its answer names
+      // one in that form; the pipeline maps it back to the real repository. The agent never needs
+      // an absolute path, and an answer naming something that was not listed is still refused.
+      // eslint-disable-next-line global-require
+      const { relativizeLocalPaths, promptBases } = require('./relative-paths.js');
+      const shown = new Map(manifest.map((r) => [relativizeLocalPaths(r.path, promptBases()), r.path]));
       for (const cl of picked) {
-        const why = !path.isAbsolute(cl.path) ? 'that path is not absolute'
+        if (cl && typeof cl.path === 'string' && !path.isAbsolute(cl.path)) {
+          const p = cl.path.replace(/\/+$/, '');
+          if (shown.has(p)) cl.path = shown.get(p);
+        }
+      }
+      for (const cl of picked) {
+        const why = !path.isAbsolute(cl.path) ? 'that path is not one of the repositories listed'
           : !fs.existsSync(cl.path) ? 'that path does not exist'
             : !fs.existsSync(path.join(cl.path, '.git')) ? 'that path is not a git repository'
               : null;
         if (why) {
           return { ok: false,
             reason: `you selected '${cl.name}' at ${cl.path}, but ${why}. Every candidate was `
-              + 'listed with its real path — copy the path of the repository you mean.' };
+              + 'listed with its path — copy the path of the repository you mean, exactly as listed.' };
         }
       }
       return { ok: true, value: answer };

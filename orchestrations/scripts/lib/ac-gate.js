@@ -301,7 +301,8 @@ function resolveCodelines(issues) {
 }
 
 function codelineDesc(cl) {
-  return process.env[`JIRA_CODELINE_DESC_${cl.toUpperCase()}`] || cl;
+  // The same key the discovery exports write (non-alphanumerics as _), or a hyphenated name is never found.
+  return process.env[`JIRA_CODELINE_DESC_${cl.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`] || cl;
 }
 
 // ── AC classification prompt ───────────────────────────────────────────────

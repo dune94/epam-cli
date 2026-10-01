@@ -8,6 +8,7 @@
  *
  *   JIRA_CODELINES            every discovered codeline, comma-separated
  *   JIRA_WORKTREE_<NAME>      the path of each, name upper-cased with non-alphanumerics as _
+ *   JIRA_CODELINE_DESC_<NAME> what discovery found about each — the AC classifier's view of it
  *   JIRA_DEFAULT_CODELINE     only when exactly one was discovered, so the orch script's
  *                             codeline-setup can pair it with project.outputDir
  *
@@ -44,7 +45,13 @@ const names = codelines.map((c) => c.name).join(',');
 
 let out = `JIRA_CODELINES="${names}"\n`;
 for (const cl of codelines) {
-  out += `JIRA_WORKTREE_${cl.name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}="${cl.path}"\n`;
+  const key = cl.name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+  out += `JIRA_WORKTREE_${key}="${cl.path}"\n`;
+  // WHAT DISCOVERY FOUND ABOUT IT, for the AC classifier (ac-gate.js codelineDesc). Without it the
+  // classifier saw bare names and filed AMSD-2974 — four codelines — under one (2026-10-01). One
+  // line, no double quotes: the caller reads KEY="value" lines and strips quotes.
+  const reason = String(cl.reason || '').replace(/\s+/g, ' ').replace(/"/g, '').trim();
+  if (reason) out += `JIRA_CODELINE_DESC_${key}="${reason}"\n`;
 }
 if (codelines.length === 1) {
   out += `JIRA_DEFAULT_CODELINE="${codelines[0].name}"\n`;

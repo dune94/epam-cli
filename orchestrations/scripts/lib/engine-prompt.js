@@ -230,7 +230,13 @@ function substituteOnce(body, keys, values) {
   if (!keys.length) return body;
   const esc = (k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(keys.map(esc).join('|'), 'g');
-  return body.replace(re, (m) => String(values[m]));
+  // RELATIVE PATHS ONLY (operator, 2026-10-01). Every value — a run's fact, never template text — has
+  // its local paths made relative to where the agent works (lib/relative-paths.js). One point: both
+  // renderers (this file's, and prompt-library's) fill placeholders here.
+  // eslint-disable-next-line global-require
+  const { relativizeLocalPaths, promptBases } = require('./relative-paths.js');
+  const bases = promptBases();
+  return body.replace(re, (m) => relativizeLocalPaths(String(values[m]), bases));
 }
 
 function renderEngineTemplate(id, values, bodyKey) {

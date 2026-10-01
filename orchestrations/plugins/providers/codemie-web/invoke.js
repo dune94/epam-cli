@@ -32,7 +32,19 @@ function declaration(env = process.env) {
   const file = activeSetFile();
   const runners = (file && (readSetFile(file) || {}).runners) || {};
   const own = Object.values(runners).find((r) => r && Array.isArray(r.plugins)) || {};
-  return { toolNames: own.toolNames || {}, plugins: own.plugins || [], hostedToolPlugins: own.hostedToolPlugins || [] };
+  // THE PIPELINE'S OWN TOOLS, named by their modules: every hosted ToolPlugin's tools join the
+  // runner's vocabulary, provided by every plugin — except that a readOnly plugin provides only the
+  // tools whose own `permission` is 'safe'. Nothing about a tool is written in the declaration.
+  const hostedToolPlugins = (own.hostedToolPlugins || []).map((m) => path.join(__dirname, '..', '..', '..', m));
+  const toolNames = { ...(own.toolNames || {}) };
+  const plugins = (own.plugins || []).map((p) => ({ ...p, provides: [...(p.provides || [])] }));
+  for (const m of hostedToolPlugins) {
+    for (const t of (require(m).tools || [])) {
+      toolNames[t.name] = toolNames[t.name] || [t.name];
+      for (const p of plugins) if (!p.readOnly || t.permission === 'safe') p.provides.push(t.name);
+    }
+  }
+  return { toolNames, plugins, hostedToolPlugins };
 }
 
 /**
@@ -80,8 +92,10 @@ async function invoke(a, env = process.env) {
     a.pluginRoot = root;
     // THE PIPELINE'S OWN TOOLS, hosted by the local plugin beside its file tools (declared:
     // hostedToolPlugins, paths relative to orchestrations/).
-    const hosted = declaration(env).hostedToolPlugins.map((m) => path.join(__dirname, '..', '..', '..', m));
-    integration = await ensurePlugin(c, { codeline: a.codeline, mode, root }, { ...env, EPAM_CODEMIE_HOSTED_TOOLS: JSON.stringify(hosted) });
+    const decl = declaration(env);
+    const readOnly = !!(decl.plugins.find((p) => p.mode === mode) || {}).readOnly;
+    integration = await ensurePlugin(c, { codeline: a.codeline, mode, root },
+      { ...env, EPAM_CODEMIE_HOSTED_TOOLS: JSON.stringify(decl.hostedToolPlugins), EPAM_CODEMIE_HOSTED_SAFE_ONLY: readOnly ? '1' : '' });
   }
   // THE AGENT'S STANDING INSTRUCTIONS, as the hub resolved them for this call (lib/agent-si.js).
   const siFile = env.EPAM_SI_FILE || '';

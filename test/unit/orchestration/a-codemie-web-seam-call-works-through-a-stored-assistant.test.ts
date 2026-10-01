@@ -41,6 +41,13 @@ function obliging(call: Call): Turn {
   if (results.length && !/LOOP-FOREVER/.test(prompt)) return { kind: 'text', text: `TOOL-RESULTS: ${results.join(' | ')}` };
   const byParams = (re: RegExp[]) => call.req.tools.find((t) => { const p = Object.keys(t.params?.properties || {}); return re.every((r) => p.some((k) => r.test(k))); });
   // Checked before WRITE/READ: their names contain those words.
+  const named = /CALL-TOOL (\S+)$/m.exec(prompt);
+  if (named) {
+    const tool = call.req.tools.find((t) => t.name === named[1] || t.name.replace(/^_+/, '') === named[1]);
+    if (!tool) return { kind: 'text', text: `NOT-OFFERED ${named[1]}` };
+    return { kind: 'tools', calls: [{ id: newCallId(), name: tool.name, input: {} }] };
+  }
+  if (/LIST-OFFERED/.test(prompt) && !results.length) return { kind: 'text', text: `OFFERED: ${call.req.tools.map((t) => t.name).join(',')}` };
   const cg = /CODEGRAPH (\w+) (.+)$/m.exec(prompt);
   if (cg) {
     const tool = call.req.tools.find((t) => /codegraph/i.test(t.name));
@@ -63,7 +70,8 @@ function obliging(call: Call): Turn {
   }
   const w = /WRITE (\S+) (\S+)/.exec(prompt); const r = /READ (\S+)/.exec(prompt);
   if (w) {
-    const tool = byParams([/path/i, /content|text/i]);
+    // A model writes with a tool NAMED for writing — a scanner that takes a path and content is not one.
+    const tool = call.req.tools.filter((t) => /write/i.test(t.name)).find((t) => { const p = Object.keys(t.params?.properties || {}); return p.some((k) => /path/i.test(k)) && p.some((k) => /content|text/i.test(k)); });
     if (!tool) return { kind: 'text', text: 'NO-WRITE-TOOL' };
     const p = Object.keys(tool.params.properties);
     return { kind: 'tools', calls: [{ id: newCallId(), name: tool.name, input: { [p.find((k) => /path/i.test(k))!]: w[1], [p.find((k) => /content|text/i.test(k))!]: w[2] } }] };
@@ -328,6 +336,40 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
     expect(r.status, r.stderr.slice(-1500)).toBe(0);
     expect(r.stdout, 'the assistant was not offered the code-graph tool').not.toMatch(/NO-CODEGRAPH-TOOL/);
     expect(r.stdout, 'the code graph did not answer from the codeline').toMatch(/renderToast/);
+  }, 300_000);
+
+  // THE PIPELINE'S TOOLS, read from the modules the set declares it hosts — never listed here.
+  const RUNNER_DECL = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/llm-defaults.codemie-web.json'), 'utf8')).runners['codemie-web'];
+  const HOSTED = (RUNNER_DECL.hostedToolPlugins || []).flatMap((m: string) => (require(join(ROOT, 'orchestrations', m)).tools || []) as { name: string; permission?: string }[]);
+  const SAFE = HOSTED.filter((t) => t.permission === 'safe').map((t) => t.name);
+  const UNSAFE = HOSTED.filter((t) => t.permission !== 'safe').map((t) => t.name);
+
+  it('every pipeline tool the set hosts reaches a read-only assistant — nothing granted is dropped', async () => {
+    expect(SAFE.length, 'the set declares no hosted pipeline tools — this proves nothing').toBeGreaterThan(1);
+    const r = await call('LIST-OFFERED', { EPAM_AGENT_NAME: READ_ONLY_SEAM, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: ['read_file', 'list_files', 'search', ...SAFE].join(',') });
+    expect(r.stderr, 'the runner dropped a granted pipeline tool').not.toMatch(/dropped:/);
+    expect(r.status, r.stderr.slice(-1500)).toBe(0);
+    // CodeMie names a plugin's tools with a leading underscore (live: _codegraph_query).
+    const offered = ((/OFFERED: (.*)/.exec(r.stdout) || [])[1]?.split(',') || []).map((n) => n.replace(/^_+/, ''));
+    for (const t of SAFE) expect(offered, `${t} was not offered to the assistant`).toContain(t);
+  }, 300_000);
+
+  it('a pipeline tool other than the code graph runs through the assistant and answers', async () => {
+    const t = SAFE.find((n) => /git/.test(n)) || SAFE.find((n) => !/codegraph/.test(n));
+    expect(t, 'no second hosted tool to prove this with').toBeTruthy();
+    const r = await call(`CALL-TOOL ${t}`, { EPAM_AGENT_NAME: READ_ONLY_SEAM, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: ['read_file', ...SAFE].join(',') });
+    expect(r.status, r.stderr.slice(-1500)).toBe(0);
+    expect(r.stdout, `${t} was not offered`).not.toMatch(/NOT-OFFERED/);
+    expect(r.stdout, `${t} gave no answer`).toMatch(/TOOL-RESULTS: .+/);
+    expect(cm.chats[cm.chats.length - 1].toolCalls.map((c) => c.name.replace(/^_+/, ''))).toContain(t);
+  }, 300_000);
+
+  it('the read-only plugin never hosts a pipeline tool not declared safe; the read-write plugin does', async () => {
+    expect(UNSAFE.length, 'every hosted tool is safe — the split proves nothing').toBeGreaterThan(0);
+    const ro = await call('LIST-OFFERED', { EPAM_AGENT_NAME: READ_ONLY_SEAM, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search' });
+    for (const t of UNSAFE) expect(ro.stdout, `the read-only plugin offered ${t}`).not.toMatch(new RegExp(`(^|[,_ ])${t}(,|\\s|$)`));
+    const rw = await call('LIST-OFFERED', { EPAM_AGENT_NAME: 'story-writer', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,write_file,bash' });
+    for (const t of UNSAFE) expect(rw.stdout, `the read-write plugin did not offer ${t}: ${rw.stdout.slice(0, 600)} ${rw.stderr.slice(-600)}`).toMatch(new RegExp(`(^|[,_ ])${t}(,|\\s|$)`));
   }, 300_000);
 
   it('an answer with nothing in it is a failure the ladder can act on, not a success', async () => {

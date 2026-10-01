@@ -131,7 +131,7 @@ class GitFileList(RecursiveFileRetrieval):
 # call is executed by its own `execute`, from this plugin's root. Nothing about a tool is written here.
 
 _LIST_JS = """const p = require(process.argv[1]);
-process.stdout.write(JSON.stringify((p.tools || []).map((t) => ({ name: t.name, description: t.description,
+process.stdout.write(JSON.stringify((p.tools || []).map((t) => ({ name: t.name, description: t.description || (t.definition && t.definition.description) || '', permission: t.permission,
   schema: (t.definition && t.definition.inputSchema) || t.inputSchema || { type: 'object', properties: {} } }))));"""
 _EXEC_JS = """const p = require(process.argv[1]); const t = (p.tools || []).find((x) => x.name === process.argv[2]);
 Promise.resolve(t.execute(JSON.parse(process.argv[3]))).then((r) => process.stdout.write(JSON.stringify(r || {})),
@@ -174,12 +174,17 @@ def _hosted_tool(module: str, spec: dict, root: str):
 
 
 def hosted_tools(root: str) -> list:
-    """Every tool of every ToolPlugin module the runner declared for this plugin to host."""
+    """Every tool of every ToolPlugin module the runner declared for this plugin to host — in a
+    read-only plugin (EPAM_CODEMIE_HOSTED_SAFE_ONLY), only those whose own permission is 'safe'."""
     modules = json.loads(os.environ.get("EPAM_CODEMIE_HOSTED_TOOLS") or "[]")
+    safe_only = os.environ.get("EPAM_CODEMIE_HOSTED_SAFE_ONLY") == "1"
     out = []
     for module in modules:
         listed = subprocess.run([_node(), "-e", _LIST_JS, module], capture_output=True, text=True, check=True)
-        out.extend(_hosted_tool(module, spec, root) for spec in json.loads(listed.stdout or "[]"))
+        for spec in json.loads(listed.stdout or "[]"):
+            if safe_only and spec.get("permission") != "safe":
+                continue
+            out.append(_hosted_tool(module, spec, root))
     return out
 
 

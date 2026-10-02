@@ -688,6 +688,30 @@ commit_completed_story() {
 # Runs git commands from GIT_WORK_ROOT (falling back to PROJECT_ROOT for
 # callers, like codemie-claude.sh, that only set that) — the directory
 # containing .git. Worktrees are created as siblings of that root.
+# codeline_baseline_ref <codeline_root> <declared_branch>
+#
+# THE REF A CODELINE'S WORK IS CUT FROM, from LOCAL refs only — no remote is contacted. The declared
+# baseline when this codeline has it (origin/<b>, else <b>); otherwise this codeline's own default
+# branch (refs/remotes/origin/HEAD). One project declares one baseline for several codelines, and a
+# codeline need not have it (AMSD-2974, 2026-10-02: cx-shared's default is master, it has no
+# develop). Prints nothing when nothing is found — never a guess.
+codeline_baseline_ref() {
+    local _root="${1:-}" _declared="${2:-}"
+    [ -n "$_root" ] && [ -e "$_root/.git" ] || return 0
+    if [ -n "$_declared" ]; then
+        if git -C "$_root" rev-parse -q --verify "refs/remotes/origin/${_declared}" >/dev/null 2>&1; then
+            printf 'origin/%s\n' "$_declared"; return 0
+        fi
+        if git -C "$_root" rev-parse -q --verify "refs/heads/${_declared}" >/dev/null 2>&1; then
+            printf '%s\n' "$_declared"; return 0
+        fi
+    fi
+    local _head
+    _head=$(git -C "$_root" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null || true)
+    [ -n "$_head" ] && printf '%s\n' "$_head"
+    return 0
+}
+
 setup_worktrees() {
     local worktrees=("primary" "independent")
     local git_root

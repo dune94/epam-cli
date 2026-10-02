@@ -103,6 +103,10 @@ describe('the writer\'s plan carries the shared fact', () => {
     expect(text).toContain('../lib-repo');
     expect(text).toContain('^7');
     expect(text, 'an absolute path reached the writer').not.toContain('/w/codelines');
+    // The pipeline installs the sibling's current package (lib/local-dependency-overrides.sh); the
+    // writer must not redirect the dependency itself (2026-10-02).
+    expect(text).toContain('already installed');
+    expect(text).not.toMatch(/point this codeline at it/i);
   });
 
   it('the providing lane\'s own site renders its shared fact', () => {

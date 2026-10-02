@@ -301,6 +301,30 @@ _env_file="$(dirname "$AUTOMATION_DIR")/.env"
 # to use MockServer called the real API with a real key (2026-08-25, unapproved spend).
 # With preserve, a placeholder set by the caller survives and cannot authenticate.
 if [ -f "$_env_file" ]; then load_env_file_safe "$_env_file" preserve; fi
+
+# THE LANE'S OWN BASELINE. A project declares one baseline for all its codelines; a codeline need
+# not have it (AMSD-2974, 2026-10-02: cx-shared's default is master, it has no develop). A brownfield
+# lane uses the declared branch where its codeline has it, else the codeline's own default branch —
+# read from local refs (lib/git-ops.sh codeline_baseline_ref). Everything in the lane reads
+# JIRA_BASELINE_BRANCH, so it is set once, here.
+if [ "${JIRA_CODELINE_RUN:-0}" = "1" ] && [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "${PROJECT_ROOT:-}" ]; then
+    _lane_baseline_ref=$(codeline_baseline_ref "$PROJECT_ROOT" "${JIRA_BASELINE_BRANCH:-}")
+    if [ -n "$_lane_baseline_ref" ]; then
+        export JIRA_BASELINE_BRANCH="${_lane_baseline_ref#origin/}"
+    fi
+fi
+# END THE LANE'S OWN BASELINE
+
+# THE LANE BUILDS AGAINST ITS SIBLINGS' CURRENT PACKAGES. A brownfield lane installs, without saving,
+# the local package sources its codeline declares (dependency-check.json localDependencyOverrides) —
+# from the provider codeline's current checkout, which an earlier lane has already updated
+# (AMSD-2974, 2026-10-02). Never from a registry; never written to the manifest.
+if [ "${JIRA_CODELINE_RUN:-0}" = "1" ] && [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "${PROJECT_ROOT:-}" ]; then
+    command -v _apply_local_dependency_overrides >/dev/null 2>&1 \
+        || . "$SCRIPT_DIR/lib/local-dependency-overrides.sh"
+    _apply_local_dependency_overrides "$PROJECT_ROOT"
+fi
+# END THE LANE BUILDS AGAINST ITS SIBLINGS
 unset _env_file
 # Restore caller overrides (tier scripts set these intentionally; .env has stale defaults)
 [ -n "$_pre_gate_provider" ] && ORCH_GATE_PROVIDER="$_pre_gate_provider"
@@ -1249,17 +1273,22 @@ echo ""
 # deprecated SKY-002-test (completed == false, since it never ran) got
 # re-queued and re-implemented on every orchestration loop restart, burning
 # cost on work that had already been correctly abandoned.
-main_stories=$(jq -r --arg phase "$PHASE" \
+# A BROWNFIELD STORY RUNS IN A WORKTREE LANE, never in the client's checkout. Brownfield writers ran in
+# the primary worktree lane (metrolinx run 12, 2026-07-22) until a single-story run was defaulted to
+# "main" in the synthesiser (ffb148f0, 2026-07-23); operator, 2026-10-02: "We need to work in
+# worktrees". A PRD already synthesised with "main" (a resume) is routed here, never edited.
+_bf_worktree_lane="${EPAM_BROWNFIELD:-0}"
+main_stories=$(jq -r --arg phase "$PHASE" --arg bf "$_bf_worktree_lane" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
      select(.status != "deprecated") |
-     select((.agentGroup == "main" or .agentGroup == "preflight") and (.completed // false) == false) | .id' "$PRD_FILE")
+     select(((.agentGroup == "main" and $bf != "1") or .agentGroup == "preflight") and (.completed // false) == false) | .id' "$PRD_FILE")
 
-primary_stories=$(jq -r --arg phase "$PHASE" \
+primary_stories=$(jq -r --arg phase "$PHASE" --arg bf "$_bf_worktree_lane" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
      select(.status != "deprecated") |
-     select(.agentGroup == "primary" and (.completed // false) == false) | .id' "$PRD_FILE")
+     select((.agentGroup == "primary" or (.agentGroup == "main" and $bf == "1")) and (.completed // false) == false) | .id' "$PRD_FILE")
 
 independent_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
@@ -2635,10 +2664,32 @@ need_worktrees=false
 [ -n "$primary_stories" ] && need_worktrees=true
 [ -n "$independent_stories" ] && need_worktrees=true
 
+# A BROWNFIELD WORKTREE LANE STARTS ON ITS STORY BRANCH. Step 13 cuts the worktree from the
+# checkout's HEAD and Step 17 merges back into the checkout's current branch — so in brownfield the
+# checkout is first put on the story's own branch from the codeline's baseline, exactly as the main
+# lane does per story (ensure_story_branch). Never the client's develop or master, never a branch
+# left over from an earlier ticket (AMSD-2974, 2026-10-02).
+if [ "$need_worktrees" = true ] && [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+    _bf_wt_story=$(printf '%s\n%s\n' "$primary_stories" "$independent_stories" | grep -m1 . || true)
+    if [ -n "$_bf_wt_story" ]; then
+        ensure_story_branch "${PROJECT_ROOT:-}" "$_bf_wt_story" "${JIRA_BASELINE_BRANCH:-}" \
+            || warning "  [story-branch] $_bf_wt_story: the worktree lane could not start on its story branch — see above"
+    fi
+fi
+# END A BROWNFIELD WORKTREE LANE
+
 if [ "$need_worktrees" = true ]; then
     step_emit "13" "running" "Step 13: Create worktrees"
     log "Step 13: Creating git worktrees..."
     "$CLAUDE_SH" --setup-worktrees || { error "Failed to create worktrees"; exit 1; }
+    # A brownfield lane worktree gets the codeline's provisioned, untracked state — never an install
+    # from the codeline's registry (lib/codeline-lanes.sh provision_lane_worktree).
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+        _lane_wt_root="$(cd "${GIT_WORK_ROOT:-$PROJECT_ROOT}" && pwd)"
+        for _lane_wt_name in primary independent; do
+            provision_lane_worktree "$_lane_wt_root" "$_lane_wt_root/../$(basename "$_lane_wt_root")-wt-$_lane_wt_name"
+        done
+    fi
     step_emit "13" "pass" "Step 13: Create worktrees"
 else
     step_emit "13" "skip" "Step 13: Create worktrees" "no parallel stories"

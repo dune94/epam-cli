@@ -89,6 +89,16 @@
       "codeline": "next.upexpress.com",
       "package": "@metrolinx/cx-shared",
       "localSourcePath": "cx-shared"
+    },
+    {
+      "codeline": "next.gotransit.com",
+      "package": "@metrolinx/cx-shared",
+      "localSourcePath": "cx-shared"
+    },
+    {
+      "codeline": "next.metrolinx.com",
+      "package": "@metrolinx/cx-shared",
+      "localSourcePath": "cx-shared"
     }
   ],
   "buildArtifactDirs": [

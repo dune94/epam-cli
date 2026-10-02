@@ -49,6 +49,7 @@ function codeline(name: string, branches: string[], onBranch?: string) {
 function run(root: string, script: string, extra: Record<string, string> = {}) {
   const r = spawnSync('bash', ['-c', `log(){ :; }; info(){ :; }; warning(){ echo "WARN $*" >&2; }; error(){ echo "ERR $*" >&2; }; success(){ :; }
 source ${JSON.stringify(join(SCRIPTS, 'lib/git-ops.sh'))}
+source ${JSON.stringify(join(SCRIPTS, 'lib/codeline-lanes.sh'))}
 PROJECT_ROOT=${JSON.stringify(root)}
 ${script}`], { encoding: 'utf8', env: { ...env, JIRA_CODELINE_RUN: '1', EPAM_BROWNFIELD: '1', ...extra } });
   return r;
@@ -114,5 +115,26 @@ ${step13}`], { encoding: 'utf8', env: { ...env, PROJECT_ROOT: site, EPAM_BROWNFI
     expect(git(site, 'branch', '--show-current')).toBe('AI-S-7');
     expect(lstatSync(join(wt, 'node_modules')).isSymbolicLink()).toBe(true);
 
+  });
+});
+
+describe('pause 2 holds for a worktree lane — the writer never starts unattended', () => {
+  it('with EPAM_PAUSE_BEFORE_WRITER=1 and no main-lane stories, the run stops before Step 13', () => {
+    const blk = block('# A BROWNFIELD WORKTREE LANE STARTS ON ITS STORY BRANCH', '# END A BROWNFIELD WORKTREE LANE');
+    const r = spawnSync('bash', ['-c', `log(){ :; }; info(){ :; }; warning(){ :; }; error(){ :; }; success(){ :; }; step_emit(){ :; }
+spec_review_gate(){ echo SPEC_REVIEW; return 0; }
+save_run_checkpoint(){ echo "CHECKPOINT $2"; }
+should_pause_before_writer(){ [ "\${EPAM_PAUSE_BEFORE_WRITER:-}" = "1" ]; }
+record_run_pause(){ echo "PAUSE $1"; }
+ensure_story_branch(){ echo "BRANCH $2"; }
+${(() => { const ls = require('node:fs').readFileSync(join(SCRIPTS, 'run-agent-orchestration.sh'), 'utf8').split('\n'); const s = ls.findIndex((l: string) => l.startsWith('before_the_writer() {')); const e = ls.findIndex((l: string, i: number) => i > s && l === '}'); return s >= 0 ? ls.slice(s, e + 1).join('\n') : ''; })()}
+PHASE=core; PRD_FILE=/dev/null; ORCH_RUN_ID=R1
+need_worktrees=true; primary_stories="S-1"; independent_stories=""; non_review_main=""
+${blk}
+echo REACHED_STEP_13`], { encoding: 'utf8', env: { ...env, EPAM_BROWNFIELD: '1', EPAM_PAUSE_BEFORE_WRITER: '1' } });
+    expect(r.stdout).toContain('SPEC_REVIEW');
+    expect(r.stdout).toContain('CHECKPOINT pre-writer');
+    expect(r.stdout).toContain('PAUSE pre-writer');
+    expect(r.stdout).not.toContain('REACHED_STEP_13');
   });
 });

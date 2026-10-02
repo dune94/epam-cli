@@ -173,34 +173,6 @@ provision_env_local_from_sample() {
     done > "$dest"
 }
 
-# provision_lane_worktree <codeline_root> <worktree_path>
-#
-# A brownfield lane's worktree gets what `git worktree add` cannot give it — the untracked state the
-# pipeline provisioned into the codeline: the .epam/ declaration (copied), the env file (provisioned
-# from the codeline's own sample, as the lane does), and the vendor directory provisioning populates
-# (the declaration's FIRST vendorDir, linked). Nothing is installed: an install would reach the
-# codeline's package registry, a client system (AMSD-2974, 2026-10-02). Same pattern as the baseline
-# gates' worktrees (lib/tsc-baseline-gate.sh). Build output is not linked — it stays in the worktree.
-provision_lane_worktree() {
-    local _root="${1:-}" _wt="${2:-}"
-    [ -n "$_root" ] && [ -d "$_root" ] && [ -n "$_wt" ] && [ -d "$_wt" ] || return 0
-    if [ -d "$_root/.epam" ] && [ ! -e "$_wt/.epam" ]; then
-        cp -r "$_root/.epam" "$_wt/.epam" 2>/dev/null || warning "  [worktree] could not copy .epam/ into $_wt"
-    fi
-    if [ ! -e "$_wt/.env.local" ]; then
-        provision_env_local_from_sample "$_wt" "$_wt/.env.local"
-    fi
-    # The declaration is read where the baseline gate reads it (_bg_vendor_dirs): the project's own
-    # first, then the codeline's — ensure_story_branch cleans the checkout's untracked .epam/.
-    local _cfg="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}" _vd=""
-    [ -n "$_cfg" ] && [ -f "$_cfg" ] || _cfg="$_root/.epam/dependency-check.json"
-    [ -f "$_cfg" ] && _vd=$(jq -r '.vendorDirs[0]? // empty' "$_cfg" 2>/dev/null || true)
-    if [ -n "$_vd" ] && [ -d "$_root/$_vd" ] && [ ! -e "$_wt/$_vd" ]; then
-        ln -s "$_root/$_vd" "$_wt/$_vd" || warning "  [worktree] could not link $_vd into $_wt"
-    fi
-    return 0
-}
-
 resolve_codeline_node() {
     local codeline_root="$1"
     local pkg="$codeline_root/package.json"

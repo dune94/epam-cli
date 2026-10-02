@@ -49,6 +49,7 @@ const lane = (() => {
 function runLane(extra: Record<string, string>) {
   rmSync(calls, { force: true });
   return spawnSync('bash', ['-c', `log(){ :; }; info(){ :; }; warning(){ echo "WARN $*" >&2; }; error(){ :; }; success(){ :; }
+source ${JSON.stringify(join(SCRIPTS, 'lib/codeline-lanes.sh'))}
 source ${JSON.stringify(join(SCRIPTS, 'lib/local-dependency-overrides.sh'))}
 ${lane}`], { encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, EPAM_PROJECT_CONFIG_DIR: proj, PROJECT_ROOT: site, JIRA_CODELINE_RUN: '1', EPAM_BROWNFIELD: '1', ...extra } });
 }

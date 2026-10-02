@@ -307,7 +307,7 @@ if [ -f "$_env_file" ]; then load_env_file_safe "$_env_file" preserve; fi
 # lane uses the declared branch where its codeline has it, else the codeline's own default branch —
 # read from local refs (lib/git-ops.sh codeline_baseline_ref). Everything in the lane reads
 # JIRA_BASELINE_BRANCH, so it is set once, here.
-if [ "${JIRA_CODELINE_RUN:-0}" = "1" ] && [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "${PROJECT_ROOT:-}" ]; then
+if is_lane && [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "${PROJECT_ROOT:-}" ]; then
     _lane_baseline_ref=$(codeline_baseline_ref "$PROJECT_ROOT" "${JIRA_BASELINE_BRANCH:-}")
     if [ -n "$_lane_baseline_ref" ]; then
         export JIRA_BASELINE_BRANCH="${_lane_baseline_ref#origin/}"
@@ -319,7 +319,7 @@ fi
 # the local package sources its codeline declares (dependency-check.json localDependencyOverrides) —
 # from the provider codeline's current checkout, which an earlier lane has already updated
 # (AMSD-2974, 2026-10-02). Never from a registry; never written to the manifest.
-if [ "${JIRA_CODELINE_RUN:-0}" = "1" ] && [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "${PROJECT_ROOT:-}" ]; then
+if is_lane && [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "${PROJECT_ROOT:-}" ]; then
     command -v _apply_local_dependency_overrides >/dev/null 2>&1 \
         || . "$SCRIPT_DIR/lib/local-dependency-overrides.sh"
     _apply_local_dependency_overrides "$PROJECT_ROOT"
@@ -1267,6 +1267,55 @@ echo -e "${MAGENTA}  Orch:  ${WHITE}${RESOLVED_ORCH_MODE}$([ "$RESOLVED_ORCH_MOD
 echo -e "${MAGENTA}============================================${NC}"
 echo ""
 
+# before_the_writer <stories> — THE STEPS EVERY LANE PASSES BEFORE ITS WRITER STARTS: the spec review
+# must have cleared, the pre-writer checkpoint is saved, and pause 2 stops the run when it is set.
+# One definition for the main lane and the worktree lanes — a brownfield story runs in a worktree
+# lane (2026-10-02), and pause 2 must hold there too: a writer never starts unattended.
+before_the_writer() {
+    local non_review_main="${1:-}"
+        # ── Gate: the specification review must have cleared these stories ───
+        # The reviewer runs with filesystem access and checks each manifest against the
+        # repository. Live 2026-08-04 it returned needs_review on all three lanes — two of
+        # which had a manifest naming a file that does not exist — and the pipeline went
+        # straight to implementation, because the only verdict the code branched on was
+        # 'fail' and the schema never emits it. Enforced here, before the writer spends
+        # anything. SPEC_REVIEW_ENFORCE=0 overrides deliberately.
+        if ! spec_review_gate "$PRD_FILE"; then
+            error "[orch] Halting phase '${PHASE}' before implementation — the spec review did not clear."
+            exit 1
+        fi
+
+        # ── Checkpoint / pause: PRE-WRITER ───────────────────────────────────
+        # Everything the writer consumes is settled by now — the spec pass, the CPA
+        # pre-pass, the skill assessment and the detective have all run and written
+        # their output into the PRD. This is the last point at which those inputs can
+        # be inspected before any code is generated. Saved unconditionally: an artefact
+        # that exists only in memory is a project violation.
+        if _ckpt_path=$(save_run_checkpoint "$PHASE" pre-writer 2>&1); then
+            info "[orch] pre-writer checkpoint saved: ${_ckpt_path}"
+        else
+            warning "[orch] could not save the pre-writer checkpoint: ${_ckpt_path}"
+        fi
+        if should_pause_before_writer; then
+            echo ""
+            echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
+            echo -e "${GREEN}║  PAUSED — inputs ready, writer NOT started                         ║${NC}"
+            echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
+            echo ""
+            echo -e "  RUN NUMBER:  ${GREEN}${ORCH_RUN_ID}${NC}"
+            echo -e "  Phase:       ${PHASE}"
+            echo -e "  Stories:     $(printf '%s\n' "$non_review_main" | awk 'NF{n++} END{print n+0}') queued for the writer"
+            echo -e "  Artefacts:   ${_ckpt_path:-<not saved>}"
+            echo ""
+            echo -e "  Resume implementation with:"
+            echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID}${NC} <your launcher>"
+            echo ""
+            step_emit "8" "skip" "Step 8: Main-branch stories" "paused before the writer (EPAM_PAUSE_BEFORE_WRITER)"
+            record_run_pause pre-writer
+            exit 0
+        fi
+}
+
 # Categorize stories by agent group
 # Deprecated stories (e.g. a split child rejected for a same-file coherence
 # violation) must never be selected here — found live 2026-07-10 when a
@@ -1277,18 +1326,17 @@ echo ""
 # the primary worktree lane (metrolinx run 12, 2026-07-22) until a single-story run was defaulted to
 # "main" in the synthesiser (ffb148f0, 2026-07-23); operator, 2026-10-02: "We need to work in
 # worktrees". A PRD already synthesised with "main" (a resume) is routed here, never edited.
-_bf_worktree_lane="${EPAM_BROWNFIELD:-0}"
-main_stories=$(jq -r --arg phase "$PHASE" --arg bf "$_bf_worktree_lane" \
+main_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
      select(.status != "deprecated") |
-     select(((.agentGroup == "main" and $bf != "1") or .agentGroup == "preflight") and (.completed // false) == false) | .id' "$PRD_FILE")
+     select(((.agentGroup == "main" and ($ENV.EPAM_BROWNFIELD // "0") != "1") or .agentGroup == "preflight") and (.completed // false) == false) | .id' "$PRD_FILE")
 
-primary_stories=$(jq -r --arg phase "$PHASE" --arg bf "$_bf_worktree_lane" \
+primary_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
      select(.status != "deprecated") |
-     select((.agentGroup == "primary" or (.agentGroup == "main" and $bf == "1")) and (.completed // false) == false) | .id' "$PRD_FILE")
+     select((.agentGroup == "primary" or (.agentGroup == "main" and ($ENV.EPAM_BROWNFIELD // "0") == "1")) and (.completed // false) == false) | .id' "$PRD_FILE")
 
 independent_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
@@ -2248,47 +2296,7 @@ if [ -n "$main_stories" ]; then
             info "[CHECKPOINT] All $_ckpt_total stories already completed — skipping Step 1 for phase '${PHASE:-main}'"
             step_emit "8" "pass" "Step 8: Main-branch stories (all checkpointed)"
         else
-        # ── Gate: the specification review must have cleared these stories ───
-        # The reviewer runs with filesystem access and checks each manifest against the
-        # repository. Live 2026-08-04 it returned needs_review on all three lanes — two of
-        # which had a manifest naming a file that does not exist — and the pipeline went
-        # straight to implementation, because the only verdict the code branched on was
-        # 'fail' and the schema never emits it. Enforced here, before the writer spends
-        # anything. SPEC_REVIEW_ENFORCE=0 overrides deliberately.
-        if ! spec_review_gate "$PRD_FILE"; then
-            error "[orch] Halting phase '${PHASE}' before implementation — the spec review did not clear."
-            exit 1
-        fi
-
-        # ── Checkpoint / pause: PRE-WRITER ───────────────────────────────────
-        # Everything the writer consumes is settled by now — the spec pass, the CPA
-        # pre-pass, the skill assessment and the detective have all run and written
-        # their output into the PRD. This is the last point at which those inputs can
-        # be inspected before any code is generated. Saved unconditionally: an artefact
-        # that exists only in memory is a project violation.
-        if _ckpt_path=$(save_run_checkpoint "$PHASE" pre-writer 2>&1); then
-            info "[orch] pre-writer checkpoint saved: ${_ckpt_path}"
-        else
-            warning "[orch] could not save the pre-writer checkpoint: ${_ckpt_path}"
-        fi
-        if should_pause_before_writer; then
-            echo ""
-            echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
-            echo -e "${GREEN}║  PAUSED — inputs ready, writer NOT started                         ║${NC}"
-            echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
-            echo ""
-            echo -e "  RUN NUMBER:  ${GREEN}${ORCH_RUN_ID}${NC}"
-            echo -e "  Phase:       ${PHASE}"
-            echo -e "  Stories:     $(printf '%s\n' "$non_review_main" | awk 'NF{n++} END{print n+0}') queued for the writer"
-            echo -e "  Artefacts:   ${_ckpt_path:-<not saved>}"
-            echo ""
-            echo -e "  Resume implementation with:"
-            echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID}${NC} <your launcher>"
-            echo ""
-            step_emit "8" "skip" "Step 8: Main-branch stories" "paused before the writer (EPAM_PAUSE_BEFORE_WRITER)"
-            record_run_pause pre-writer
-            exit 0
-        fi
+        before_the_writer "$non_review_main"
 
         step_emit "8" "running" "Step 8: Main-branch stories"
     log "Step 8: Running main-branch stories..."
@@ -2670,6 +2678,11 @@ need_worktrees=false
 # lane does per story (ensure_story_branch). Never the client's develop or master, never a branch
 # left over from an earlier ticket (AMSD-2974, 2026-10-02).
 if [ "$need_worktrees" = true ] && [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+    # The main lane passed before_the_writer above; a run whose writers are all in worktree lanes
+    # passes it here, before its story branch and its worktrees exist.
+    if [ -z "${non_review_main:-}" ]; then
+        before_the_writer "$(printf '%s\n%s\n' "$primary_stories" "$independent_stories" | grep . || true)"
+    fi
     _bf_wt_story=$(printf '%s\n%s\n' "$primary_stories" "$independent_stories" | grep -m1 . || true)
     if [ -n "$_bf_wt_story" ]; then
         ensure_story_branch "${PROJECT_ROOT:-}" "$_bf_wt_story" "${JIRA_BASELINE_BRANCH:-}" \

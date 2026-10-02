@@ -17,6 +17,18 @@
  */
 const fs = require('fs');
 
+/**
+ * A STORY THAT SPANS CODELINES IS SPECIFIED PER CODELINE. In a lane's PRD (story.codeline = the lane)
+ * the spec mark from another lane is not this lane's spec: AMSD-2974's three site lanes skipped their
+ * spec pass on a resume because cxshared's spec had stamped the story (2026-10-01). The lane's own
+ * fix-site entry is the mark that this codeline was investigated.
+ */
+function lacksOwnLane(s) {
+  if (!Array.isArray(s.codelines) || s.codelines.length < 2 || !s.codeline) return false;
+  const own = s.fixSiteAnalysisPerCodeline;
+  return !(own && Object.prototype.hasOwnProperty.call(own, s.codeline));
+}
+
 function storiesLackingSpec(prd, phase) {
   const byId = new Map((prd.stories || []).map((s) => [s.id, s]));
   const ids = phase
@@ -28,7 +40,7 @@ function storiesLackingSpec(prd, phase) {
     // THE PASS'S WRITE IS THE MARK. Every spec-pass write stamps specification.runId — on the
     // story it specified and on each child it split off. Judging by appliedAgents counted the
     // pass's own children as spec-less, and every resume re-split them (run 20260915T101555Z).
-    .filter((s) => !(s.specification && s.specification.runId))
+    .filter((s) => !(s.specification && s.specification.runId) || lacksOwnLane(s))
     .map((s) => s.id);
 }
 

@@ -236,6 +236,21 @@ run_stage() {
         _stage="$_lane_min"
     fi
     [ -n "$_stage" ] || return 1
+    # SENT BACK, NEVER FORWARD. EPAM_RESUME_FROM_STAGE resumes from an EARLIER stage than the run
+    # reached — to redo the work after it (operator, 2026-10-01: rerun pause 1 -> pause 2 after a spec
+    # fix; every lane already at pre-writer would otherwise have counted pause 2 as passed and gone
+    # straight into the writer). A stage later than the run reached is refused: skipping work the run
+    # never did is the one thing a resume must not do.
+    if [ -n "${EPAM_RESUME_FROM_STAGE:-}" ]; then
+        local _want_rank _have_rank
+        _want_rank=$(_stage_rank "$EPAM_RESUME_FROM_STAGE")
+        _have_rank=$(_stage_rank "$_stage")
+        if [ "${_want_rank:-0}" -ge 1 ] 2>/dev/null && [ "$_want_rank" -le "${_have_rank:-0}" ]; then
+            _stage="$EPAM_RESUME_FROM_STAGE"
+        else
+            echo "[checkpoint] EPAM_RESUME_FROM_STAGE='${EPAM_RESUME_FROM_STAGE}' is not a stage at or before the one run '${_rid}' reached ('${_stage}') — ignored" >&2
+        fi
+    fi
     printf '%s' "$_stage"
 }
 

@@ -334,8 +334,16 @@ _run_codeline_bridge() {
     # --no-tools — the same class of gap already fixed once for
     # code-graph-detective/failure-analyst. Budgeted like every other
     # tool-bearing gate call in this file.
+    local _bridge_reply; _bridge_reply="$(mktemp "${TMPDIR:-/tmp}/codeline-bridge-reply-XXXXXX")"
     AI_GATE_ALLOW_TOOLS=1 EPAM_MAX_TOOL_CALLS="${CODELINE_BRIDGE_MAX_TOOL_CALLS:-10}" \
-        run_orch_prompt "$_bridge_prompt" "codeline-bridge-agent" "$_bcl" || _bridge_rc=$?
+        run_orch_prompt "$_bridge_prompt" "codeline-bridge-agent" "$_bcl" > "$_bridge_reply" || _bridge_rc=$?
+    # THE ENGINE PERFORMS THE WRITE. The contract is the agent's ANSWER; the file lies outside the
+    # folder the agent may write in, so on copilot every lane's three attempts returned the full
+    # contract as text and "failed" (AMSD-2974, 2026-10-01). A file the agent wrote itself still wins.
+    if [ "$_bridge_rc" = "0" ] && [ ! -s "$_bridge_out" ] && [ -s "$_bridge_reply" ]; then
+      cp "$_bridge_reply" "$_bridge_out"
+    fi
+    rm -f "$_bridge_reply"
 
     # Determine success: exit 0 AND file exists AND file is non-empty
     if [ "$_bridge_rc" = "0" ] && [ -f "$_bridge_out" ] && [ -s "$_bridge_out" ]; then

@@ -54,7 +54,15 @@
           ...s,
           codeline: cl,
           verificationCriteria: _scoped(s.verificationCriteria, s.verificationCriteriaPerCodeline),
-          fixSiteAnalysis: _scoped(s.fixSiteAnalysis, s.fixSiteAnalysisPerCodeline),
+          // A LANE NEVER INHERITS ANOTHER CODELINE'S FIX SITES. With no entry of its own yet, the
+          // fallback keeps only findings tagged with this codeline: the next lane of a spanning
+          // story was handed the first lane's files, which do not exist in its checkout (AMSD-2974,
+          // 2026-10-01). Findings carry their codeline once pooled.
+          fixSiteAnalysis: (s.fixSiteAnalysisPerCodeline && Object.prototype.hasOwnProperty.call(s.fixSiteAnalysisPerCodeline, cl))
+            ? s.fixSiteAnalysisPerCodeline[cl]
+            : (Array.isArray(s.codelines) && s.codelines.length > 1 && Array.isArray(s.fixSiteAnalysis)
+              ? s.fixSiteAnalysis.filter(f => f && f.codeline === cl)
+              : s.fixSiteAnalysis),
         };
       });
       const ids = new Set(stories.map(s => s.id));

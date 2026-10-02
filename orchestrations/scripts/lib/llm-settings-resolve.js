@@ -106,7 +106,15 @@ function readSetFile(file) {
   if (!base) throw new Error("[llm-settings] " + file + " inherits from '" + baseName + "', which cannot be read at " + baseFile);
   const out = {};
   for (const k of Array.isArray(keys) ? keys : []) if (base[k] !== undefined) out[k] = base[k];
-  for (const [k, v] of Object.entries(own)) if (k !== 'inheritFrom') out[k] = v;
+  for (const [k, v] of Object.entries(own)) {
+    if (k === 'inheritFrom') continue;
+    // ONE LEVEL DEEP FOR AN INHERITED OBJECT: a set may redeclare one tier of a ladder (the copilot set
+    // prices its Opus steps differently — Copilot bills per token, operator 2026-10-01) and keep the
+    // rest inherited, so the two copies never drift where they agree.
+    const inherited = out[k];
+    const plain = (x) => x && typeof x === 'object' && !Array.isArray(x);
+    out[k] = plain(inherited) && plain(v) ? { ...inherited, ...v } : v;
+  }
   return out;
 }
 

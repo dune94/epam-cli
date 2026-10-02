@@ -34,11 +34,16 @@ describe('the copilot set', () => {
     expect(c.credentials.map((x: { env: string }) => x.env)).toContain('COPILOT_GITHUB_TOKEN');
   });
 
-  it('climbs exactly the ladders the claude set declares — tiers, chains, rungs and model overrides', () => {
+  it('climbs the claude set\'s ladders except the tiers it prices itself — chains, rungs and model overrides', () => {
+    // Operator, 2026-10-01: ladders ideal for cost on GHCP. Copilot bills per token, so the copilot set
+    // redeclares the tiers it prices differently (its own `ladders`); every other tier is the claude set's.
     const copilot = underSet('copilot', 'r.resolveLlmSettings()');
     const claude = underSet('claude', 'r.resolveLlmSettings()');
+    const own = Object.keys(JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '../../../orchestrations/config/llm-defaults.copilot.json'), 'utf8')).ladders || {});
     expect(Object.keys(copilot.ladders).length).toBeGreaterThan(0);
-    expect(copilot.ladders).toEqual(claude.ladders);
+    expect(Object.keys(copilot.ladders).sort()).toEqual(Object.keys(claude.ladders).sort());
+    for (const t of Object.keys(claude.ladders).filter((k) => !own.includes(k))) expect(copilot.ladders[t]).toEqual(claude.ladders[t]);
+    for (const t of own) expect(copilot.ladders[t].rungs).toEqual(claude.ladders[t].rungs);
     expect(copilot.ladderTierOrder).toEqual(claude.ladderTierOrder);
     expect(copilot.modelOverrides).toEqual(claude.modelOverrides);
   });

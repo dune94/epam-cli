@@ -11,6 +11,71 @@
     "model": "claude-sonnet-5",
     "provider": "copilot"
   },
+  "$whyLadders": "Only the tiers Copilot prices differently; every other tier is inherited from the claude set (operator, 2026-10-01: ladders ideal for cost on GHCP). No $-key inside ladders: model-ladders.sh exports one variable per key.",
+  "ladders": {
+    "high": {
+      "$why": "Copilot bills per token (GitHub, June 2026): Opus 5.5 is $4/$20 per 1M (cached $0.20) against Opus 5's $5/$25 (cached $0.50) — the top step is cheaper and not weaker. Entry and rungs as the claude set's high tier.",
+      "startModel": "claude-haiku-4-5-20251001",
+      "modelLadder": [
+        {
+          "from": "claude-haiku-4-5-20251001",
+          "to": "claude-sonnet-5"
+        },
+        {
+          "from": "claude-sonnet-5",
+          "to": "claude-opus-5-5"
+        }
+      ],
+      "rungs": [
+        {
+          "rung": 0,
+          "maxIterations": 40,
+          "reasoningEffort": "medium"
+        },
+        {
+          "rung": 1,
+          "maxIterations": 250,
+          "reasoningEffort": "high"
+        },
+        {
+          "rung": 2,
+          "maxIterations": 300,
+          "reasoningEffort": "high"
+        }
+      ]
+    },
+    "highest": {
+      "$why": "Copilot bills per token: Opus 4.8 costs the same as Opus 5 ($5/$25) and is the weaker model, so the middle step is Opus 5; the top step is Opus 5.5 ($4/$20, cached $0.20), cheaper than both. Entry and rungs as the claude set's highest tier.",
+      "startModel": "claude-sonnet-5",
+      "modelLadder": [
+        {
+          "from": "claude-sonnet-5",
+          "to": "claude-opus-5"
+        },
+        {
+          "from": "claude-opus-5",
+          "to": "claude-opus-5-5"
+        }
+      ],
+      "rungs": [
+        {
+          "rung": 0,
+          "maxIterations": 250,
+          "reasoningEffort": "high"
+        },
+        {
+          "rung": 1,
+          "maxIterations": 250,
+          "reasoningEffort": "high"
+        },
+        {
+          "rung": 2,
+          "maxIterations": 300,
+          "reasoningEffort": "xhigh"
+        }
+      ]
+    }
+  },
   "runners": {
     "copilot": {
       "siChannel": {"env": "COPILOT_CUSTOM_INSTRUCTIONS_DIRS", "file": "si.instructions.md"},

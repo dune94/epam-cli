@@ -228,7 +228,7 @@ function publishFixPlans(prd, env) {
   return published;
 }
 
-module.exports = { renderFixPlan, renderStoryPlan, publishFixPlans, KIND, PRODUCER };
+module.exports = { renderFixPlan, renderStoryPlan, publishFixPlans, sharedFact, KIND, PRODUCER };
 
 // CLI: node fix-plan.js <prd.json> <story-id>   — emits the rendered plan on stdout.
 // The shell consumers call it this way; it is the same function either way, never a second copy.

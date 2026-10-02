@@ -6288,6 +6288,21 @@ function detectivePrescription(kind, story) {
  * The other lanes' shared findings already recorded are handed over as leads — a lane never gets
  * its own back. Empty for a story confined to one codeline, so its prompt is unchanged.
  */
+/**
+ * THE SPEC AGENT IS TOLD WHAT IS SHARED, AND HOW A SHARED CHANGE IS VERIFIED (spec-shared-consumer).
+ * Live 2026-10-02: the detective reported each site's dependency entry as shared and out of range,
+ * the spec agent never saw it, and every consumer's description and criteria contradicted each
+ * other. Empty when no finding is shared, so every other prompt is unchanged.
+ */
+function sharedSpecBlock(findings) {
+  const shared = (Array.isArray(findings) ? findings : []).filter((f) => f && f.shared && typeof f.shared === 'object');
+  if (!shared.length) return '';
+  const { sharedFact } = require('./lib/producers/fix-plan.js');
+  return renderEngineTemplate('spec-shared-consumer', {
+    __SHARED_FACTS__: shared.map((f) => `- ${f.file} — ${sharedFact(f.shared)}`).join('\n'),
+  });
+}
+
 function detectiveSharedBlock(story) {
   const lanes = (story && Array.isArray(story.codelines)) ? story.codelines.filter(Boolean) : [];
   const here = story && story.codeline;
@@ -7688,6 +7703,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   const fixSiteBlock = detectiveFindings.length
     ? `\n\nLOCATED FIX SITE(S) — traced in this repository before you were asked. Anchor every criterion to the behaviour THIS code produces:\n`
       + detectiveFindings.slice(0, evidenceWindow('fixSitesInPrompt')).map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n') + '\n'
+      + sharedSpecBlock(detectiveFindings)
     : '';
   // detectiveFindings, not story.fixSiteAnalysis: the field is not set until later.
   const declaredFileBlock = manifestFileExcerpts(story, prd, { located: detectiveFindings });

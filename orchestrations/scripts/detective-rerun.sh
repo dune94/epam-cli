@@ -68,7 +68,10 @@ if [ -n "${SECRETS_FILE:-}" ]; then
   esac
   [ -f "$_secrets_abs" ] && load_env_file_safe "$_secrets_abs"
 fi
-load_env_file_safe "$CONFIG"
+# The project env again, after the secrets file — as orchestrate.sh does. This read a $CONFIG
+# that nothing sets since the project env became two files resolved by load_project_env, and the
+# launcher died before any call: "CONFIG: unbound variable" (2026-10-02).
+load_project_env "$PROJECT_DIR" || exit 1
 
 export EPAM_PROJECT_CONFIG_DIR="${EPAM_PROJECT_CONFIG_DIR:-$PROJECT_DIR}"
 

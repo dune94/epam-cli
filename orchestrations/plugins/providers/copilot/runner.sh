@@ -39,7 +39,12 @@ copilot_invoke() {
     [ "$events_keep" = "--" ] && events_keep=""
     [ -n "$events_keep" ] || events_keep="${result_json%.json}.events.jsonl"
     local extra=()
-    shift 4; [ $# -gt 0 ] && [ "$1" != "--" ] && shift
+    # SLOT 5 IS THE EVENTS-KEEP PATH, and "--" is its "none" placeholder — which is also the separator
+    # that follows it. Consumed unless it IS the separator (a caller that passed no slot 5): taking
+    # the placeholder for the separator sent the real "--" to the CLI, and every argument after it
+    # (--add-dir, --available-tools) was read as a subcommand, whenever LOG_DIR was unset (2026-10-02).
+    shift 4
+    if [ $# -gt 0 ] && { [ "$1" != "--" ] || [ "${2:-}" = "--" ]; }; then shift; fi
     [ "${1:-}" = "--" ] && { shift; extra=("$@"); }
     local node="${NODE_BIN:-node}" bin="${COPILOT_CMD:-copilot}"
     local home="${EPAM_COPILOT_HOME:-$_copilot_orch/.copilot-home}"

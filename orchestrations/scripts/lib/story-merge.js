@@ -133,8 +133,21 @@ function mergeLaneIntoCanonical({ canonical, updated, codeline }) {
       (cl) => perCodeline[cl] && perCodeline[cl].completed === true,
     );
 
+    // THE TICKET STAYS THE TICKET. A lane's spec agent rewrites the title and description for ITS
+    // codeline; copied over canonical, the next lane was handed that rewrite as the ticket. Live
+    // 2026-10-02 (AMSD-2974): the library lane wrote "that bump is tracked separately" and the next
+    // lane's detective quoted it as the ticket. Each lane's rewrite is kept under its codeline and
+    // filtered-prd.js gives each lane its own; canonical keeps the ticket's text.
+    const specTextPerCodeline = {
+      ...(s.specTextPerCodeline || {}),
+      [codeline]: { title: u.title, description: u.description },
+    };
+
     return {
       ...u,
+      title: s.title,
+      description: s.description,
+      specTextPerCodeline,
       perCodeline,
       verificationCriteriaPerCodeline: vcPerCodeline,
       verificationCriteria: unionCriteria(vcPerCodeline, s.codelines),

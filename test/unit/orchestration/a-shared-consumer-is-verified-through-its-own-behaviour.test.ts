@@ -60,6 +60,9 @@ describe('the spec agent is told what is shared and how a consumer is verified',
     expect(p).toContain('@scope/lib');
     expect(p).toContain('^7');
     expect(p).toContain('SHARED WITH ANOTHER CODELINE');
+    // The library lane's spec once declared the sites' change "tracked separately", which the
+    // ticket never said, and every later lane inherited it (2026-10-02).
+    expect(p).toContain('NEVER DECLARE ANOTHER CODELINE');
   }, 120000);
 
   it('a story with nothing shared gets no such section', async () => {

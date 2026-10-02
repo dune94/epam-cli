@@ -6491,6 +6491,7 @@ function sharedOf(v) {
   return {
     package: v.package.trim(),
     providedBy: str(v.providedBy),
+    shipsInVersion: str(v.shipsInVersion),
     consumers: (Array.isArray(v.consumers) ? v.consumers : [])
       .filter((c) => c && typeof c === 'object' && typeof c.codeline === 'string')
       .map((c) => ({

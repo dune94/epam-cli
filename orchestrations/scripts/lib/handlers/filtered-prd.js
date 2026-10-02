@@ -50,8 +50,11 @@
       ).map(s => {
         const _scoped = (flat, perCl) =>
           (perCl && Object.prototype.hasOwnProperty.call(perCl, cl)) ? perCl[cl] : flat;
+        const _ownText = (s.specTextPerCodeline && s.specTextPerCodeline[cl]) || null;
         return {
           ...s,
+          // THIS LANE'S OWN SPEC TEXT, OR THE TICKET'S - never another lane's rewrite (story-merge.js).
+          ...(_ownText ? { title: _ownText.title, description: _ownText.description } : {}),
           codeline: cl,
           verificationCriteria: _scoped(s.verificationCriteria, s.verificationCriteriaPerCodeline),
           // A LANE NEVER INHERITS ANOTHER CODELINE'S FIX SITES. With no entry of its own yet, the

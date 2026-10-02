@@ -84,7 +84,7 @@ describe('the shared answer survives the parse', () => {
       { file: 'src/b.ts', reason: 'r', fix: 'f', changeRequired: true },
     ]);
     const [a, b] = runner.parseDetectiveFindings(reply, '');
-    expect(a.shared).toEqual(shared);
+    expect(a.shared).toEqual({ ...shared, shipsInVersion: '' });
     expect(b.shared).toBeUndefined();
   });
 
@@ -140,4 +140,22 @@ describe('the new words are in the template layer and name no project', () => {
       for (const p of projects) expect(raw.toLowerCase()).not.toContain(p.toLowerCase());
     });
   }
+});
+
+describe('the provider states the version its change ships in (shipsInVersion)', () => {
+  it('the detective of a spanning story is asked for it', () => {
+    expect(runner.detectivePrescription('novel', spanning('lib'))).toContain('"shipsInVersion"');
+  });
+  it('the parse keeps it', () => {
+    const [a] = runner.parseDetectiveFindings(JSON.stringify([{ file: 'src/a.ts', shared: { ...shared, shipsInVersion: '8.10.0' } }]), '');
+    expect(a.shared.shipsInVersion).toBe('8.10.0');
+  });
+  it('an absent version is absent, never invented', () => {
+    const [a] = runner.parseDetectiveFindings(JSON.stringify([{ file: 'src/a.ts', shared }]), '');
+    expect(a.shared.shipsInVersion).toBe('');
+  });
+  it('the writer is told it', () => {
+    const story = { ...spanning('site'), fixSiteAnalysisPerCodeline: { lib: [{ ...libFinding, shared: { ...shared, shipsInVersion: '8.10.0' } }], site: [siteFinding] } };
+    expect(fixPlan.renderStoryPlan(story, prdFor('site'))).toContain('8.10.0');
+  });
 });

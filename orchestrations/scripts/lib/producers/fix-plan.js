@@ -110,6 +110,7 @@ function sharedFact(sh) {
   });
   let out = `package \`${sh.package}\``;
   if (sh.providedBy) out += `, provided by ${sh.providedBy}`;
+  if (sh.shipsInVersion) out += `, the change ships in version ${sh.shipsInVersion}`;
   if (consumers.length) out += `; consumers: ${consumers.join('; ')}`;
   if (sh.note) out += `. ${sh.note}`;
   return out;

@@ -6971,6 +6971,8 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       // JSON to parse/persist. So phase 1's job is just to INVESTIGATE; a
       // separate no-tools phase 2 does the structured output. If phase 1 happens
       // to already contain JSON (it sometimes does), we use it directly.
+      // How THIS attempt's call ended (runClaude fills exitCode) — phase 2 reads it.
+      const _phase1Call = {};
       const out = await runClaude(exec, prompt + correctiveNote, logPath, {
         AI_GATE_ALLOW_TOOLS: '1',           // enable tools so it can call the CodeGraph script via Bash
         // Output-token budget: the detective runs on a REASONING model (GLM-5.1)
@@ -7051,6 +7053,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
         // yields null and retries. Found live 2026-07-23: perfect fix-site JSON
         // was produced and then discarded on a null exit.
         salvageOutputOnFailure: true,
+        result: _phase1Call,
         // Tighter per-attempt timeout so a stalled base-model call (seen live
         // in-pipeline: glm-5.1 hung 6 min producing nothing while the pipeline
         // hammered the same OpenRouter key) fails FAST and escalates up the
@@ -7064,7 +7067,13 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       // possible action is to emit the JSON — it cannot wander off exploring
       // because it has no tools. This is the robust fix for "reasoning model
       // won't commit to structured output": separate exploration from output.
-      if (findings === null && out && out.trim() && !/reached maximum iterations/i.test(out)) {
+      // ONLY AN INVESTIGATION IS EXTRACTED. A phase 1 that FAILED (the runner exited non-zero) is
+      // salvaged so a JSON answer printed before a teardown error survives the parse above — but its
+      // text is not an investigation. Live 2026-10-02: every call failed to start the CLI, phase 2
+      // was handed the error message, and "recovered" a fix site per codeline that no investigation
+      // produced, one in a file that does not exist. A failed call stays a failure; the retry and
+      // the ladder below take it from there.
+      if (findings === null && _phase1Call.exitCode === 0 && out && out.trim() && !/reached maximum iterations/i.test(out)) {
         // THE EXTRACTION PROMPT IS A TEMPLATE, not a literal in this file (2026-09-14).
         const extractPrompt = renderEngineTemplate('detective-extract', { __INVESTIGATION__: out });
         const extractLog = logPath ? logPath.replace(/\.log$/, '-extract.log') : null;
@@ -10091,6 +10100,10 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
       // was salvaged still consumed tokens and still cost real money. Recording
       // only successes is how spend goes missing precisely when things go wrong.
       _emitCost();
+      // HOW THE CALL ENDED, for a caller that salvages: salvaged text from a call that FAILED is not
+      // an answer, and a caller that treats it as one invents findings from an error message
+      // (live 2026-10-02 — see runCodeGraphDetective's phase 2).
+      if (opts.result && typeof opts.result === 'object') opts.result.exitCode = code;
       if (code !== 0) {
         if (opts.salvageOutputOnFailure && output) {
           return resolve(output);

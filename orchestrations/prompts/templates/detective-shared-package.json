@@ -1,0 +1,25 @@
+{
+  "$why": [
+    "Operator, 2026-10-01 (a story spanning a shared library and the codelines that consume it): shared",
+    "changes MUST be treated differently, the run must mirror what a developer faces, and it is the",
+    "detective's judgement, not engine rules. The spec said the consumers needed no edit because their",
+    "declared range 'picks it up'; the library was a major version past every consumer's range.",
+    "Appended to the detective's prescription only when its story spans more than one codeline, so a",
+    "story confined to one codeline is asked exactly what it was asked before."
+  ],
+  "description": "Composed into the code-graph detective's prescription for a story that spans codelines: say whether a fix site is shared between them, and whether each consumer's declared range takes the change.",
+  "id": "detective-shared-package",
+  "seams": [
+    "code-graph-detective"
+  ],
+  "placeholders": [
+    "__THIS_CODELINE__",
+    "__OTHER_CODELINES__",
+    "__SIBLING_SHARED__"
+  ],
+  "mayBeEmpty": [
+    "__SIBLING_SHARED__"
+  ],
+  "version": 1,
+  "body": "\nTHIS STORY SPANS CODELINES. You are investigating codeline \"__THIS_CODELINE__\"; the same story is also being worked in: __OTHER_CODELINES__.\n\nSAY WHETHER A FIX SITE IS SHARED — add \"shared\" to a fix site when the change lives in, or depends on a change to, a package that one of these codelines PROVIDES and another CONSUMES. A change to a shared package is not finished when its own repository builds: every consumer receives it only through the version range it declares, so a change that ships in a version outside a consumer's range never reaches that consumer, however correct it is. Read the facts, do not assume them: this codeline's own manifest says what it provides (its name and version) or which range of a package it consumes, and what is actually installed.\n\n  \"shared\": {\"package\":\"<the package name, as its manifest declares it>\",\"providedBy\":\"<the codeline that provides it>\",\"consumers\":[{\"codeline\":\"<a codeline that consumes it>\",\"declaredRange\":\"<the range that codeline's manifest declares, or \\\"unknown\\\" when you cannot read it>\",\"receivesChange\":<true if that range takes the version this change ships in, false if it does not, null if you cannot tell>}],\"note\":\"<one line: what a consumer must do to build and test against this change>\"}\n\nOmit \"shared\" on a site that touches nothing another of these codelines provides or consumes — that is the common case. If a consumer cannot receive the change through its declared range, say so with receivesChange:false and name, as a fix site in the consumer, the manifest entry that must change; never describe that consumer as needing no edit.\n__SIBLING_SHARED__"
+}

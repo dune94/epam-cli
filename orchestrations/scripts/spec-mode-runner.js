@@ -6271,11 +6271,46 @@ function advanceAgentLadderEscalation(logDir, agentName, storyId) {
  * Unknown kinds take the NOVEL contract: inventing a cause for work that has none is the more
  * expensive error, and the one the reality anchor exists to prevent.
  */
-function detectivePrescription(kind) {
+function detectivePrescription(kind, story) {
   // RENDERED FROM THE TEMPLATE LAYER. Two bodies, not one prompt with a branch: the two arms say
   // OPPOSITE things about the most consequential field — brokenLine is required for a defect and
   // must be empty for novel work — and a branching prompt hides which set an agent received.
-  return renderEngineTemplate('detective-prescription', {}, kind === 'defect' ? 'defect' : 'novel');
+  return renderEngineTemplate('detective-prescription', {}, kind === 'defect' ? 'defect' : 'novel')
+    + detectiveSharedBlock(story);
+}
+
+/**
+ * A STORY THAT SPANS CODELINES IS ASKED WHETHER A FIX SITE IS SHARED BETWEEN THEM.
+ *
+ * Operator, 2026-10-01 (AMSD-2974: a shared library and three consuming sites): shared changes are
+ * treated differently, by the detective's judgement, never by engine rules. The spec said the sites
+ * needed no edit because their range "picks it up"; the library was a major version past them all.
+ * The other lanes' shared findings already recorded are handed over as leads — a lane never gets
+ * its own back. Empty for a story confined to one codeline, so its prompt is unchanged.
+ */
+function detectiveSharedBlock(story) {
+  const lanes = (story && Array.isArray(story.codelines)) ? story.codelines.filter(Boolean) : [];
+  const here = story && story.codeline;
+  if (lanes.length < 2 || !here) return '';
+  const others = lanes.filter((c) => c !== here);
+  const per = (story.fixSiteAnalysisPerCodeline && typeof story.fixSiteAnalysisPerCodeline === 'object')
+    ? story.fixSiteAnalysisPerCodeline : {};
+  const leads = [];
+  for (const cl of others) {
+    for (const f of (Array.isArray(per[cl]) ? per[cl] : [])) {
+      if (f && f.shared && typeof f.shared === 'object') {
+        leads.push(`- ${cl}: ${f.file} — ${JSON.stringify(f.shared)}`);
+      }
+    }
+  }
+  const sibling = leads.length
+    ? `\nWHAT THE OTHER CODELINES' INVESTIGATIONS ALREADY REPORTED AS SHARED (leads to confirm against this codeline's own manifest, not facts about it):\n${leads.join('\n')}\n`
+    : '';
+  return renderEngineTemplate('detective-shared-package', {
+    __THIS_CODELINE__: String(here),
+    __OTHER_CODELINES__: others.join(', '),
+    __SIBLING_SHARED__: sibling,
+  });
 }
 
 /**
@@ -6433,11 +6468,45 @@ function _promptLibrary() {
   return _promptLibraryMod;
 }
 
-function parseDetectiveFindings(out, repoPath) {
+/** The detective's "shared" answer, or undefined. Shape only — what it says is the agent's. */
+function sharedOf(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v) || typeof v.package !== 'string' || !v.package.trim()) return undefined;
+  const str = (x) => (typeof x === 'string' ? x : '');
+  return {
+    package: v.package.trim(),
+    providedBy: str(v.providedBy),
+    consumers: (Array.isArray(v.consumers) ? v.consumers : [])
+      .filter((c) => c && typeof c === 'object' && typeof c.codeline === 'string')
+      .map((c) => ({
+        codeline: c.codeline,
+        declaredRange: str(c.declaredRange),
+        receivesChange: typeof c.receivesChange === 'boolean' ? c.receivesChange : null,
+      })),
+    note: str(v.note),
+  };
+}
+
+/**
+ * The first JSON array of objects in a reply. The lazy match ends at the first `}]`, which is
+ * INSIDE an answer whose entries hold a list of objects (shared.consumers) — so on a parse failure
+ * the match is extended to each later `]` in turn, and the first that parses is the answer.
+ */
+function firstJsonArrayOfObjects(out) {
   const m = out && out.match(/\[\s*\{[\s\S]*?\}\s*\]/);
   if (!m) return null;
-  let arr;
-  try { arr = JSON.parse(m[0]); } catch { return null; }
+  const start = m.index;
+  let end = start + m[0].length;
+  for (;;) {
+    try { return JSON.parse(out.slice(start, end)); } catch { /* extend to the next ] */ }
+    const next = out.indexOf(']', end);
+    if (next < 0) return null;
+    end = next + 1;
+  }
+}
+
+function parseDetectiveFindings(out, repoPath) {
+  const arr = firstJsonArrayOfObjects(out);
+  if (arr === null) return null;
   const seen = new Set();
   const findings = [];
   for (const h of (Array.isArray(arr) ? arr : [])) {
@@ -6507,6 +6576,9 @@ function parseDetectiveFindings(out, repoPath) {
       deliveryRole: ['produces', 'carries', 'verifies'].includes(h.deliveryRole)
         ? h.deliveryRole : undefined,
       runsIn: ['server', 'browser', 'both', 'n/a'].includes(h.runsIn) ? h.runsIn : undefined,
+      // SHARED BETWEEN THE STORY'S CODELINES (detective-shared-package). Kept as the detective
+      // stated it, for the writer's plan; undefined when absent or not an object — never invented.
+      shared: sharedOf(h.shared),
     });
   }
   return findings;
@@ -6787,7 +6859,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       // The estimation application's assessment of this ticket — leads for the fix site, to confirm.
       __ESTIMATION_ASSESSMENT__: estimationAssessmentBlock(story, null, 'code-graph-detective'),
       __PRESEED_BLOCK__: preseedBlock,
-      __PRESCRIPTION_RULES__: detectivePrescription(_kindHint),
+      __PRESCRIPTION_RULES__: detectivePrescription(_kindHint, story),
       // The configuration this codeline actually carries, resolved from its OWN manifest by
       // the adapter that already knows this stack. Empty for a stack no adapter recognises.
       __CONFIG_SURFACE__: configSurfaceBlock(repoPath),

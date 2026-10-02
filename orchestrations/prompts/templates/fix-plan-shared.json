@@ -1,0 +1,18 @@
+{
+  "$why": [
+    "The writer's half of the detective's 'shared' finding (see detective-shared-package). A developer",
+    "changing a shared package and a consumer at once builds and tests the consumer against the",
+    "package's working copy, and saves none of that redirection: it is how they test, not what they",
+    "ship. The location is RELATIVE to this codeline (operator, 2026-10-01: no absolute paths in a",
+    "prompt). Rendered by the fix-plan producer only when a site of this story carries 'shared'."
+  ],
+  "description": "Appended to a writer's fix plan when the detective reported a shared fix site: what is shared, where each sibling codeline's working copy is, and how to build and test against it without saving the redirection.",
+  "id": "fix-plan-shared",
+  "seams": [],
+  "placeholders": [
+    "__SHARED_SITES__",
+    "__SIBLING_LOCATIONS__"
+  ],
+  "version": 1,
+  "body": "\n\nSHARED WITH OTHER CODELINES OF THIS STORY — the investigation found these fix sites are shared:\n__SHARED_SITES__\nThe other codelines' working copies, relative to this codeline's root:\n__SIBLING_LOCATIONS__\nWork as a developer changing a shared package and its consumers at once would. Where this codeline consumes a package another codeline provides, build and test against that codeline's working copy (with this run's changes in it) — point this codeline at it only for the build and the tests, and leave that redirection out of what you save: it is how you test, not part of the change. Where a consumer's declared range does not take the version the change ships in, the manifest entry is part of this codeline's change and must be edited. Where this codeline provides the package, its change is not finished until each consumer above can build against it; say in your final message what each consumer needs."
+}

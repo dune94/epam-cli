@@ -67,6 +67,8 @@ function renderSite(s) {
   const runsIn = s.runsIn == null ? '' : String(s.runsIn);
   if (runsIn !== '' && runsIn !== 'n/a') line += ` [runs: ${runsIn}]`;
 
+  if (s.shared && typeof s.shared === 'object') line += `\n  - **Shared:** ${sharedFact(s.shared)}`;
+
   const fix = s.fix == null ? '' : String(s.fix);
   if (fix !== '') {
     line += `\n  - **Minimal fix:** ${fix}`;
@@ -95,6 +97,22 @@ function renderSite(s) {
   }
 
   return line;
+}
+
+/** The detective's "shared" answer in its own terms: what, who provides it, and who receives it. */
+function sharedFact(sh) {
+  const consumers = (Array.isArray(sh.consumers) ? sh.consumers : []).map((c) => {
+    const range = c.declaredRange ? ` declares ${c.declaredRange}` : '';
+    const gets = c.receivesChange === true ? 'receives this change'
+      : c.receivesChange === false ? 'does NOT receive this change through that range'
+        : 'not known whether it receives this change';
+    return `${c.codeline}${range} — ${gets}`;
+  });
+  let out = `package \`${sh.package}\``;
+  if (sh.providedBy) out += `, provided by ${sh.providedBy}`;
+  if (consumers.length) out += `; consumers: ${consumers.join('; ')}`;
+  if (sh.note) out += `. ${sh.note}`;
+  return out;
 }
 
 /**
@@ -149,6 +167,45 @@ function sitesFor(story) {
 }
 
 /**
+ * A STORY'S PLAN: its own sites, and — when the detective reported a site SHARED between this
+ * story's codelines, in this lane or another — what is shared and where each sibling codeline's
+ * working copy is, RELATIVE to this codeline (detective-shared-package / fix-plan-shared). A story
+ * with nothing shared renders exactly renderFixPlan(sites).
+ */
+function renderStoryPlan(story, prd, sites) {
+  const own = sites === undefined ? sitesFor(story) : sites;
+  const base = renderFixPlan(own);
+  const here = story && story.codeline;
+  const lanes = (story && Array.isArray(story.codelines)) ? story.codelines.filter(Boolean) : [];
+  const per = (story && story.fixSiteAnalysisPerCodeline) || {};
+  const shared = [];
+  for (const s of (Array.isArray(own) ? own : [])) {
+    if (s && s.shared && typeof s.shared === 'object') shared.push(`- ${here || 'this codeline'}: ${s.file} — ${sharedFact(s.shared)}`);
+  }
+  for (const cl of lanes.filter((c) => c !== here)) {
+    for (const s of (Array.isArray(per[cl]) ? per[cl] : [])) {
+      if (s && s.shared && typeof s.shared === 'object') shared.push(`- ${cl}: ${s.file} — ${sharedFact(s.shared)}`);
+    }
+  }
+  if (shared.length === 0) return base;
+
+  const dirs = (prd && prd.project && Array.isArray(prd.project.outputDirs)) ? prd.project.outputDirs : [];
+  const dirOf = (cl) => (dirs.find((d) => d && d.codeline === cl) || {}).path;
+  const hereDir = dirOf(here) || (prd && prd.project && prd.project.outputDir);
+  const path = require('path');
+  const locations = lanes.filter((c) => c !== here).map((cl) => {
+    const there = dirOf(cl);
+    return there && hereDir ? `- ${cl}: ${path.relative(hereDir, there)}` : `- ${cl}: not recorded in this run's PRD`;
+  });
+  // eslint-disable-next-line global-require
+  const { renderEngineTemplate } = require('../engine-prompt.js');
+  return base + renderEngineTemplate('fix-plan-shared', {
+    __SHARED_SITES__: shared.join('\n'),
+    __SIBLING_LOCATIONS__: locations.join('\n') || '- none recorded',
+  });
+}
+
+/**
  * Publish every story's plan, so consumers stop reading the detective's fields.
  *
  * A story with no sites publishes NOTHING, which clears any plan published earlier. That is the
@@ -164,14 +221,14 @@ function publishFixPlans(prd, env) {
   let published = 0;
   for (const story of stories) {
     if (!story || !story.id) continue;
-    const text = renderFixPlan(sitesFor(story));
+    const text = renderStoryPlan(story, prd);
     agentIo.publish(PRODUCER, KIND, story.id, text, env);
     if (text !== '') published += 1;
   }
   return published;
 }
 
-module.exports = { renderFixPlan, publishFixPlans, KIND, PRODUCER };
+module.exports = { renderFixPlan, renderStoryPlan, publishFixPlans, KIND, PRODUCER };
 
 // CLI: node fix-plan.js <prd.json> <story-id>   — emits the rendered plan on stdout.
 // The shell consumers call it this way; it is the same function either way, never a second copy.
@@ -187,7 +244,7 @@ if (require.main === module) {
       const [prdPath, storyId] = argv;
       const prd = JSON.parse(require('fs').readFileSync(prdPath, 'utf8'));
       const story = (prd.stories || []).find((s) => s && s.id === storyId);
-      process.stdout.write(renderFixPlan(story && story.fixSiteAnalysis));
+      process.stdout.write(story ? renderStoryPlan(story, prd, story.fixSiteAnalysis) : '');
     }
   } catch (e) {
     // A rendering that cannot be produced must not look like a detective that found nothing:

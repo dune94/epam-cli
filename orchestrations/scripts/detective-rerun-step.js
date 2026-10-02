@@ -368,7 +368,8 @@ async function runRerun({
         let findings = null;
         let error = '';
         try {
-          findings = await detective(laneStory, logDir, { promptExec: _promptExec });
+          // THE PRD, so a spanning story's detective is given each codeline's package facts.
+          findings = await detective(laneStory, logDir, { promptExec: _promptExec, prd });
         } catch (err) {
           error = (err && err.message) || String(err);
         }

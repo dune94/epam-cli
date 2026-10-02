@@ -321,6 +321,13 @@ module.exports = {
     // ecosystem that defines the fields rather than in the scanner that happens to want them.
     describe: (text) => {
       const pkg = JSON.parse(text);
-      return { packageName: pkg.name || '', description: pkg.description || '' };
+      return { packageName: pkg.name || '', description: pkg.description || '', version: pkg.version || '' };
+    },
+    // THE RANGE DECLARED FOR EACH DEPENDENCY, from the same sections deps() reads — so a codeline
+    // spanning story can compare a consumer's range with what a sibling codeline provides
+    // (lib/codeline-packages.js).
+    depRanges: (text) => {
+      const pkg = JSON.parse(text);
+      return { ...(pkg.devDependencies || {}), ...(pkg.dependencies || {}) };
     },
 };

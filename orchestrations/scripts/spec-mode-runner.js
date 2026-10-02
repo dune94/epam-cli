@@ -6272,12 +6272,40 @@ function advanceAgentLadderEscalation(logDir, agentName, storyId) {
  * Unknown kinds take the NOVEL contract: inventing a cause for work that has none is the more
  * expensive error, and the one the reality anchor exists to prevent.
  */
-function detectivePrescription(kind, story) {
+function detectivePrescription(kind, story, prd) {
   // RENDERED FROM THE TEMPLATE LAYER. Two bodies, not one prompt with a branch: the two arms say
   // OPPOSITE things about the most consequential field — brokenLine is required for a defect and
   // must be empty for novel work — and a branching prompt hides which set an agent received.
   return renderEngineTemplate('detective-prescription', {}, kind === 'defect' ? 'defect' : 'novel')
-    + detectiveSharedBlock(story);
+    + detectiveSharedBlock(story, prd);
+}
+
+/** The lane's PRD as the spec pass runs it (PRD_FILE), or null. */
+function lanePrdFromEnv() {
+  try { return process.env.PRD_FILE ? JSON.parse(fs.readFileSync(process.env.PRD_FILE, 'utf8')) : null; }
+  catch { return null; }
+}
+
+/**
+ * The package facts of a spanning story's codelines (lib/codeline-packages.js): who provides what at
+ * which version, and the range each declares for what a sibling provides. Read from disk, never
+ * left to an agent to remember (AMSD-2974, 2026-10-02). Empty when nothing is shared between them.
+ */
+function codelinePackagesBlock(lanes, prd) {
+  let facts = [];
+  try { facts = require('./lib/codeline-packages.js').codelinePackages(prd, lanes); } catch { facts = []; }
+  const provided = new Set(facts.filter((f) => f.provides).map((f) => f.provides.name));
+  const lines = [];
+  for (const f of facts) {
+    const declared = Object.entries(f.declares || {});
+    if (f.provides && facts.some((o) => o.codeline !== f.codeline && Object.prototype.hasOwnProperty.call(o.declares || {}, f.provides.name))) {
+      lines.push(`- ${f.codeline} provides ${f.provides.name}, version ${f.provides.version || 'not stated in its manifest'}`);
+    }
+    for (const [name, range] of declared) if (provided.has(name)) lines.push(`- ${f.codeline} declares ${name} ${range}`);
+  }
+  return lines.length
+    ? `\nPACKAGE FACTS, read from each codeline's own manifest by the engine (facts, not leads):\n${lines.join('\n')}\n`
+    : '';
 }
 
 /**
@@ -6304,7 +6332,7 @@ function sharedSpecBlock(findings) {
   });
 }
 
-function detectiveSharedBlock(story) {
+function detectiveSharedBlock(story, prd) {
   const lanes = (story && Array.isArray(story.codelines)) ? story.codelines.filter(Boolean) : [];
   const here = story && story.codeline;
   if (lanes.length < 2 || !here) return '';
@@ -6323,6 +6351,7 @@ function detectiveSharedBlock(story) {
     ? `\nWHAT THE OTHER CODELINES' INVESTIGATIONS ALREADY REPORTED AS SHARED (leads to confirm against this codeline's own manifest, not facts about it):\n${leads.join('\n')}\n`
     : '';
   return renderEngineTemplate('detective-shared-package', {
+    __CODELINE_PACKAGES__: codelinePackagesBlock(lanes, prd || lanePrdFromEnv()),
     __THIS_CODELINE__: String(here),
     __OTHER_CODELINES__: others.join(', '),
     __SIBLING_SHARED__: sibling,
@@ -6876,7 +6905,9 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       // The estimation application's assessment of this ticket — leads for the fix site, to confirm.
       __ESTIMATION_ASSESSMENT__: estimationAssessmentBlock(story, null, 'code-graph-detective'),
       __PRESEED_BLOCK__: preseedBlock,
-      __PRESCRIPTION_RULES__: detectivePrescription(_kindHint, story),
+      // opts.prd: the caller's PRD, for the package facts of a spanning story's codelines; the
+      // spec pass passes none and the lane's PRD (PRD_FILE) is read instead.
+      __PRESCRIPTION_RULES__: detectivePrescription(_kindHint, story, opts.prd),
       // The configuration this codeline actually carries, resolved from its OWN manifest by
       // the adapter that already knows this stack. Empty for a stack no adapter recognises.
       __CONFIG_SURFACE__: configSurfaceBlock(repoPath),

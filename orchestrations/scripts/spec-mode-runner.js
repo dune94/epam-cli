@@ -5924,6 +5924,7 @@ async function regenerateVcViaOpenspec({ story, flags, cycle, logDir, findings =
       // whose vagueness the cap was meant to be fixing.
       + findings.map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n')
       + `\nDo NOT write criteria about areas unrelated to this code.\n`
+      + sharedSpecBlock(findings)
     : '';
 
   const prompt = buildVcRegeneratePrompt({ story, flags, siteBlock });
@@ -8064,6 +8065,9 @@ async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runI
   const prompt = refineExistingChildren
     ? renderEngineTemplate('spec-agent-speckit-refine', {
       __FORCED_RETRY_BLOCK__: forcedRetryBlock,
+      // What the detective reported as shared between this story's codelines — speckit can rewrite
+      // the description, and must keep it consistent with how a shared change is verified.
+      __SHARED_BLOCK__: sharedSpecBlock(story && story.fixSiteAnalysis),
       __PHASE__: phase,
       __STORY_ID__: story.id,
       __EXISTING_CHILDREN__: JSON.stringify(openspecOutput?.splitStories || [], null, 2),
@@ -8078,6 +8082,9 @@ async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runI
     })
     : renderEngineTemplate('spec-agent-speckit', {
       __FORCED_RETRY_BLOCK__: forcedRetryBlock,
+      // What the detective reported as shared between this story's codelines — speckit can rewrite
+      // the description, and must keep it consistent with how a shared change is verified.
+      __SHARED_BLOCK__: sharedSpecBlock(story && story.fixSiteAnalysis),
       __PHASE__: phase,
       __STORY_ID__: story.id,
       __OPENSPEC_OUTPUT__: JSON.stringify({
@@ -11024,6 +11031,7 @@ module.exports = {
   // be tested, and every defect in it lived in what the real model actually returns.
   reviewVcViaSpeckit,
   regenerateVcViaOpenspec,
+  runSpeckitReview,
   manifestEvidence,
   manifestPathStatus,
   manifestMissingPaths,

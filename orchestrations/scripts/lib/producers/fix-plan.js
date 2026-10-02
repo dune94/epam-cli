@@ -174,7 +174,17 @@ function sitesFor(story) {
  */
 function renderStoryPlan(story, prd, sites) {
   const own = sites === undefined ? sitesFor(story) : sites;
-  const base = renderFixPlan(own);
+  return renderFixPlan(own) + renderShared('fix-plan-shared', story, prd, own);
+}
+
+/**
+ * The shared section alone, under the template a consumer declares: what the detective reported as
+ * shared (this lane and its siblings) and where each sibling's working copy is, RELATIVE to this
+ * codeline. '' when nothing is shared. One gathering for the writer (fix-plan-shared) and the diff
+ * reviewers (review-shared), so the two can never be told different facts.
+ */
+function renderShared(templateId, story, prd, sites) {
+  const own = sites === undefined ? sitesFor(story) : sites;
   const here = story && story.codeline;
   const lanes = (story && Array.isArray(story.codelines)) ? story.codelines.filter(Boolean) : [];
   const per = (story && story.fixSiteAnalysisPerCodeline) || {};
@@ -187,7 +197,7 @@ function renderStoryPlan(story, prd, sites) {
       if (s && s.shared && typeof s.shared === 'object') shared.push(`- ${cl}: ${s.file} — ${sharedFact(s.shared)}`);
     }
   }
-  if (shared.length === 0) return base;
+  if (shared.length === 0) return '';
 
   const dirs = (prd && prd.project && Array.isArray(prd.project.outputDirs)) ? prd.project.outputDirs : [];
   const dirOf = (cl) => (dirs.find((d) => d && d.codeline === cl) || {}).path;
@@ -199,7 +209,7 @@ function renderStoryPlan(story, prd, sites) {
   });
   // eslint-disable-next-line global-require
   const { renderEngineTemplate } = require('../engine-prompt.js');
-  return base + renderEngineTemplate('fix-plan-shared', {
+  return renderEngineTemplate(templateId, {
     __SHARED_SITES__: shared.join('\n'),
     __SIBLING_LOCATIONS__: locations.join('\n') || '- none recorded',
   });
@@ -228,14 +238,19 @@ function publishFixPlans(prd, env) {
   return published;
 }
 
-module.exports = { renderFixPlan, renderStoryPlan, publishFixPlans, sharedFact, KIND, PRODUCER };
+module.exports = { renderFixPlan, renderStoryPlan, renderShared, publishFixPlans, sharedFact, KIND, PRODUCER };
 
 // CLI: node fix-plan.js <prd.json> <story-id>   — emits the rendered plan on stdout.
 // The shell consumers call it this way; it is the same function either way, never a second copy.
 if (require.main === module) {
   const argv = process.argv.slice(2);
   try {
-    if (argv[0] === '--publish') {
+    if (argv[0] === '--review-shared') {
+      // node fix-plan.js --review-shared <prd.json> <story-id> — the reviewers' shared section, or nothing.
+      const prd = JSON.parse(require('fs').readFileSync(argv[1], 'utf8'));
+      const story = (prd.stories || []).find((s) => s && s.id === argv[2]);
+      process.stdout.write(story ? renderShared('review-shared', story, prd) : '');
+    } else if (argv[0] === '--publish') {
       // The orchestrator calls this after any step that can change the plan.
       const prd = JSON.parse(require('fs').readFileSync(argv[1], 'utf8'));
       const n = publishFixPlans(prd);

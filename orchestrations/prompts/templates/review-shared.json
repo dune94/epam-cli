@@ -1,0 +1,17 @@
+{
+  "$why": [
+    "The diff reviewers' half of the detective's 'shared' finding (team-lead-review and",
+    "code-review-cycle, through lib/review-criteria.sh). Full consumer review 2026-10-02: neither",
+    "reviewer was shown it, so a required manifest bump read as a thin change and a saved local-path",
+    "redirection to a sibling's working copy would have read as a fix. Locations are RELATIVE."
+  ],
+  "description": "Appended to the criteria a diff reviewer judges against when the detective reported a shared fix site: what is shared, where the sibling working copies are, and what a correct shared change looks like in a diff.",
+  "id": "review-shared",
+  "seams": [],
+  "placeholders": [
+    "__SHARED_SITES__",
+    "__SIBLING_LOCATIONS__"
+  ],
+  "version": 1,
+  "body": "\nSHARED WITH OTHER CODELINES OF THIS STORY — the investigation reported:\n__SHARED_SITES__\nThe other codelines' working copies, relative to this codeline's root:\n__SIBLING_LOCATIONS__\nJudge the diff with this in mind. Where this codeline consumes the package and its declared range does not take the change, editing that manifest entry is required and is a real part of the fix, not a thin change. A dependency pointed at another codeline's working copy (a local path or link) that is SAVED in the diff is a defect: that is how the change is built and tested, not part of what ships. Where this codeline provides the package, judge whether each consumer above can build against the change.\n"
+}

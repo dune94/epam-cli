@@ -30,6 +30,15 @@ review_vc_block() {
         '.stories[] | select(.id == $id) | (.verificationCriteria // []) | map("- " + .) | join("\n")' \
         "$_prd" 2>/dev/null || printf '')
 
-    [ -n "$_vc" ] || { printf ''; return 0; }
+    # WHAT THE DETECTIVE REPORTED AS SHARED between this story's codelines (lib/producers/fix-plan.js
+    # --review-shared, template review-shared) — empty when nothing is. Both reviewers build this
+    # block here, so both are told the same facts.
+    local _shared=""
+    _shared=$("${NODE_BIN:-node}" "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/producers/fix-plan.js" \
+        --review-shared "$_prd" "$_story_id" 2>/dev/null || printf '')
+
+    [ -n "$_vc" ] || { printf '%s' "$_shared"; return 0; }
     printf '\nVERIFICATION CRITERIA (the observable checks this change MUST satisfy — judge the diff against every one):\n%s\n' "$_vc"
+    [ -n "$_shared" ] && printf '%s' "$_shared"
+    return 0
 }

@@ -64,10 +64,13 @@ describe('both render', () => {
       'spec-agent-speckit-refine': {
         __FORCED_RETRY_BLOCK__: '', __PHASE__: 'p', __STORY_ID__: 's',
         __EXISTING_CHILDREN__: '[]', __STORY_PAYLOAD__: '{}',
+        // A story with no shared package: the runner passes the block empty (sharedSpecBlock).
+        __SHARED_BLOCK__: '',
       },
       'spec-agent-speckit': {
         __FORCED_RETRY_BLOCK__: '', __PHASE__: 'p', __STORY_ID__: 's',
         __OPENSPEC_OUTPUT__: '{}', __STORY_PAYLOAD__: '{}',
+        __SHARED_BLOCK__: '',
       },
     };
     for (const id of IDS) {

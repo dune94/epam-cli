@@ -462,7 +462,12 @@ ensure_story_branch() {
         # RUNS and _selective_worktree_reset applies between RUNGS, now also
         # applied here, once, before a story's FIRST attempt even begins.
         git -C "$codeline_root" reset --hard "$_base_ref" --quiet 2>/dev/null || true
-        git -C "$codeline_root" clean -fd --quiet 2>/dev/null || true
+        # -e .epam: THIS run's provisioned declarations for the codeline, written at lane setup just
+        # before this (the pre-flight reset already cleared any earlier run's). Cleaned here, the
+        # codeline lost dependency-check.json (vendorDirs, provisionCommand) — _provision_epam_plugin_config
+        # restores only settings, facts and the verification manifest — and every worktree
+        # verification then ran the declared install against the registry (multi-lane £0, 2026-10-02).
+        git -C "$codeline_root" clean -fd -e .epam --quiet 2>/dev/null || true
         _provision_epam_plugin_config "$codeline_root"
         # The repo is now on a story branch, which is where edits are allowed to
         # land — reopen it. While it sat on the baseline branch it was chmod'd

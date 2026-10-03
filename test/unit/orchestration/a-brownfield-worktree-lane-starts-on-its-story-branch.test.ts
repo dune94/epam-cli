@@ -97,6 +97,9 @@ describe('Step 13, whole: story branch, worktree from it, provisioned from the c
     // As a real codeline: node_modules is ignored; the vendor declaration is the project's.
     writeFileSync(join(site, '.git', 'info', 'exclude'), 'node_modules\n');
     mkdirSync(join(site, 'node_modules'));
+    // The codeline's provisioned declaration, as lane setup writes it before the story branch is cut.
+    mkdirSync(join(site, '.epam'));
+    writeFileSync(join(site, '.epam', 'dependency-check.json'), JSON.stringify({ vendorDirs: ['node_modules'], provisionCommand: 'install-from-registry' }));
     const projDir = join(work, 'project3'); mkdirSync(projDir);
     writeFileSync(join(projDir, 'dependency-check.json'), JSON.stringify({ vendorDirs: ['node_modules'] }));
     const step13 = block('# A BROWNFIELD WORKTREE LANE STARTS ON ITS STORY BRANCH', '# Step 3: Launch parallel agents');
@@ -114,6 +117,12 @@ ${step13}`], { encoding: 'utf8', env: { ...env, PROJECT_ROOT: site, EPAM_BROWNFI
     expect(git(wt, 'rev-parse', 'HEAD')).toBe(git(site, 'rev-parse', 'origin/develop'));
     expect(git(site, 'branch', '--show-current')).toBe('AI-S-7');
     expect(lstatSync(join(wt, 'node_modules')).isSymbolicLink()).toBe(true);
+    // THE CODELINE'S PROVISIONED DECLARATION SURVIVES THE STORY BRANCH, in the checkout and the
+    // worktree: without it verification read no vendor directory and ran the declared install
+    // against the registry (multi-lane £0 run 16, 2026-10-02 — a client's private registry, live).
+    for (const at of [site, wt]) {
+      expect(existsSync(join(at, '.epam', 'dependency-check.json')), `${at} lost .epam/dependency-check.json`).toBe(true);
+    }
 
   });
 });

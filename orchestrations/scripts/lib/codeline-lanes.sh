@@ -223,7 +223,7 @@ _link_entry() {
 }
 
 link_sibling_builds() {
-    local _root="$1" _wt="$2" _vd="$3" _pairs _name _prov _bc _scope _base _e
+    local _root="$1" _wt="$2" _vd="$3" _pairs _name _prov _bc _scope _base _e _stamp
     [ -n "${PRD_FILE:-}" ] && [ -f "$PRD_FILE" ] && [ -d "$_root/$_vd" ] || return 0
     _pairs=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/sibling-providers.js" "$PRD_FILE" "$_root" 2>/dev/null) || return 0
     [ -n "$_pairs" ] || return 0
@@ -239,7 +239,7 @@ link_sibling_builds() {
         # The sibling's own build, once per checkout state: the only command it runs is the one the
         # sibling declares; a failure is reported and the lane tests against what it has.
         _bc=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$_prov" 2>/dev/null | jq -r '.buildCommand // empty' 2>/dev/null)
-        local _stamp="${LOG_DIR:-/tmp}/sibling-build-$(printf '%s' "$_prov" | md5sum | cut -c1-12)-$(git -C "$_prov" rev-parse --short HEAD 2>/dev/null || echo none)"
+        _stamp="${LOG_DIR:-/tmp}/sibling-build-$(printf '%s' "$_prov" | md5sum | cut -c1-12)-$(git -C "$_prov" rev-parse --short HEAD 2>/dev/null || echo none)"
         if [ -n "$_bc" ] && [ ! -f "$_stamp" ]; then
             log "  [sibling] building ${_name} from ${_prov} ($(git -C "$_prov" branch --show-current 2>/dev/null)): $_bc"
             if (cd "$_prov" && bash -c "$_bc") > "${_stamp}.log" 2>&1; then

@@ -94,6 +94,22 @@ describe('a site worktree builds against its sibling\'s change without installin
     for (const c of calls) expect(c, `npm ${c}`).toMatch(/^run build\b/);
     expect(r.stderr).not.toContain('TRIPWIRE');
   });
+  it('_link_entry replaces only a link it made — a real directory is never removed', () => {
+    const at = join(work, 'link-entry'); mkdirSync(join(at, 'real-dir', 'keep'), { recursive: true });
+    const r2 = spawnSync('bash', ['-c', `warning(){ echo "WARN $*" >&2; }
+source ${JSON.stringify(join(SCRIPTS, 'lib/codeline-lanes.sh'))}
+_link_entry ${JSON.stringify(join(at, 'real-dir'))} ${JSON.stringify(lib)}; echo "rc=$?"
+ln -s /nonexistent ${JSON.stringify(join(at, 'a-link'))}
+_link_entry ${JSON.stringify(join(at, 'a-link'))} ${JSON.stringify(lib)}; echo "rc=$?"
+_link_entry "" ${JSON.stringify(lib)}; echo "rc=$?"`], { encoding: 'utf8' });
+    const rcs = r2.stdout.trim().split('\n');
+    expect(rcs[0], 'a real directory must be refused').toBe('rc=1');
+    expect(existsSync(join(at, 'real-dir', 'keep')), 'the real directory was removed').toBe(true);
+    expect(rcs[1]).toBe('rc=0');
+    expect(realpathSync(join(at, 'a-link'))).toBe(realpathSync(lib));
+    expect(rcs[2], 'an empty path must be refused').toBe('rc=1');
+  });
+
   it('a site that declares no sibling package keeps the plain link to its own vendor dir', () => {
     provision(plain, prd);
     expect(lstatSync(join(plain.wt, 'node_modules')).isSymbolicLink()).toBe(true);

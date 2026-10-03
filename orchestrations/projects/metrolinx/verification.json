@@ -4,7 +4,11 @@
   "test": {
     "$clockWhy": "This suite is wall-clock dependent. src/components/Schedules/utils.ts hides service updates for the first two hours of the day (BUSINESS_HOURS = 2) and jest.config.js pins TZ=UTC, so two tests in schedules.spec.tsx fail between 00:00 and 02:00 UTC and pass the other twenty-two hours. Run 20260906T225844Z started at 00:29 and burned 12 writer retries on a fix that was already correct and byte-identical to the one two green runs produced. Measured 2026-09-07, whole suite: wall clock 3358 passed / 2 FAILED; pinned 3360 passed / 0 failed, 746 of 746 suites.",
     "clockInstant": "2026-01-15T15:00:00Z",
-    "clockPinnedCommand": "npm run test -- --setupFiles={setupFile}",
+    "command": "npm run test -- --maxWorkers=1",
+    "scopedCommand": "npm run test -- --maxWorkers=1 {files}",
+    "clockPinnedCommand": "npm run test -- --setupFiles={setupFile} --maxWorkers=1",
+    "maxOldSpaceMb": 2048,
+    "$workersWhy": "Measured 2026-10-03 in scratch copies, offline: one worker — gotransit 746/746 suites, peak 2.36 GB, 1m45s; cx-shared 196/196, peak 1.6 GB. Two workers peaked 4.8 GB (gotransit); an unbounded suite (16 workers) OOM-killed the run under its 5.5 GB cap. maxOldSpaceMb keeps test workers off the 5 GB heap the sibling build is launched with.",
     "$commandWhy": "The engine knows how to freeze a Node clock; it does not know that jest spells the flag --setupFiles. The project supplies the template and the engine substitutes {setupFile}, the same split scopedCommand already uses for {files}."
   }
 }

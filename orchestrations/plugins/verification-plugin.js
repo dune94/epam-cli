@@ -105,7 +105,12 @@ function detectVerification(projectRoot) {
 function runVerification(projectRoot, timeoutMs, section) {
   const m = readManifest(projectRoot, section);
   if (!m.ok) return { status: 'unknown', reason: m.reason };
-  const command = m.command.replace(/\$\{PROJECT_ROOT\}/g, projectRoot);
+  // THE SUITE IS ONE COMMAND, WHOEVER RUNS IT. A story's verification runs testCommandFor — the
+  // project's clock-pinned command when it declares one — and the baseline it is judged against ran
+  // the plain test.command. On cx-shared (AMSD-2974, 2026-10-03) the pin itself fails ten date-picker
+  // tests: the baseline recorded none and all ten were charged to the story, which no writer could fix.
+  const suite = section === 'test' ? testCommandFor(projectRoot) : '';
+  const command = (suite || m.command).replace(/\$\{PROJECT_ROOT\}/g, projectRoot);
   try {
     const out = execSync(command, {
       cwd: projectRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
@@ -227,7 +232,8 @@ function testCommandFor(projectRoot) {
 function runTests(projectRoot, timeoutMs) {
   const m = readTestManifest(projectRoot);
   if (!m.ok) return { status: 'unknown', reason: m.reason };
-  const command = m.command.replace(/\$\{PROJECT_ROOT\}/g, projectRoot);
+  // The same one command as every other run of the suite (runVerification, above).
+  const command = (testCommandFor(projectRoot) || m.command).replace(/\$\{PROJECT_ROOT\}/g, projectRoot);
   try {
     const out = execSync(command, {
       cwd: projectRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],

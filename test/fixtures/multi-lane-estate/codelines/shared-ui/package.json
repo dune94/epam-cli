@@ -1,0 +1,11 @@
+{
+  "name": "@estate/shared-ui",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/toast.js",
+  "files": ["src"],
+  "scripts": {
+    "typecheck": "node --check src/toast.js",
+    "test": "vitest run"
+  }
+}

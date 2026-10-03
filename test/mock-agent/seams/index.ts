@@ -24,6 +24,7 @@ import { perStoryList } from './per-story';
 import { codelineSelection } from './discovery';
 import { fixPlan } from './fixplan';
 import { reproWriter } from './repro';
+import { acClassification } from './classify';
 
 type FillerFor = (world: World, prompt: string, fields: Field[], call: Call) => Filler;
 
@@ -43,8 +44,9 @@ export const WHOLE: Record<string, (world: World, prompt: string, call: Call, co
   'test-criteria': (w, p, _c, k) => testCriteria(w, p, k),
   'project-roster': (w, p) => JSON.stringify(rosterDelta(w, p)),
   'project-prompts': (w, p) => segmented(w, p) ?? 'OK',
-  'codeline-selection': (_w, p) => codelineSelection(p),
+  'codeline-selection': (w, p) => codelineSelection(p, w),
   'fix-plan': (_w, p) => fixPlan(p),
+  'ac-classification': (_w, p) => acClassification(p),
 };
 
 /** A contract that declares a tag is answered inside it, whatever style the prompt rendered its shape in. */

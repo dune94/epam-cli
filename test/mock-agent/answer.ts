@@ -69,7 +69,9 @@ function exemplarIn(prompt: string, contract?: Contract): Record<string, unknown
   const req = contract?.requiredKeys || [];
   const known = new Set([...(contract?.knownKeys || []), ...req]);
   const scored: { v: Record<string, unknown>; score: number; at: number }[] = [];
-  jsonValues(prompt).forEach((v, at) => {
+  // A format shown as a LIST of entries ("[{...}]") is the entry's shape — a fix plan's sites.
+  const entries = jsonValues(prompt).map((v) => (Array.isArray(v) ? v.find((x) => x && typeof x === 'object' && !Array.isArray(x)) : v)).filter((v) => v !== undefined);
+  entries.forEach((v, at) => {
     const k = keysOf(v); if (!k.length) return;
     // With no declared keys, every object shown is a candidate format.
     const score = req.length || known.size ? req.filter((r) => k.includes(r)).length * 10 + k.filter((x) => known.has(x)).length : 1;
@@ -162,7 +164,11 @@ export function reconcile(text: string, contract: Contract | undefined, prompt: 
   const jsonKinds = ['declared', 'schema', 'verdict', 'per-story-map'];
   const ex = contract && jsonKinds.includes(contract.kind) ? exemplar(prompt, contract, templateText) : null;
   if (ex) {
-    const v = jsonValues(text).find((x) => x && typeof x === 'object' && !Array.isArray(x)) as Record<string, unknown> | undefined;
+    // AN ANSWER THAT IS A LIST is judged by its entries: a fix plan is an array of sites, each shaped
+    // like the prompt's example, and judging only top-level objects called every such answer stale.
+    const vals = jsonValues(text);
+    const isObj = (x: unknown) => !!x && typeof x === 'object' && !Array.isArray(x);
+    const v = (vals.find(isObj) ?? vals.filter(Array.isArray).flat().find(isObj)) as Record<string, unknown> | undefined;
     if (!v) return ['no JSON answer, but the prompt shows one'];
     // A key the prompt says may be left out ("(optional", "omit …") is not wanted of every answer.
     // Judged on the PROMPT'S OWN TEXT for the key, not the parsed value — shape notation like

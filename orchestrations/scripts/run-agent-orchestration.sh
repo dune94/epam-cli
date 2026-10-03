@@ -1494,7 +1494,17 @@ src_tag="[$_topology_source]"
 info "Topology: $_topology_decision $src_tag — ${_topology_reason:-count heuristic}"
 
 # Collapse worktree lane when topology is single or sequential
-if [ "$_topology_decision" = "single" ] || [ "$_topology_decision" = "sequential" ]; then
+# A BROWNFIELD STORY NEVER LEAVES ITS WORKTREE: "single" means one lane, and in brownfield that one
+# lane is the primary worktree — the client's checkout is never written directly (AMSD-2974,
+# 2026-10-02: the heuristic said single and the story ran in Step 8 on the checkout).
+if [ "${EPAM_BROWNFIELD:-0}" = "1" ] \
+    && { [ "$_topology_decision" = "single" ] || [ "$_topology_decision" = "sequential" ]; }; then
+    if [ "$_wt_count" -ge 1 ]; then
+        primary_stories=$(topo_sort_stories "$(echo "$_wt_stories_list" | tr -s '\n' | grep '[^[:space:]]' || true)")
+        independent_stories=""
+        persist_lane_assignments "$primary_stories" ""
+    fi
+elif [ "$_topology_decision" = "single" ] || [ "$_topology_decision" = "sequential" ]; then
     if [ "$_wt_count" -ge 1 ]; then
         _collapsed=$(echo "$_wt_stories_list" | tr -s '\n' | grep '[^[:space:]]' || true)
         if [ -n "$main_stories" ]; then
@@ -2872,11 +2882,11 @@ if [ "$need_worktrees" = true ]; then
         # mis-detection, or from prior failed runs. Both tracked-modified and untracked files
         # that would block the merge are cleaned here.
         git -C "$_merge_git_root" checkout -- . 2>/dev/null || true
-        # -e .codegraph: never delete the CodeGraph index (see
-        # brownfield-preflight-reset.sh for the root cause — the .gitignore that
-        # protects codegraph.db is itself removed by git clean's first pass,
-        # exposing the db to deletion on any later clean like this one).
-        git -C "$_merge_git_root" clean -fd -e .codegraph 2>/dev/null || true
+        # -e .codegraph: never delete the CodeGraph index (brownfield-preflight-reset.sh: git clean's
+        # first pass removes the .gitignore protecting codegraph.db). -e .epam: the codeline's own
+        # provisioned declarations, which the Step 19 build gate reads next — cleaned, it found "no
+        # verification manifest declared" and failed an approved change (multi-lane £0, 2026-10-02).
+        git -C "$_merge_git_root" clean -fd -e .codegraph -e .epam 2>/dev/null || true
 
         # Merge-integrity guard (found live via flow-gap analysis, 2026-07-12):
         # the real merge below uses `-X ours`, which silently resolves any

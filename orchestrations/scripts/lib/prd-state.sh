@@ -29,7 +29,12 @@ is_story_completed() {
     if [ "$completed" = "true" ]; then
         return 0
     fi
-    # Not found or not completed in primary PRD — check cross-codeline PRD if set
+    # A STORY THIS LANE CARRIES IS COMPLETED WHEN THIS LANE COMPLETED IT. A story that spans
+    # codelines has the same id in every lane; the cross-codeline PRD holds the earlier lanes'
+    # copies, and reading it here made the next lane skip its own work as "already completed"
+    # (multi-lane £0 run 13, 2026-10-02). The cross PRD answers only for another codeline's story.
+    [ -n "$completed" ] && return 1
+    # Not found in the primary PRD — a dependency on another codeline's story: check the cross PRD
     if [ -n "${CROSS_CODELINE_PRD:-}" ] && [ -f "${CROSS_CODELINE_PRD}" ]; then
         completed=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .completed' "$CROSS_CODELINE_PRD" 2>/dev/null)
         [ "$completed" = "true" ] && return 0

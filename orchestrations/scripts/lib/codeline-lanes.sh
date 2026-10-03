@@ -763,6 +763,36 @@ _run_codeline_loop() {
     "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/filtered-prd.js" "${_fsrc}" "${_fout}" "${_fcl}" 2>/dev/null
   }
 
+  # A LANE RESUMES FROM ITS OWN CHECKPOINT. On a resume, a lane whose own checkpoint was taken
+  # pre-writer has finished its spec pass, and that checkpoint's PRD is the spec the operator
+  # approved at pause 2. Rebuilding the lane's PRD from the canonical one instead — which a resume
+  # restores from the run's post-roster checkpoint, taken before any spec — handed every lane a
+  # PRD with no spec, so every lane ran its spec pass again, paid, and overwrote what had been
+  # approved (AMSD-2974 writer relaunch, 2026-10-02). An edit the operator made at the pause to the
+  # lane's working PRD is kept. A resume sent back to an earlier stage (EPAM_RESUME_FROM_STAGE)
+  # redoes the work after it, so it never takes this path.
+  # Sets _lane_spec_mode=0 and returns 0 when the lane resumes from its checkpoint.
+  _lane_resume_prd() {
+    local _rcl="$1" _rout="$2"
+    _lane_spec_mode=""
+    [ -n "${EPAM_RESUME_RUN:-}" ] || return 1
+    local _rck="${EPAM_PROJECT_CONFIG_DIR:-${PROJECT_CONFIG_DIR:-}}/runs/${EPAM_RESUME_RUN}/lanes/${_rcl}/checkpoint"
+    [ -f "$_rck/prd.json" ] && [ -f "$_rck/checkpoint.json" ] || return 1
+    local _want; _want=$(_stage_rank pre-writer)
+    [ "$(_stage_rank "$(jq -r '.stage // empty' "$_rck/checkpoint.json" 2>/dev/null)")" -ge "$_want" ] || return 1
+    if [ -n "${EPAM_RESUME_FROM_STAGE:-}" ] && [ "$(_stage_rank "$EPAM_RESUME_FROM_STAGE")" -lt "$_want" ]; then
+      return 1
+    fi
+    if _operator_edited "$_rout" "$_rck/reviewed/$(basename "$_rout")"; then
+      log "[orch] Codeline '${_rcl}': resuming from its pre-writer checkpoint — KEEPING its PRD, edited at the pause"
+    else
+      cp "$_rck/prd.json" "$_rout" || return 1
+      log "[orch] Codeline '${_rcl}': resuming from its pre-writer checkpoint — its spec pass is done; the PRD approved at the pause is the lane's PRD"
+    fi
+    _lane_spec_mode=0
+    return 0
+  }
+
   # THE PATH THE CALLER PASSED, ACTUALLY FORWARDED.
   #
   # This took "$1" and never used it, so the handler read no PRD; and `2>/dev/null` hid the error
@@ -810,7 +840,7 @@ _run_codeline_loop() {
   #     EPAM_PARALLEL_CODELINES=0.
   _EPAM_PARALLEL_LANES="${EPAM_PARALLEL_CODELINES:-1}"
   if [ "$_EPAM_PARALLEL_LANES" = "1" ] && [ "${#_cl_entries[@]}" -gt 1 ]; then
-    local _p_cls=() _p_wts=() _p_prds=() _p_pids=()
+    local _p_cls=() _p_wts=() _p_prds=() _p_pids=() _p_spec=() _lane_spec_mode=""
     local _p_statusdir; _p_statusdir="$(mktemp -d /tmp/orch-lanes-XXXXXX)"
 
     for _entry in "${_cl_entries[@]}"; do
@@ -818,12 +848,16 @@ _run_codeline_loop() {
       local _cl_prd="$_work_dir/${_cl}-prd.json"
       _cl_prds+=("$_cl_prd")
       local _n_stories
-      _n_stories=$(_filtered_prd "$_cl" "$_cl_prd" "$_prd_path")
+      if _lane_resume_prd "$_cl" "$_cl_prd"; then
+        _n_stories=$(jq '(.stories // []) | length' "$_cl_prd" 2>/dev/null || echo 0)
+      else
+        _n_stories=$(_filtered_prd "$_cl" "$_cl_prd" "$_prd_path")
+      fi
       if [ "${_n_stories:-0}" -eq 0 ]; then
         log "[orch] Codeline '${_cl}': no stories — skipping"
         continue
       fi
-      _p_cls+=("$_cl"); _p_wts+=("$_wt"); _p_prds+=("$_cl_prd")
+      _p_cls+=("$_cl"); _p_wts+=("$_wt"); _p_prds+=("$_cl_prd"); _p_spec+=("${_lane_spec_mode}")
       log "[orch] Codeline '${_cl}' — ${_n_stories} stories → ${_wt}"
     done
 
@@ -838,6 +872,7 @@ _run_codeline_loop() {
       _cl="${_p_cls[$_lane_idx]}"
       _wt="${_p_wts[$_lane_idx]}"
       _cl_prd="${_p_prds[$_lane_idx]}"
+      _lane_spec_mode="${_p_spec[$_lane_idx]:-}"
       _lane_status="${_p_statusdir}/${_cl}.status"
       (
         _log_file="${LOG_DIR:-/tmp}/lane-${_cl}.log"
@@ -880,6 +915,7 @@ _run_codeline_loop() {
       LOG_DIR="$_lane_log_dir" \
       AGENT_IO_DIR="$_lane_log_dir/agent-io" \
       PRD_FILE="$_cl_prd" \
+      EPAM_SPEC_MODE="${_lane_spec_mode:-${EPAM_SPEC_MODE:-}}" \
       PROJECT_ROOT="$_wt" \
       OUTPUT_DIR="$_wt" \
       PHASE="$_phase" \
@@ -899,6 +935,7 @@ _run_codeline_loop() {
       LOG_DIR="$_lane_log_dir" \
       AGENT_IO_DIR="$_lane_log_dir/agent-io" \
         PRD_FILE="$_cl_prd" \
+        EPAM_SPEC_MODE="${_lane_spec_mode:-${EPAM_SPEC_MODE:-}}" \
         PROJECT_ROOT="$_wt" \
         OUTPUT_DIR="$_wt" \
         PHASE="$_phase" \
@@ -1050,8 +1087,12 @@ _run_codeline_loop() {
     local _cl_prd="$_work_dir/${_cl}-prd.json"
     _cl_prds+=("$_cl_prd")
 
-    local _n_stories
-    _n_stories=$(_filtered_prd "$_cl" "$_cl_prd" "$_prd_path")
+    local _n_stories _lane_spec_mode=""
+    if _lane_resume_prd "$_cl" "$_cl_prd"; then
+      _n_stories=$(jq '(.stories // []) | length' "$_cl_prd" 2>/dev/null || echo 0)
+    else
+      _n_stories=$(_filtered_prd "$_cl" "$_cl_prd" "$_prd_path")
+    fi
 
     if [ "${_n_stories:-0}" -eq 0 ]; then
       log "[orch] Codeline '${_cl}': no stories — skipping"
@@ -1079,6 +1120,7 @@ _run_codeline_loop() {
       local _pex=0
       JIRA_CODELINE_RUN=1 \
       PRD_FILE="$_cl_prd" \
+      EPAM_SPEC_MODE="${_lane_spec_mode:-${EPAM_SPEC_MODE:-}}" \
       PROJECT_ROOT="$_wt" \
       OUTPUT_DIR="$_wt" \
       PHASE="$_phase" \
@@ -1095,6 +1137,7 @@ _run_codeline_loop() {
         _pex=0
         JIRA_CODELINE_RUN=1 \
         PRD_FILE="$_cl_prd" \
+        EPAM_SPEC_MODE="${_lane_spec_mode:-${EPAM_SPEC_MODE:-}}" \
         PROJECT_ROOT="$_wt" \
         OUTPUT_DIR="$_wt" \
         PHASE="$_phase" \

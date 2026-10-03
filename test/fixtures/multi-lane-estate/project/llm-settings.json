@@ -1,0 +1,75 @@
+{
+  "$schema": "../../config/llm-settings.schema.json",
+  "temperatureFloor": 0,
+  "rungs": [
+    {
+      "rung": 0,
+      "retryRange": [
+        0,
+        1
+      ],
+      "reasoningEffort": "low",
+      "temperature": 0,
+      "iterationBump": 0,
+      "outputTokenBump": null
+    },
+    {
+      "rung": 1,
+      "retryRange": [
+        2,
+        3
+      ],
+      "reasoningEffort": "medium",
+      "temperature": 0.2,
+      "iterationBump": 10,
+      "outputTokenBump": 8192
+    },
+    {
+      "rung": 2,
+      "retryRange": [
+        4,
+        5
+      ],
+      "reasoningEffort": "high",
+      "temperature": 0.5,
+      "iterationBump": 20,
+      "outputTokenBump": 16384
+    },
+    {
+      "rung": 3,
+      "retryRange": [
+        6,
+        7
+      ],
+      "reasoningEffort": "high",
+      "temperature": 0.7,
+      "iterationBump": 30,
+      "outputTokenBump": 24576
+    }
+  ],
+  "retries": {
+    "maxRetries": 7,
+    "selfHeal": {
+      "enabled": true,
+      "extensionMax": 2
+    }
+  },
+  "timeouts": {
+    "storyTimeoutSecs": 1800,
+    "gateTimeoutSecs": 2400
+  },
+  "brownfield": {
+    "minOutputTokens": 24576,
+    "maxScaledIterations": 150
+  },
+  "compaction": {
+    "defaultAutoCompressAt": 80000,
+    "defaultAutoCompressEveryNIterations": 20
+  },
+  "costControls": {
+    "maxToolCallsPerStory": 120,
+    "storyBudgetWarningUsd": 0.5,
+    "storyBudgetHardLimitUsd": 2
+  },
+  "_laddersMovedToSet": "ladders, ladderTierOrder and modelOverrides REMOVED 2026-08-25. A ladder names MODELS and models belong to a STACK, so the stack declares them and every project inherits. While a project declared its own, project-overrides-set meant EPAM_PROVIDER_SET=codemie changed the provider and left the models behind — a run pointed at codemie-claude still asking for MiniMax-M3. See config/llm-defaults.<set>.json."
+}

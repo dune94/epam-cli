@@ -11,7 +11,9 @@ import type { Behaviour } from '../agent';
 import type { ToolCall } from '../wire';
 import { newCallId } from '../wire';
 import { quotedLiterals } from './discovery';
-import { writeTool, isFirstTurn } from './writer';
+import { writeTool, editTool, isFirstTurn } from './writer';
+import { existsSync, readFileSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
 
 const keyLike = (params: Record<string, any>, re: RegExp) => Object.keys(params?.properties || {}).find((k) => re.test(k));
 
@@ -41,7 +43,18 @@ export function reproWriter(): Behaviour {
     const t = reproTest(prompt);
     if (!tool || !t) return { kind: 'text', text: `I could not write a reproducing test: ${!tool ? 'no write tool was offered' : 'the prompt gave no readable example, diff or path'}.` };
     const [pathKey, contentKey] = [keyLike(tool.params, /path/i)!, keyLike(tool.params, /(^|_)(content|text)$/i)!];
-    const calls: ToolCall[] = [{ id: newCallId(), name: tool.name, input: { [pathKey]: t.path, [contentKey]: t.content } }];
+    // WHERE IT IS: the path the prompt names, in the working directory the runner states; absolute
+    // when the tool says its path must be. An EXISTING test file is edited through the edit tool when
+    // the write tool refuses an existing path (the GitHub Copilot CLI's create) — the whole file replaced.
+    const cwd = (/[Ww]orking directory:\s*(\S+)/.exec(call.req.system) || [])[1] || '';
+    const onDisk = isAbsolute(t.path) || !cwd ? t.path : join(cwd, t.path);
+    const absolute = (d?: string) => /path[^.]*must be absolute/i.test(d || '');
+    const edit = editTool(call.req.tools);
+    if (existsSync(onDisk) && edit && /cannot be used if the specified path already exists/i.test(tool.description || '')) {
+      const [pk, ok, nk] = [keyLike(edit.params, /path/i)!, keyLike(edit.params, /^old/i)!, keyLike(edit.params, /^new/i)!];
+      return { kind: 'tools', calls: [{ id: newCallId(), name: edit.name, input: { [pk]: absolute(edit.description) ? onDisk : t.path, [ok]: readFileSync(onDisk, 'utf8'), [nk]: t.content } }] };
+    }
+    const calls: ToolCall[] = [{ id: newCallId(), name: tool.name, input: { [pathKey]: absolute(tool.description) ? onDisk : t.path, [contentKey]: t.content } }];
     return { kind: 'tools', calls };
   };
 }

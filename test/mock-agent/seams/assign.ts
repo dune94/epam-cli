@@ -21,7 +21,7 @@ export function roleAssigner(world: World, prompt: string, fields: Field[]): Fil
     return world.storiesIn(prompt).flatMap((s) => {
       const role = roles.find((r) => s.agentRole === r) || roles[0];
       const block = prompt.slice(Math.max(0, prompt.indexOf(`- ${s.id}:`))).split(/\n- /)[0];
-      const listed = (/\n\s+codelines?:\s*([^\n]+)/.exec(block) || [, ''])[1].split(/[,\s]+/).filter(Boolean);
+      const listed = (/\n\s+codelines?\b[^\n]*?(?:EACH of:|:)\s*([^\n]+)/.exec(block) || [, ''])[1].split(/[,\s]+/).filter(Boolean);
       return (listed.length ? listed : [codeline]).map((cl) => build(list.items!, (item) => {
         if (/story/i.test(item.name)) return s.id;
         if (/codeline/i.test(item.name)) return cl;

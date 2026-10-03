@@ -56,3 +56,49 @@ describe('a brownfield story runs in a worktree lane', () => {
     expect(lanes('0', 'main')).toEqual({ main: 'S-1', primary: '' });
   });
 });
+
+/**
+ * THE TOPOLOGY NEVER MOVES A BROWNFIELD STORY OUT OF ITS WORKTREE.
+ *
+ * Live 2026-10-02 (AMSD-2974 writer relaunch, cx-shared lane): the story was categorised into the
+ * primary lane, then the count heuristic answered "single" for one worktree story and the collapse
+ * moved it into main_stories — Step 8 wrote straight into the codeline's checkout. "single" means
+ * ONE lane; in brownfield that one lane is still a worktree.
+ *
+ * EXECUTED: the real file from "# Categorize stories by agent group" through the topology collapse,
+ * with the real lib/prd-integrity.sh; the model router is declined (EPAM_TOPOLOGY_ROUTER=0), so the
+ * deterministic count heuristic decides — £0.
+ */
+const SCRIPTS_DIR = join(__dirname, '../../../orchestrations/scripts');
+const topoEnd = lines.findIndex((l, i) => i > start && l.includes('# topology=parallel: leave'));
+const throughTopology = lines.slice(start, topoEnd).join('\n');
+
+function lanesAfterTopology(brownfield: string, ids: string[], extra: Record<string, string> = {}) {
+  const prd = join(work, `prd-topo-${brownfield}-${ids.length}-${Object.keys(extra).join('')}.json`);
+  writeFileSync(prd, JSON.stringify({ implementationOrder: { core: ids }, stories: ids.map((id) => ({ id, status: 'pending', completed: false, agentGroup: 'main' })) }));
+  const out = execFileSync('bash', ['-c', `log(){ :; }; info(){ :; }; warning(){ :; }; error(){ :; }; success(){ :; }
+source ${JSON.stringify(join(SCRIPTS_DIR, 'lib/prd-integrity.sh'))}
+SCRIPT_DIR=${JSON.stringify(SCRIPTS_DIR)}; PHASE=core; PRD_FILE=${JSON.stringify(prd)}; PHASE_COST_FILE=/dev/null
+${throughTopology}
+printf 'MAIN=%s\\nPRIMARY=%s\\nTOPO=%s\\n' "$(echo $main_stories)" "$(echo $primary_stories)" "$_topology_decision"`], { encoding: 'utf8', env: { ...process.env, EPAM_BROWNFIELD: brownfield, EPAM_TOPOLOGY_ROUTER: '0', ...extra } });
+  const pick = (k: string) => (out.split('\n').find((l) => l.startsWith(`${k}=`)) || '').slice(k.length + 1).trim();
+  return { main: pick('MAIN'), primary: pick('PRIMARY'), topology: pick('TOPO') };
+}
+
+describe('the topology never moves a brownfield story out of its worktree', () => {
+  it('the span under test was found', () => { expect(topoEnd).toBeGreaterThan(start); });
+
+  it('brownfield, one story: topology single, and the story stays in the primary worktree lane', () => {
+    expect(lanesAfterTopology('1', ['S-1'])).toEqual({ main: '', primary: 'S-1', topology: 'single' });
+  });
+
+  it('brownfield, declared sequential, several stories: one worktree lane holds them all', () => {
+    const r = lanesAfterTopology('1', ['S-1', 'S-2'], { EPAM_TOPOLOGY: 'sequential' });
+    expect(r.main).toBe('');
+    expect(r.primary.split(' ').sort()).toEqual(['S-1', 'S-2']);
+  });
+
+  it('greenfield, one story: single collapses into main, as before', () => {
+    expect(lanesAfterTopology('0', ['S-1'])).toEqual({ main: 'S-1', primary: '', topology: 'single' });
+  });
+});

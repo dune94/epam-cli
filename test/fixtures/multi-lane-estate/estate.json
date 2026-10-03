@@ -1,0 +1,9 @@
+{
+  "$what": "How each codeline of the estate is laid out as a git repository: its origin's branches (the first is the remote default) and the branch its checkout is on when the run starts. Mirrors a real estate: the library's default is master, the sites' is develop, and one site is still on a story branch an earlier run left.",
+  "codelines": [
+    { "dir": "shared-ui", "branches": ["master"], "checkedOut": "master" },
+    { "dir": "site-a.example", "branches": ["develop", "master"], "checkedOut": "bugfix/AI-OLD-1" },
+    { "dir": "site-b.example", "branches": ["develop", "master"], "checkedOut": "develop" },
+    { "dir": "site-c.example", "branches": ["develop", "master"], "checkedOut": "develop" }
+  ]
+}

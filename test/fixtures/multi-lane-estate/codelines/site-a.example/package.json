@@ -1,0 +1,13 @@
+{
+  "name": "site-a",
+  "version": "3.4.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@estate/shared-ui": "^1.0.0"
+  },
+  "scripts": {
+    "typecheck": "node --check src/notice.js",
+    "test": "vitest run"
+  }
+}

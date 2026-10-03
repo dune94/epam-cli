@@ -14,7 +14,15 @@ export type Story = { id: string; title?: string; status?: string; description?:
 export class World {
   constructor(readonly codelinePaths: () => string[], readonly prdPath: () => string, readonly projectDir = '') {}
 
-  codelines(): Codeline[] { return this.codelinePaths().map((p) => ({ name: basename(p), path: p })); }
+  /**
+   * A codeline is named as the RUN names it: once ingest has written the PRD, its project.outputDirs
+   * give each codeline's identifier against its path (a directory "site-a.example" is the run's
+   * "aexample"); before that, by its directory, as discovery is shown it.
+   */
+  codelines(): Codeline[] {
+    const declared = ((this.prd().project as { outputDirs?: { codeline?: string; path?: string }[] } | undefined)?.outputDirs || []);
+    return this.codelinePaths().map((p) => ({ name: declared.find((d) => d.path === p)?.codeline || basename(p), path: p }));
+  }
 
   /** The codelines this request is about: those whose name or path the prompt carries. */
   codelinesIn(prompt: string): Codeline[] {

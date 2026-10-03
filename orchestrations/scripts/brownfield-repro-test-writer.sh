@@ -758,14 +758,20 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     # --provider (change-log/SEAM-CONSISTENCY-ANALYSIS.md).
     _srw_provider_flag=()
     [ -n "$_provider" ] && _srw_provider_flag=(--provider "$_provider")
+    # THE AGENT WORKS IN THE CODELINE. The prompt names the test by a path relative to the repository
+    # root, and a runner works in the directory it is started from; started from wherever this script
+    # was called (the install), the GitHub Copilot CLI wrote the reproducing test into the INSTALL
+    # folder and the codeline got nothing — the repro gate blocked a correct fix (multi-lane £0 run 11,
+    # 2026-10-02). The spec and review seams already start their runners in PROJECT_ROOT.
     { printf '%s' "$_prompt"; [ -n "$_typecheck_feedback" ] && printf '%s' "$_typecheck_feedback"; [ -n "$_assertion_feedback" ] && printf '%s' "$_assertion_feedback"; [ -n "$_hook_feedback" ] && printf '%s' "$_hook_feedback"; } | \
+      ( cd "$PROJECT_ROOT" || exit 1
       AI_GATE_ALLOW_TOOLS=1 \
       EPAM_DANGEROUS_SKIP_APPROVAL=1 \
       EPAM_ALLOWED_WRITE_PATHS="${_target_rel}" \
       EPAM_MAX_ITERATIONS="${EPAM_MAX_ITERATIONS:-${REPRO_TEST_WRITER_MAX_ITERATIONS:-30}}" \
       EPAM_MAX_OUTPUT_TOKENS="${EPAM_MAX_OUTPUT_TOKENS:-${REPRO_TEST_WRITER_MAX_OUTPUT_TOKENS:-32768}}" \
       AI_MODEL="$_model" \
-      EPAM_AGENT_NAME="repro-test-writer" bash "$AI_RUNNER_CMD" "${_srw_provider_flag[@]}" --model "$_model" > "$_writer_log" 2>&1 || true
+      EPAM_AGENT_NAME="repro-test-writer" bash "$AI_RUNNER_CMD" "${_srw_provider_flag[@]}" --model "$_model" ) > "$_writer_log" 2>&1 || true
 
     # A file existing is NOT success. The agent can (and live, on 2026-07-24, DID)
     # write a test with a syntax error; committing it both proves nothing and

@@ -9,7 +9,8 @@
  * and the disk.
  */
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, isAbsolute } from 'node:path';
+import type { World } from '../world';
 
 const between = (text: string, from: RegExp, to: RegExp) => {
   const a = text.search(from); if (a < 0) return '';
@@ -54,9 +55,16 @@ function find(root: string, term: string, budget = { files: 4000 }): string | nu
 /** The identifier rule the prompt states: the directory name, lowercase alphanumerics, every word kept. */
 const identifier = (dir: string) => dir.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
 
-export function codelineSelection(prompt: string): string {
+/**
+ * A manifest path is where the discovery agent's tools look: absolute, or relative to the estate root
+ * the agent works in — the run's own codelines, by directory name, as the world knows them.
+ */
+const onDisk = (r: { dir: string; path: string }, world?: World) =>
+  isAbsolute(r.path) ? r.path : (world?.codelines().find((c) => c.name === r.dir || c.name === r.path)?.path || r.path);
+
+export function codelineSelection(prompt: string, world?: World): string {
   const tickets = between(prompt, /JIRA TICKETS:/, /REPOSITORY MANIFEST/);
-  const repos = [...between(prompt, /REPOSITORY MANIFEST/, /\n\n[A-Z]/).matchAll(/-\s*dir:\s*(\S+)\s*\n\s*path:\s*(\S+)/g)].map((m) => ({ dir: m[1], path: m[2] }));
+  const repos = [...between(prompt, /REPOSITORY MANIFEST/, /\n\n[A-Z]/).matchAll(/-\s*dir:\s*(\S+)\s*\n\s*path:\s*(\S+)/g)].map((m) => ({ dir: m[1], path: m[2] })).map((r) => ({ ...r, path: onDisk(r, world) }));
   const terms = codeTerms(tickets);
   const codelines = repos.flatMap((r) => {
     for (const t of terms) {

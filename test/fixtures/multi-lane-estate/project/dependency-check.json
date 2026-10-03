@@ -1,15 +1,19 @@
 {
   "manifestFile": "package.json",
-  "manifestKeys": ["dependencies", "devDependencies"],
+  "manifestKeys": [
+    "dependencies",
+    "devDependencies"
+  ],
   "importPattern": "from\\s+['\"]([^./][^'\"]*)['\"]|require\\(\\s*['\"]([^./][^'\"]*)['\"]\\s*\\)",
   "installCommand": "npm install --ignore-scripts {package}",
-  "ignorePackages": ["vitest", "node:test", "node:assert"],
-  "vendorDirs": ["node_modules"],
+  "ignorePackages": [
+    "vitest",
+    "node:test",
+    "node:assert"
+  ],
+  "vendorDirs": [
+    "node_modules"
+  ],
   "testFailurePattern": "^FAIL\\s+(\\S+)",
-  "autoInstall": false,
-  "localDependencyOverrides": [
-    { "codeline": "site-a.example", "package": "@estate/shared-ui", "localSourcePath": "shared-ui" },
-    { "codeline": "site-b.example", "package": "@estate/shared-ui", "localSourcePath": "shared-ui" },
-    { "codeline": "site-c.example", "package": "@estate/shared-ui", "localSourcePath": "shared-ui" }
-  ]
+  "autoInstall": false
 }

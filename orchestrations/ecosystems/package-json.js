@@ -287,6 +287,10 @@ module.exports = {
     // than from a runner name. Returns '' when it declares none, which the caller reads as
     // 'nothing to run' — never as 'the tests passed'.
     testCommand: (text, manager) => ((JSON.parse(text).scripts || {}).test ? ((manager || 'npm') + ' test') : ''),
+    // WHAT BUILDS THIS PROJECT INTO WHAT IT SHIPS, taken from what it declares — a sibling codeline
+    // that consumes it builds against that output. Only the project's own script runs: nothing is
+    // installed, packed or fetched. '' when it declares no build.
+    buildCommand: (text, manager) => ((JSON.parse(text).scripts || {}).build ? ((manager || 'npm') + ' run build') : ''),
     // HOW THIS ECOSYSTEM RUNS SPECIFIC TEST FILES.
     //
     // The bug-reproduction gate must execute ONE test — the story's new reproducing test — against

@@ -114,14 +114,3 @@ describe('the pipeline classifies dependencies instead of asking the model to gu
   });
 });
 
-describe('the classification is actually passed to the agent', () => {
-  it('the oracle hands package.json to the summariser', () => {
-    const start = orchSrc.indexOf('npm audit Oracle');
-    expect(start, 'npm audit oracle block not found').toBeGreaterThan(-1);
-    const end = orchSrc.indexOf('sast_prompt=', start);
-    const block = orchSrc.slice(start, end > start ? end : start + 4000);
-    expect(block,
-      'package.json is never given to the summariser, so nothing can be classified')
-      .toMatch(/package\.json"?\s*$|\$PROJECT_ROOT\/package\.json/m);
-  });
-});

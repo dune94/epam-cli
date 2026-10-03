@@ -498,30 +498,12 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
         sast_prompt="$(render_engine_prompt qa-oracle-evidence "$_oe_vals" semgrep)"
         rm -f "$_oe_vals"
 
-        # ── npm audit Oracle: inject dependency CVE evidence ──
-        local audit_json="$LOG_DIR/npm-audit-oracle-${phase_id}.json"
-        local audit_summary=""
-        local _npm_bin
-        _npm_bin=$(command -v npm 2>/dev/null || true)
-        if [ -n "$_npm_bin" ] && [ -f "$PROJECT_ROOT/package.json" ]; then
-            set +e
-            "$_npm_bin" audit --json --prefix "$PROJECT_ROOT" \
-                > "$audit_json" 2>/dev/null
-            local _audit_rc=$?
-            set -e
-            if [ -f "$audit_json" ] && [ -s "$audit_json" ]; then
-                # MOVED TO A HANDLER. This was a 48-line Python program held in a shell
-                # single-quoted string and piped to `python3 -`, inside a 1590-line function:
-                # unrunnable on its own, untestable, and invisible to every Python tool here.
-                audit_summary=$(python3 "$SCRIPT_DIR/lib/handlers/dependency-audit-summary.py" \
-                    "$audit_json" "$PROJECT_ROOT/package.json" 2>/dev/null \
-                    || echo "(audit parse error)")
-            else
-                audit_summary="(npm audit produced no output — exit code $_audit_rc)"
-            fi
-        else
-            audit_summary="(npm audit skipped — npm not found or no package.json)"
-        fi
+        # ── Dependency evidence: none from a registry ──
+        # The pipeline contacts no package registry and names no stack (operator, 2026-10-03). This
+        # step ran `npm audit` here from 2026-05-30 — one ecosystem's tool in the engine, and the
+        # codeline's dependency list sent to a registry on every run. The SAST agent judges from the
+        # code and the semgrep evidence; what it is told about dependencies is that no audit ran.
+        local audit_summary="(no dependency audit: this pipeline contacts no package registry)"
 
         _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
         jq_vals \

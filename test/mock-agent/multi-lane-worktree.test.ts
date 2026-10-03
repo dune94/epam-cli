@@ -22,7 +22,7 @@
  *              library's current checkout without saving it to its manifest.
  */
 import { describe, it, expect, afterAll } from 'vitest';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, readdirSync, cpSync, symlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, readdirSync, cpSync, symlinkSync, chmodSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -80,6 +80,15 @@ function buildEstate(workspace: string): string {
   // codelines. A codeline's node_modules is its own directory, so the pipeline's installs there
   // (the local dependency overrides) touch nothing outside it.
   symlinkSync(join(ROOT, 'node_modules'), join(workspace, 'node_modules'));
+  // INSTALLED, AS A REAL SITE IS: a site declaring another codeline's package carries that package's
+  // RELEASE (the baseline) in its own node_modules — what a lane must NOT test against.
+  const manifests = Object.fromEntries(layout.map((c) => [c.dir, JSON.parse(readFileSync(join(root, c.dir, 'package.json'), 'utf8'))]));
+  for (const c of layout) {
+    for (const dep of Object.keys(manifests[c.dir].dependencies || {})) {
+      const provider = layout.find((p) => manifests[p.dir].name === dep);
+      if (provider) cpSync(join(FIXTURE, 'codelines', provider.dir), join(root, c.dir, 'node_modules', dep), { recursive: true });
+    }
+  }
   const scripts = (dir: string) => Object.values(JSON.parse(readFileSync(join(root, dir, 'package.json'), 'utf8')).scripts || {}) as string[];
   for (const c of layout) {
     const bin = join(root, c.dir, 'node_modules', '.bin'); mkdirSync(bin, { recursive: true });
@@ -145,6 +154,16 @@ describe('a ticket spanning four codelines runs through pause 1, pause 2 and the
       // The estate's packages come from the estate; npm never reaches a registry from this test.
       npm_config_offline: 'true', npm_config_audit: 'false', npm_config_fund: 'false', npm_config_update_notifier: 'false',
     });
+    // THE NPM TRIPWIRE (operator, 2026-10-03: nothing installed, packed, published or fetched): a script
+    // verb passes through to the real npm; any other verb is recorded and refused.
+    const trip = join(workspace, 'tripwire'); mkdirSync(trip);
+    const npmLog = join(journal, 'npm-calls.log');
+    const realNpm = execFileSync('bash', ['-c', 'command -v npm'], { encoding: 'utf8' }).trim();
+    // Script verbs only — the project's own scripts (run, run-script, test). Everything else (install,
+    // ci, add, pack, publish, view…) is refused and recorded.
+    writeFileSync(join(trip, 'npm'), `#!/bin/bash\necho "$*" >> ${JSON.stringify(npmLog)}\ncase "$1" in run|run-script|test|t) ;; *) echo "TRIPWIRE: npm $1 refused" >&2; exit 97;; esac\nexec ${JSON.stringify(realNpm)} "$@"\n`);
+    chmodSync(join(trip, 'npm'), 0o755);
+    env.PATH = `${trip}:${env.PATH}`;
     const launcher = join(install, 'orchestrations/scripts/pipeline');
     const keep = (name: string, text: string) => {
       writeFileSync(join(journal, `${name}.log`), text);
@@ -236,15 +255,21 @@ describe('a ticket spanning four codelines runs through pause 1, pause 2 and the
       }
     }
 
-    // EACH SITE BUILT AGAINST THE LIBRARY'S CURRENT CHECKOUT, AND NEVER SAVED IT TO ITS MANIFEST.
-    const overrides = JSON.parse(readFileSync(join(projDir, 'dependency-check.json'), 'utf8')).localDependencyOverrides as { codeline: string; package: string; localSourcePath: string }[];
-    for (const o of overrides) {
-      const site = join(codelineRoot, o.codeline);
-      const installed = join(site, 'node_modules', o.package, 'package.json');
-      expect(existsSync(installed), `${o.codeline} never installed ${o.package} from ${o.localSourcePath}`).toBe(true);
-      const seededRange = JSON.parse(readFileSync(join(FIXTURE, 'codelines', o.codeline, 'package.json'), 'utf8')).dependencies[o.package];
-      const committedRange = JSON.parse(git(site, 'show', `origin/${layout.find((x) => x.dir === o.codeline)!.branches[0]}:package.json`)).dependencies[o.package];
-      expect(committedRange, 'the baseline manifest changed').toBe(seededRange);
+    // NOTHING INSTALLED, PACKED OR FETCHED: npm was only ever asked to run a declared script.
+    const npmCalls = existsSync(npmLog) ? readFileSync(npmLog, 'utf8').trim().split('\n').filter(Boolean) : [];
+    for (const c of npmCalls) expect(c, `npm ${c} — only the project's own scripts may run`).toMatch(/^(run|run-script|test|t)\b/);
+    // EACH SITE'S OWN INSTALL IS UNTOUCHED: its baseline keeps the provider's release.
+    const mf = (d: string) => JSON.parse(readFileSync(join(FIXTURE, 'codelines', d, 'package.json'), 'utf8'));
+    for (const c of layout) {
+      for (const dep of Object.keys(mf(c.dir).dependencies || {})) {
+        const provider = layout.find((p) => mf(p.dir).name === dep);
+        if (!provider) continue;
+        const installed = join(codelineRoot, c.dir, 'node_modules', dep);
+        for (const f of ['package.json', 'src/toast.js']) {
+          if (!existsSync(join(FIXTURE, 'codelines', provider.dir, f))) continue;
+          expect(readFileSync(join(installed, f), 'utf8'), `${c.dir}'s installed ${dep} was changed`).toBe(readFileSync(join(FIXTURE, 'codelines', provider.dir, f), 'utf8'));
+        }
+      }
     }
 
     expect(agent.stale, 'the agent generated answers the current code cannot accommodate').toEqual([]);

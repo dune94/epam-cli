@@ -72,7 +72,7 @@ function ecosystemOf(root) {
 
 const eco = ecosystemOf(repo);
 const out = {
-  stack: '', manifest: '', installDir: null, packageManager: '', testCommand: '', testFileCommand: '',
+  stack: '', manifest: '', installDir: null, packageManager: '', testCommand: '', buildCommand: '', testFileCommand: '',
   installCommand: '', addCommand: '',
   lockfile: '',
   declaredBins: [], declaredDeps: [], missingBins: [], providers: {},
@@ -116,6 +116,11 @@ if (eco) {
     // "the tests passed".
     if (typeof eco.testCommand === 'function') {
       try { out.testCommand = eco.testCommand(text, out.packageManager) || ''; } catch { out.testCommand = ''; }
+    }
+    // WHAT BUILDS IT, from the same registry: a sibling that consumes this repository builds against
+    // that output (lib/codeline-lanes.sh link_sibling_builds).
+    if (typeof eco.buildCommand === 'function') {
+      try { out.buildCommand = eco.buildCommand(text, out.packageManager) || ''; } catch { out.buildCommand = ''; }
     }
 
     // HOW TO RUN SPECIFIC TEST FILES, from the same registry. The bug-reproduction gate needs to

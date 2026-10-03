@@ -198,6 +198,69 @@ provision_lane_worktree() {
     if [ -n "$_vd" ] && [ -d "$_root/$_vd" ] && [ ! -e "$_wt/$_vd" ]; then
         ln -s "$_root/$_vd" "$_wt/$_vd" || warning "  [worktree] could not link $_vd into $_wt"
     fi
+    [ -n "$_vd" ] && link_sibling_builds "$_root" "$_wt" "$_vd"
+    return 0
+}
+
+# link_sibling_builds <root> <worktree> <vendor-dir> — A SITE BUILDS AGAINST ITS SIBLING'S CHANGE.
+#
+# Operator, 2026-10-03: nothing installed, packed, published or fetched — "shared gets updated then
+# dependent codelines get the branch". A codeline of a spanning story that declares a package another
+# codeline of the SAME story provides (lib/handlers/sibling-providers.js) tests against that sibling's
+# checkout — its story branch, its lane already merged — after the sibling's OWN declared build ran
+# there (its ecosystem's buildCommand). The worktree gets its own vendor directory: a link to every
+# entry of the codeline's, except the sibling's package, linked to the sibling's checkout. The
+# codeline's own vendor directory is never touched, so its baseline keeps the installed release and
+# a reproducing test still fails there.
+# _link_entry <entry> <target> — point a vendor entry the worktree's own directory holds at <target>.
+# The entry is only ever a link this file made (to the codeline's entry), so only a link is removed —
+# never a directory, never anything whose path did not resolve.
+_link_entry() {
+    local _at="$1" _to="$2"
+    [ -n "$_at" ] && [ -n "$_to" ] || return 1
+    if [ -L "$_at" ]; then rm -f -- "$_at"; elif [ -e "$_at" ]; then warning "  [sibling] $_at is not a link — left as it is"; return 1; fi
+    ln -s "$_to" "$_at"
+}
+
+link_sibling_builds() {
+    local _root="$1" _wt="$2" _vd="$3" _pairs _name _prov _bc _scope _base _e
+    [ -n "${PRD_FILE:-}" ] && [ -f "$PRD_FILE" ] && [ -d "$_root/$_vd" ] || return 0
+    _pairs=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/sibling-providers.js" "$PRD_FILE" "$_root" 2>/dev/null) || return 0
+    [ -n "$_pairs" ] || return 0
+    # The worktree's own vendor directory: every entry of the codeline's, linked.
+    if [ -L "$_wt/$_vd" ]; then rm -f "$_wt/$_vd"; fi
+    mkdir -p "$_wt/$_vd"
+    for _e in "$_root/$_vd"/* "$_root/$_vd"/.[!.]*; do
+        [ -e "$_e" ] || [ -L "$_e" ] || continue
+        [ -e "$_wt/$_vd/$(basename "$_e")" ] || ln -s "$_e" "$_wt/$_vd/$(basename "$_e")"
+    done
+    while IFS=$'\t' read -r _name _prov; do
+        [ -n "$_name" ] && [ -d "$_prov" ] || continue
+        # The sibling's own build, once per checkout state: the only command it runs is the one the
+        # sibling declares; a failure is reported and the lane tests against what it has.
+        _bc=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$_prov" 2>/dev/null | jq -r '.buildCommand // empty' 2>/dev/null)
+        local _stamp="${LOG_DIR:-/tmp}/sibling-build-$(printf '%s' "$_prov" | md5sum | cut -c1-12)-$(git -C "$_prov" rev-parse --short HEAD 2>/dev/null || echo none)"
+        if [ -n "$_bc" ] && [ ! -f "$_stamp" ]; then
+            log "  [sibling] building ${_name} from ${_prov} ($(git -C "$_prov" branch --show-current 2>/dev/null)): $_bc"
+            if (cd "$_prov" && bash -c "$_bc") > "${_stamp}.log" 2>&1; then
+                : > "$_stamp"
+            else
+                warning "  [sibling] the build of ${_name} failed — see ${_stamp}.log; the lane tests against what ${_prov} holds"
+            fi
+        fi
+        # Link the sibling's package into the worktree's vendor directory, scope by scope.
+        case "$_name" in
+            */*) _scope="${_name%%/*}"; _base="${_name#*/}"
+                 if [ -L "$_wt/$_vd/$_scope" ]; then
+                     rm -f "$_wt/$_vd/$_scope"; mkdir -p "$_wt/$_vd/$_scope"
+                     for _e in "$_root/$_vd/$_scope"/*; do [ -e "$_e" ] && ln -s "$_e" "$_wt/$_vd/$_scope/$(basename "$_e")"; done
+                 fi
+                 mkdir -p "$_wt/$_vd/$_scope"
+                 _link_entry "$_wt/$_vd/$_scope/$_base" "$_prov" ;;
+            *)   _link_entry "$_wt/$_vd/$_name" "$_prov" ;;
+        esac
+        log "  [sibling] ${_name} → ${_prov} in $(basename "$_wt") (the codeline keeps its installed release)"
+    done <<< "$_pairs"
     return 0
 }
 

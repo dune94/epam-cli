@@ -51,6 +51,14 @@ export function edited(existing: string, prompt: string, standIn: string): strin
   return `${existing.replace(/\n?$/, '\n')}${standIn}`;
 }
 
+/** One comment line in the style the file itself uses (its own line-comment prefix, or block comments), or null. */
+export function commentLine(existing: string, text: string): string | null {
+  const prefix = (/^\s*(\/\/|#|--|;)/m.exec(existing) || [])[1];
+  if (prefix) return `${prefix} ${text}`;
+  if (/\/\*/.test(existing)) return `/* ${text} */`;
+  return null;
+}
+
 /** The tool whose parameters say it replaces text in a file: a path, an old and a new string. */
 export const editTool = (tools: ToolDef[]) => tools.find((t) => {
   const p = Object.keys(t.params?.properties || {});
@@ -89,6 +97,10 @@ export function writerDelivers(world: World, install: string): Behaviour {
     // ("Files to Create/Modify"); writing to the main checkout left the lane with no commits. The
     // path the prompt gives wins; otherwise a relative path, which the runner resolves where it runs.
     const prompt = call.req.messages.find((m) => m.role === 'user')?.text || '';
+    // THE TICKET SAYS WHAT CHANGES: its own title, description and criteria — never every literal the
+    // prompt quotes (a detective's package facts quote '@estate/shared-ui', and taking that as the old
+    // value rewrote an import; multi-lane £0, 2026-10-02).
+    const ticket = [story.title, story.description, ...((story.acceptanceCriteria as unknown[]) || []).map((a) => (typeof a === 'string' ? a : JSON.stringify(a)))].filter(Boolean).join('\n');
     const given = (f: string) => (prompt.match(new RegExp(`(/[^\\s\`'"]*/${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?=[\\s\`'"]|$)`, 'm')) || [])[1];
     // AN EXISTING FILE IS READ BEFORE IT IS WRITTEN — as a model does, and as a runner may enforce
     // (Claude Code refuses the write otherwise: "File has not been read yet"). The read tool is the one
@@ -97,12 +109,12 @@ export function writerDelivers(world: World, install: string): Behaviour {
     const existing = d.map((x) => (isAbsolute(x.path) ? x.path : given(x.path) || x.path)).filter((at) => existsSync(isAbsolute(at) ? at : join(cwd, at)));
     if (readTool && existing.length && !called(readTool)) {
       const rk = (readTool.params?.required || [])[0];
-      const abs = /path[^.]*must be absolute/i.test(readTool.description || '');
+      const abs = /path\W*must\W*be\W*absolute/i.test(readTool.description || '');
       return { kind: 'tools', calls: existing.map((at) => ({ id: newCallId(), name: readTool.name, input: { [rk]: abs && !isAbsolute(at) ? join(cwd, at) : at } })) };
     }
     // A TOOL THAT SAYS ITS PATH MUST BE ABSOLUTE (its own description — the GitHub Copilot CLI's
     // create/edit) is given the absolute path in the working directory, as a model reads that rule.
-    const wantsAbsolute = (t?: ToolDef) => !!t && /path[^.]*must be absolute/i.test(t.description || '');
+    const wantsAbsolute = (t?: ToolDef) => !!t && /path\W*must\W*be\W*absolute/i.test(t.description || '');
     // AN EXISTING FILE IS EDITED THROUGH THE EDIT TOOL when the runner offers one whose write tool
     // refuses an existing path ("Cannot be used if the specified path already exists") — the
     // change replaces the ticket's old literal; with none, the stand-in is appended after the last line.
@@ -113,14 +125,18 @@ export function writerDelivers(world: World, install: string): Behaviour {
       const onDisk = isAbsolute(at0) ? at0 : join(cwd, at0);
       if (existsSync(onDisk) && edit && createRefusesExisting) {
         const existingText = readFileSync(onDisk, 'utf8');
-        const c = literalChange(existingText, prompt);
+        const c = literalChange(existingText, ticket);
         const lines = existingText.split('\n');
-        const line = c ? lines.find((l) => l.includes(c.from))! : lines.filter((l) => l.trim()).pop() || '';
-        const replaced = c ? line.split(c.from).join(c.to) : `${line}\n${x.content.replace(/\n$/, '')}`;
+        // With the ticket's change: the line that holds it. Without: the whole text (always unique —
+        // a lone '}' is not, and the edit tool refuses an ambiguous old_str), gaining one line in the
+        // file's OWN comment style, so the file stays what its language accepts.
+        const line = c ? lines.find((l) => l.includes(c.from))! : existingText;
+        const note = commentLine(existingText, `${call.story}: delivered`);
+        const replaced = c ? line.split(c.from).join(c.to) : `${existingText.replace(/\n?$/, '\n')}${note ?? x.content.replace(/\n$/, '')}\n`;
         const [pk, ok, nk] = [keyLike(edit, /path/i), keyLike(edit, /^old/i), keyLike(edit, /^new/i)];
         return { id: newCallId(), name: edit.name, input: { [pk]: wantsAbsolute(edit) ? onDisk : at0, [ok]: line, [nk]: replaced } };
       }
-      const content = existsSync(onDisk) ? edited(readFileSync(onDisk, 'utf8'), prompt, x.content) : x.content;
+      const content = existsSync(onDisk) ? edited(readFileSync(onDisk, 'utf8'), ticket, x.content) : x.content;
       return { id: newCallId(), name: tool.name, input: { [pathKey]: wantsAbsolute(tool) ? onDisk : at0, [contentKey]: content } };
     });
     // A WRITE TOOL THAT SAYS ITS PARENT DIRECTORIES MUST EXIST (its own description — the GitHub Copilot

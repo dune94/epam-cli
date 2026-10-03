@@ -31,7 +31,10 @@ export function reproTest(prompt: string): { path: string; content: string } | n
   const itBlock = /(\n\s*)it\((['"`])[^]*?\2,\s*\(\)\s*=>\s*\{[\s\S]*?\n\s*\}\);/.exec(example);
   if (!now || !call || !itBlock) return null;
   const pad = itBlock[1];
-  const replacement = `${pad}it('returns the corrected value', () => {${pad}  expect(${call}).toBe(${JSON.stringify(now)});${pad}});`;
+  // THE EXAMPLE'S OWN ASSERTION STYLE ("mirror its framework … EXACTLY"): a repository that checks
+  // rendered output with toContain is answered with toContain, never a toBe it does not use.
+  const matcher = (/\)\s*\.(toBe|toContain|toEqual|toMatch|toStrictEqual)\(/.exec(itBlock[0]) || [, 'toBe'])[1];
+  const replacement = `${pad}it('returns the corrected value', () => {${pad}  expect(${call}).${matcher}(${JSON.stringify(now)});${pad}});`;
   return { path, content: example.replace(itBlock[0], replacement) };
 }
 
@@ -48,7 +51,7 @@ export function reproWriter(): Behaviour {
     // the write tool refuses an existing path (the GitHub Copilot CLI's create) — the whole file replaced.
     const cwd = (/[Ww]orking directory:\s*(\S+)/.exec(call.req.system) || [])[1] || '';
     const onDisk = isAbsolute(t.path) || !cwd ? t.path : join(cwd, t.path);
-    const absolute = (d?: string) => /path[^.]*must be absolute/i.test(d || '');
+    const absolute = (d?: string) => /path\W*must\W*be\W*absolute/i.test(d || '');
     const edit = editTool(call.req.tools);
     if (existsSync(onDisk) && edit && /cannot be used if the specified path already exists/i.test(tool.description || '')) {
       const [pk, ok, nk] = [keyLike(edit.params, /path/i)!, keyLike(edit.params, /^old/i)!, keyLike(edit.params, /^new/i)!];

@@ -2,6 +2,6 @@
   {
     "key": "EST-1",
     "summary": "Toast close control needs an accessible name on every site",
-    "description": "The toast's close control is announced by screen readers as just 'Close', which does not say what it closes. closeLabel() in the shared UI library returns the text every site renders for that control. It should return 'Close notification' instead. The shared library ships the change; each site renders the toast through closeLabel() and must show the new name.\n\nAcceptance criteria:\n- closeLabel() returns exactly 'Close notification'\n- Every site's toast close control is announced as 'Close notification'\n- A test reproduces the defect: it fails on the current code and passes with the fix\n"
+    "description": "The toast's close control is announced by screen readers as just 'Close', which does not say what it closes. closeLabel() in the shared UI library returns that name, and each site names the control with its own constant, which also says 'Close'. Both must say 'Close notification' instead: the shared library ships the change in closeLabel(), and each site's toast must announce the new name.\n\nAcceptance criteria:\n- closeLabel() returns exactly 'Close notification'\n- Every site's toast close control is announced as 'Close notification'\n- A test reproduces the defect: it fails on the current code and passes with the fix\n"
   }
 ]

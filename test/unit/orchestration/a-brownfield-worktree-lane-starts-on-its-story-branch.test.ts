@@ -127,7 +127,7 @@ save_run_checkpoint(){ echo "CHECKPOINT $2"; }
 should_pause_before_writer(){ [ "\${EPAM_PAUSE_BEFORE_WRITER:-}" = "1" ]; }
 record_run_pause(){ echo "PAUSE $1"; }
 ensure_story_branch(){ echo "BRANCH $2"; }
-${(() => { const ls = require('node:fs').readFileSync(join(SCRIPTS, 'run-agent-orchestration.sh'), 'utf8').split('\n'); const s = ls.findIndex((l: string) => l.startsWith('before_the_writer() {')); const e = ls.findIndex((l: string, i: number) => i > s && l === '}'); return s >= 0 ? ls.slice(s, e + 1).join('\n') : ''; })()}
+${(() => { const ls = require('node:fs').readFileSync(join(SCRIPTS, 'lib/before-the-writer.sh'), 'utf8').split('\n'); const s = ls.findIndex((l: string) => l.startsWith('before_the_writer() {')); const e = ls.findIndex((l: string, i: number) => i > s && l === '}'); return s >= 0 ? ls.slice(s, e + 1).join('\n') : ''; })()}
 PHASE=core; PRD_FILE=/dev/null; ORCH_RUN_ID=R1
 need_worktrees=true; primary_stories="S-1"; independent_stories=""; non_review_main=""
 ${blk}

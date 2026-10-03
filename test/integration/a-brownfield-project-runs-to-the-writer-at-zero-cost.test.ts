@@ -182,7 +182,12 @@ describe('a brownfield project runs to the writer at £0', () => {
     expect(t.status, `the codeline's own tests fail after the run:\n${(t.stdout || '') + (t.stderr || '')}`).toBe(0);
     const committed = spawnSync('git', ['-C', clone, 'log', '--oneline'], { encoding: 'utf8' }).stdout.trim().split('\n');
     expect(committed.length, 'the codeline holds no committed work beyond the seed').toBeGreaterThan(1);
-    const changed = spawnSync('git', ['-C', clone, 'diff', '--name-only', `HEAD~${committed.length - 1}`, 'HEAD'], { encoding: 'utf8' }).stdout.trim().split('\n').filter(Boolean);
+    // EVERYTHING BEYOND THE SEED, whatever shape the history has: a brownfield story runs in a
+    // worktree lane and is MERGED back (2026-10-02), so HEAD~<count> — first parents only — named no
+    // commit and the diff came back empty. The seed is the history's root.
+    const seedRoot = spawnSync('git', ['-C', clone, 'rev-list', '--max-parents=0', 'HEAD'], { encoding: 'utf8' }).stdout.trim().split('\n')[0];
+    const changed = spawnSync('git', ['-C', clone, 'diff', '--name-only', seedRoot, 'HEAD'], { encoding: 'utf8' }).stdout.trim().split('\n').filter(Boolean);
+    expect(changed.length, 'the diff from the seed came back empty — nothing to judge').toBeGreaterThan(0);
     const { classify } = (() => { try { return require(join(install, 'orchestrations/scripts/lib/handlers/classify-changed-files.js')); } catch { return { classify: null }; } })();
     expect(changed.some((f) => /(\.|_)(spec|test)\.[A-Za-z0-9]+$|\/__tests__\/|(^|\/)test_[^/]+$/.test(f)), `no test accompanies the committed change (${changed.join(', ')})`).toBe(true);
     void classify;

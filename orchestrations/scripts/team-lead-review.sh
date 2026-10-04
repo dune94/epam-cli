@@ -527,13 +527,9 @@ while IFS= read -r story_id; do
         "${LOG_DIR:-}" "$story_id" \
         "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../config/agent-contract.json" 2>/dev/null || echo "")
 
-    STORY_FIX_ANALYSIS=$(jq -r --arg id "$story_id" '
-        .stories[] | select(.id == $id) | (.fixSiteAnalysis // []) | map(
-          "- **\(.file)**" + (if (.function // "") != "" then " (`\(.function)`)" else "" end)
-          + (if (.changeRequired | type == "boolean" and . == false) then "  [NO EDIT REQUIRED — part of the fix, correctly left unchanged; never raise a finding because this file is untouched]" else "" end)
-          + ": \(.reason)"
-          + (if (.fix // "") != "" then "\n  - Prescribed minimal fix: \(.fix)" else "" end)
-        ) | join("\n")' "$PRD_FILE" 2>/dev/null || echo "")
+    # One rendering of the detective's fix sites, shared with both failure analysts.
+    STORY_FIX_ANALYSIS=$("${NODE_BIN:-node}" "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/handlers/fix-sites.js" \
+        "$PRD_FILE" "$story_id" 2>/dev/null || echo "")
 
     # Collect recent git diff scoped to relevant files (last 5 commits max).
     # Root cause this fixes (2026-07-09 pipeline audit): head -400/-300 caps

@@ -173,11 +173,18 @@ esac
 # Values via a FILE, never argv: a failed agent's output is routinely megabytes and argv is
 # capped at ARG_MAX. This is the same crash that took out the failure analyst on 2026-08-15.
 _aa_vals=$(mktemp "${TMPDIR:-/tmp}/agent-failure-analyst-vals-XXXXXX.json")
+# Where the spec pass's detective found the fix, for the story whose agent failed — the same
+# rendering the reviewer and impl-failure-analyst read (lib/handlers/fix-sites.js).
+_fix_sites=""
+if [ -n "${AGENT_ANALYST_STORY_ID:-}" ] && [ -f "${MAIN_PRD_FILE:-${PRD_FILE:-}}" ]; then
+    _fix_sites=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/fix-sites.js" "${MAIN_PRD_FILE:-$PRD_FILE}" "$AGENT_ANALYST_STORY_ID" 2>/dev/null || true)
+fi
 jq_vals --arg class_hint "$_class_hint" \
       --arg failure_class "$FAILURE_CLASS" \
       --arg failed_output "${_failed_output:-(empty — it produced nothing)}" \
       --arg context "${_context:-(not provided)}" \
-      '{"__CLASS_HINT__":$class_hint,"__FAILURE_CLASS__":$failure_class,"__FAILED_OUTPUT__":$failed_output,"__CONTEXT__":$context}' \
+      --arg fix_sites "${_fix_sites:-(the spec pass recorded none for this story)}" \
+      '{"__CLASS_HINT__":$class_hint,"__FAILURE_CLASS__":$failure_class,"__FAILED_OUTPUT__":$failed_output,"__CONTEXT__":$context,"__FIX_SITES__":$fix_sites}' \
       > "$_aa_vals"
 if ! _prompt=$(render_engine_prompt agent-failure-analyst "$_aa_vals" prompt); then
     rm -f "$_aa_vals"

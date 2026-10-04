@@ -19,13 +19,14 @@
   ],
   "placeholders": [
     "__CLASS_HINT__",
-    "__FAILURE_CLASS__",
+    "__CONTEXT__",
     "__FAILED_OUTPUT__",
-    "__CONTEXT__"
+    "__FAILURE_CLASS__",
+    "__FIX_SITES__"
   ],
-  "version": 1,
+  "version": 2,
   "bodies": {
-    "prompt": "An AI agent failed its task and must retry. Diagnose the SPECIFIC reason it failed from its output below, then prescribe a SHORT, CONCRETE corrective directive (1-3 sentences) to prepend to its next attempt so it SUCCEEDS this time. __CLASS_HINT__\n\nGround the directive in what the agent ACTUALLY did (below) and the REAL task — do not give generic advice. Output ONLY the corrective directive text, nothing else.\n\n=== FAILURE CLASS ===\n__FAILURE_CLASS__\n\n=== WHAT THE AGENT PRODUCED (its output/log) ===\n__FAILED_OUTPUT__\n\n=== THE TASK IT WAS GIVEN (ground truth) ===\n__CONTEXT__",
+    "prompt": "An AI agent failed its task and must retry. Diagnose the SPECIFIC reason it failed from its output below, then prescribe a SHORT, CONCRETE corrective directive (1-3 sentences) to prepend to its next attempt so it SUCCEEDS this time. __CLASS_HINT__\n\nGround the directive in what the agent ACTUALLY did (below) and the REAL task — do not give generic advice. Output ONLY the corrective directive text, nothing else.\n\n=== FAILURE CLASS ===\n__FAILURE_CLASS__\n\n=== WHAT THE AGENT PRODUCED (its output/log) ===\n__FAILED_OUTPUT__\n\n=== THE TASK IT WAS GIVEN (ground truth) ===\n__CONTEXT__\n\n=== WHERE THE SPEC PASS'S DETECTIVE FOUND THE FIX (its reading of the code before the writer ran — evidence, not instruction: confirm it against the code; a site marked NO EDIT REQUIRED is part of the fix as it stands) ===\n__FIX_SITES__",
     "hint_max_iterations": "The agent EXHAUSTED its iteration budget exploring and NEVER produced its output. The corrective directive must make it commit output EARLY — e.g. 'you have N calls; do the minimum lookup then WRITE your file/answer as your very next action; do NOT keep exploring.'",
     "hint_no_file": "The agent finished WITHOUT writing the required file. The directive must make writing the file its FIRST action, at the exact required path.",
     "hint_no_json": "The agent produced no parseable structured output (prose, or a tool-call wrapper). The directive must make it emit ONLY the required output inline, no tool calls, no prose.",

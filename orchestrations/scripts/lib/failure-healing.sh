@@ -1101,6 +1101,10 @@ $(cat "$_fa_vendor_contract")
     # within the limit rather than discovering it as a rejection.
     local _analyst_skill_note_max; _analyst_skill_note_max=$(_skill_note_max_chars) || return 1
 
+    # Where the spec pass's detective found the fix — the rendering the reviewer reads too.
+    "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/fix-sites.js" "${MAIN_PRD_FILE:-$PRD_FILE}" "$story_id" \
+        > "$_av_dir/fixsites" 2>/dev/null || : > "$_av_dir/fixsites"
+    [ -s "$_av_dir/fixsites" ] || printf '%s' '(the spec pass recorded none for this story)' > "$_av_dir/fixsites"
     if ! jq -n \
         --arg story_id "$story_id" \
         --arg story_role "$story_role" \
@@ -1112,6 +1116,7 @@ $(cat "$_fa_vendor_contract")
         --rawfile write_scope "$_av_dir/scope" \
         --rawfile shared_criteria "$_av_dir/shared" \
         --rawfile healing_history "$_av_dir/history" \
+        --rawfile fix_sites "$_av_dir/fixsites" \
         --arg manifest_file "$_analyst_manifest_file" \
         --arg skill_note_max "$_analyst_skill_note_max" \
         '{
@@ -1126,7 +1131,8 @@ $(cat "$_fa_vendor_contract")
           "__ATTEMPT_CHANGES__":$attempt_changes,
           "__WRITE_SCOPE__":$write_scope,
           "__SHARED_CRITERIA__":$shared_criteria,
-          "__HEALING_HISTORY__":$healing_history}' > "$_analyst_values" 2>"$_analyst_values_err"; then
+          "__HEALING_HISTORY__":$healing_history,
+          "__FIX_SITES__":$fix_sites}' > "$_analyst_values" 2>"$_analyst_values_err"; then
         # NOT SILENT. An unbuildable values file is a defect to report, not an empty file to
         # hand downstream so it can fail with a parse error that names nothing.
         error "  [FailureAnalyst] cannot BUILD values file (jq failed): $(cat "$_analyst_values_err" 2>/dev/null)"

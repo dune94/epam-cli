@@ -312,7 +312,9 @@ if [ -n "$DEST" ]; then
     fi
 
     if [ -n "$_OPCFG_TMP" ]; then
-        restore_operator_config "$DEST" "$_OPCFG_TMP"
+        # The engine's own history of each preserved file, so a value it shipped is never mistaken for an
+        # operator edit (an unedited agent-contract.json froze the 10-01 relative-path fix out of an install).
+        restore_operator_config "$DEST" "$_OPCFG_TMP" "${_GIT_ROOT:-}"
         rm -rf "$_OPCFG_TMP"
     fi
     # RESTORED AFTER the operator config, and cleaned up on its own: the two snapshots are

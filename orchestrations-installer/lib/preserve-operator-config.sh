@@ -54,26 +54,56 @@ snapshot_operator_config() {
 # operator's value; every key the new ref adds arrives. Anything that is not a JSON object on
 # both sides is restored byte-for-byte, as before.
 restore_operator_config() {
-    local _root="$1" _tmp="$2" _f _relpath
+    local _root="$1" _tmp="$2" _engine_git="${3:-}" _f _relpath
     [ -d "$_tmp" ] || return 0
     while IFS= read -r _f; do
         _relpath="${_f#"$_tmp"/}"
         mkdir -p "$(dirname "$_root/$_relpath")"
         case "$_relpath" in
             *.json)
+                # THE ENGINE'S OWN HISTORY OF THIS FILE, when the source repository is at hand: every
+                # version it ever shipped. A value equal to one of them is the engine's, never the
+                # operator's — see the merge below.
+                local _hist=""
+                if [ -n "$_engine_git" ] && git -C "$_engine_git" rev-parse --git-dir >/dev/null 2>&1; then
+                    _hist=$(mktemp)
+                    { printf '['; local _h _first=1
+                      while IFS= read -r _h; do
+                          [ -n "$_h" ] || continue
+                          [ "$_first" = 1 ] || printf ','
+                          git -C "$_engine_git" show "$_h:$_relpath" 2>/dev/null || printf 'null'
+                          _first=0
+                      done < <(git -C "$_engine_git" log --format=%H -n 500 -- "$_relpath" 2>/dev/null)
+                      printf ']'; } > "$_hist"
+                fi
                 if [ -f "$_root/$_relpath" ] && "${NODE_BIN:-node}" -e '
                     const fs = require("fs");
-                    const [ops, ref, out] = process.argv.slice(1);
+                    const [ops, ref, out, hist, rel] = process.argv.slice(1);
                     let o, r;
                     try { o = JSON.parse(fs.readFileSync(ops, "utf8")); r = JSON.parse(fs.readFileSync(ref, "utf8")); } catch { process.exit(3); }
                     const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
                     if (!isObj(o) || !isObj(r)) process.exit(3);
-                    fs.writeFileSync(out, JSON.stringify({ ...r, ...o }, null, 2) + "\n");
-                  ' "$_f" "$_root/$_relpath" "$_root/$_relpath.merged" 2>/dev/null; then
+                    // A VALUE BELONGS TO THE OPERATOR ONLY IF THE ENGINE NEVER SHIPPED IT. Without history
+                    // to consult, every existing value is kept, as before.
+                    let versions = [];
+                    if (hist) { try { versions = JSON.parse(fs.readFileSync(hist, "utf8")).filter(isObj); } catch { versions = []; } }
+                    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+                    const shipped = (k, v) => versions.some((h) => Object.prototype.hasOwnProperty.call(h, k) && same(h[k], v));
+                    const merged = { ...r };
+                    for (const [k, v] of Object.entries(o)) {
+                      const inRef = Object.prototype.hasOwnProperty.call(r, k);
+                      if (inRef && same(v, r[k])) continue;
+                      if (shipped(k, v)) { if (!inRef) delete merged[k]; continue; }
+                      merged[k] = v;
+                      if (versions.length) process.stderr.write(`[installer] keeping an operator edit of ${rel}: ${k}\n`);
+                    }
+                    fs.writeFileSync(out, JSON.stringify(merged, null, 2) + "\n");
+                  ' "$_f" "$_root/$_relpath" "$_root/$_relpath.merged" "$_hist" "$_relpath"; then
+                    rm -f "$_hist"
                     mv "$_root/$_relpath.merged" "$_root/$_relpath"
                     continue
                 fi
-                rm -f "$_root/$_relpath.merged"
+                rm -f "$_root/$_relpath.merged" "$_hist"
                 cp "$_f" "$_root/$_relpath"
                 ;;
             *) cp "$_f" "$_root/$_relpath" ;;

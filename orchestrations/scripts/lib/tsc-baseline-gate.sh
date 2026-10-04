@@ -45,6 +45,29 @@ _run_project_verification() {
     ' "$_plugin" "$_root" "$_section"
 }
 
+# THE PROJECT'S DECLARED SUITE COMMAND — the verification plugin's testCommandFor (detected <
+# project-declared < hand-tuned), the one definition the writer's verification uses. It answered the
+# ecosystem's DETECTED command (`npm test`, bare jest, a worker per core), ignoring the declaration:
+# Step 19 OOM-killed the AMSD-2974 run after review had approved (2026-10-04), and the lint-fix check,
+# the testing-gates oracle and the unit-test gate read the same command.
+_codeline_test_command() {
+    local _root="${1:-$PROJECT_ROOT}"
+    [ -n "$_root" ] || return 0
+    local _auto_tcl="${AUTOMATION_DIR:-${SCRIPT_DIR:+$(dirname "$SCRIPT_DIR")}}"
+    [ -n "$_auto_tcl" ] || _auto_tcl="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+    local _declared _facts
+    _declared=$("${NODE_BIN:-node}" -e '
+      const p = require(process.argv[1]);
+      const c = typeof p.testCommandFor === "function" ? p.testCommandFor(process.argv[2]) : "";
+      if (c) process.stdout.write(String(c));
+    ' "$_auto_tcl/plugins/verification-plugin.js" "$_root" 2>/dev/null || true)
+    if [ -n "$_declared" ]; then printf '%s' "$_declared"; return 0; fi
+    # Nothing declared (no provisioned .epam/): the detected command, lowest in the precedence.
+    _facts=$("${NODE_BIN:-node}" "${_auto_tcl:-}/scripts/lib/handlers/codeline-ecosystem.js" "$_root" 2>/dev/null) || return 0
+    [ -n "$_facts" ] || return 0
+    printf '%s' "$_facts" | python3 "${_auto_tcl:-}/scripts/lib/handlers/json-field.py" testCommand 2>/dev/null || true
+}
+
 # tsc-baseline-gate.sh — shared "new errors only" tsc filtering, used by
 # BOTH claude.sh's per-story tsc-verify/tsc-gate AND run-agent-orchestration.sh's
 # Step 19 pre-review gate.

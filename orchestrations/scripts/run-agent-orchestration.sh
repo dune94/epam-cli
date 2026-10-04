@@ -109,14 +109,7 @@ _render_change_reviewer() {
 #
 # codeline-ecosystem.js already answers this from the repository itself. The runner is a fact of
 # the codeline, never of the engine.
-_codeline_test_command() {
-    local _root="${1:-$PROJECT_ROOT}"
-    [ -n "$_root" ] || return 0
-    local _facts
-    _facts=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$_root" 2>/dev/null) || return 0
-    [ -n "$_facts" ] || return 0
-    printf '%s' "$_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" testCommand 2>/dev/null || true
-}
+# _codeline_test_command: ONE definition, lib/tsc-baseline-gate.sh (beside _run_project_verification).
 
 # ── Failing test files, whatever printed them ─────────────────────────────────
 #
@@ -165,6 +158,8 @@ source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 
 source "$SCRIPT_DIR/lib/codeline-lanes.sh"
+# shellcheck source=lib/pre-review-gate.sh
+source "$SCRIPT_DIR/lib/pre-review-gate.sh"
 
 source "$SCRIPT_DIR/lib/control-plane.sh"
 
@@ -1647,7 +1642,7 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
     # pass codeline-health.sh was giving, and for the same reason. Its own comment two lines up
     # claims no runner name appears here, which was true of the runner and false of the ecosystem.
     _rg_facts="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$_rg_root" 2>/dev/null || echo '{}')"
-    _rg_test_cmd="$(printf '%s' "$_rg_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" testCommand 2>/dev/null || echo "")"
+    _rg_test_cmd="$(_codeline_test_command "$PROJECT_ROOT")"
     _rg_pm="$(printf '%s' "$_rg_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" packageManager 2>/dev/null || echo "")"
 
     # A project that declares no test command has nothing to regress against. That is not a pass —
@@ -3751,28 +3746,19 @@ if ! is_truthy "${SKIP_PRE_REVIEW_GATE:-}" && [ -f "$PROJECT_ROOT/package.json" 
         echo "=== Pre-Review Gate: $PHASE @ $(date -Iseconds) ===" > "$_pre_review_log"
         cd "$PROJECT_ROOT"
 
-        log "  Running vitest..."
-        # Bounded timeout (added 2026-07-06): every vitest/npm invocation in
-        # this file and claude.sh was unguarded — a live run's story-level
-        # watchdog silently absorbed a hang in one of these (network-dependent
-        # npm install, or a test that leaves a server/resource open) with zero
-        # diagnostic signal about which command was actually stuck. Same fix
-        # applied consistently across every instance in this file.
-        _pr_test_cmd="$(_codeline_test_command "$PROJECT_ROOT")"
-        if [ -z "$_pr_test_cmd" ]; then
-            # An absent declaration is not a failure of the code under review. Reporting it as
-            # "tests failed" blamed the story for the engine being unable to ask.
-            warning "  Step 19: ${PROJECT_ROOT} declares no test command — pre-review tests NOT run"
-            _pre_review_failed=1
-        elif run_test_bounded "$(resolve_test_workers)" sh -c "$_pr_test_cmd" \
-                2>&1 | tee -a "$_pre_review_log"; then
-            success "  vitest: PASS"
+        log "  Running the project's declared test suite..."
+        # lib/pre-review-gate.sh: the declared suite (never the ecosystem's detected command), bounded,
+        # and a red suite judged against the phase baseline like Step 3.545 — AMSD-2974, 2026-10-04.
+        _prs_rc=0
+        pre_review_suite "$PROJECT_ROOT" "$LOG_DIR" "$_pre_review_log" || _prs_rc=$?
+        if [ "$_prs_rc" -eq 0 ]; then
+            success "  tests: PASS"
             "$SCRIPT_DIR/update-monitor.sh" event "pre_review_test_pass" \
-                "Pre-review vitest passed for $PHASE" "" "main" "unit-test-runner" 2>/dev/null || true
+                "Pre-review tests passed for $PHASE" "" "main" "unit-test-runner" 2>/dev/null || true
         else
-            error "  vitest: FAIL — fix test failures before review proceeds"
+            error "  tests: FAIL — fix test failures before review proceeds"
             "$SCRIPT_DIR/update-monitor.sh" event "pre_review_test_fail" \
-                "Pre-review vitest FAILED for $PHASE" "" "main" "unit-test-runner" 2>/dev/null || true
+                "Pre-review tests FAILED for $PHASE" "" "main" "unit-test-runner" 2>/dev/null || true
             _pre_review_failed=1
         fi
 

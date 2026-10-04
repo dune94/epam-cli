@@ -2096,7 +2096,7 @@ run_unit_tests_gate() {
         error "  This is an engine fault, not a fact about the project — refusing to certify unit tests that were never run."
         return 1
     fi
-    _ut_test_cmd=$(printf '%s' "$_ut_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" testCommand 2>/dev/null || echo "")
+    _ut_test_cmd=$(_codeline_test_command "$PROJECT_ROOT")
     _ut_install_cmd=$(printf '%s' "$_ut_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" installCommand 2>/dev/null || echo "")
     _ut_install_dir=$(printf '%s' "$_ut_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" installDir 2>/dev/null || echo "")
 

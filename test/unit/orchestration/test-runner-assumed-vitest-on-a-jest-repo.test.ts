@@ -47,7 +47,8 @@ set +e
 log() { :; }; warning() { :; }; error() { :; }; success() { :; }; info() { :; }
 SCRIPT_DIR="${join(ROOT, 'orchestrations/scripts')}"
 NODE_BIN="${join(process.env.HOME || '', '.nvm/versions/node/v20.20.0/bin/node')}"
-eval "$(awk '/^_codeline_test_command\\(\\) \\{/,/^\\}/' "${ORCH}")"
+# _codeline_test_command lives once, in lib/tsc-baseline-gate.sh (2026-10-04).
+eval "$(awk '/^_codeline_test_command\\(\\) \\{/,/^\\}/' "${join(ROOT, 'orchestrations/scripts/lib/tsc-baseline-gate.sh')}")"
 eval "$(awk '/^_parse_failing_test_files\\(\\) \\{/,/^\\}/' "${ORCH}")"
 ${body}
 `;

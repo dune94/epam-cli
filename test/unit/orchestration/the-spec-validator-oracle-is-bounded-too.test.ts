@@ -42,6 +42,15 @@ function liftFn(name: string): string {
   return lines.slice(s, e + 1).join('\n');
 }
 
+/** A top-level function by name, lifted from the file that defines it. */
+function liftFnFrom(file: string, name: string): string {
+  const lines = engineSource(file).split('\n');
+  const s = lines.findIndex((l) => new RegExp(`^${name}\\(\\)\\s*\\{`).test(l));
+  if (s < 0) throw new Error(`${name}() not found in ${file}`);
+  const e = lines.findIndex((l, i) => i > s && /^\}/.test(l));
+  return lines.slice(s, e + 1).join('\n');
+}
+
 /** The oracle block: from its section comment to the line that stores the exit code. */
 function liftOracleBlock(): string {
   const lines = engineSource(ORCH).split('\n');
@@ -92,7 +101,8 @@ describe('the spec validator oracle is bounded too', () => {
       'phase_id=core',
       `export PATH="${join(proj, 'node_modules/.bin')}:$PATH"`,
       `[ -f "$SCRIPT_DIR/lib/bounded-exec.sh" ] && . "$SCRIPT_DIR/lib/bounded-exec.sh"`,
-      liftFn('_codeline_test_command'),
+      // One definition, in lib/tsc-baseline-gate.sh (2026-10-04).
+      liftFnFrom(join(__dirname, '../../../orchestrations/scripts/lib/tsc-baseline-gate.sh'), '_codeline_test_command'),
       liftFn('detect_node'),
       'oracle() {',
       liftOracleBlock(),

@@ -139,6 +139,7 @@ function runGate(p: ReturnType<typeof project>, env: Record<string, string> = {}
      ${'AUTOMATION_DIR=' + JSON.stringify(join(__dirname, '../../../orchestrations'))}
      ${'NODE_CMD=' + JSON.stringify(process.execPath)}
      ${shellFunction(join(__dirname, '../../../orchestrations/scripts/lib/tsc-baseline-gate.sh'), '_run_project_verification')}
+     ${shellFunction(join(__dirname, '../../../orchestrations/scripts/lib/tsc-baseline-gate.sh'), '_codeline_test_command')}
 ${lift('run_unit_tests_gate')}
      run_unit_tests_gate core; echo "RC=$?"`,
   ], { encoding: 'utf8' });

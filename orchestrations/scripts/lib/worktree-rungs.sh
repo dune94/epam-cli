@@ -130,7 +130,11 @@ _selective_worktree_reset() {
         error "  WorktreeReset[$story_id]: could not restore tracked files from ${_baseline_ref} — NOT running git clean, because that would delete untracked work without restoring anything."
         return 1
     fi
-    git -C "$PROJECT_ROOT" clean -fd -- . 2>/dev/null || true
+    # -e .epam, as ensure_story_branch and the Step 17 clean do: a lane worktree's .epam/ holds the
+    # codeline's declaration copied by provision_lane_worktree, and the re-provisioning below restores
+    # only settings, facts and verification. Cleaned, the writer read no vendorDirs and ran the
+    # provisionCommand — npm install against the client registry (AMSD-2974 retry, 2026-10-03).
+    git -C "$PROJECT_ROOT" clean -fd -e .epam -- . 2>/dev/null || true
     LAST_VERIFIED_TOUCHED_FILES=""
     LAST_VERIFIED_UNCHANGED_FILES=""
     log "  WorktreeReset[$story_id]: reset to $_baseline_ref — the attempt changed no VERIFIED fix site"

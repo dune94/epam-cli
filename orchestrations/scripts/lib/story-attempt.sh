@@ -182,8 +182,19 @@ _tc_writer_phase() {
 _declared_read_roots() {
     local _prd="${1:-}"
     [ -n "$_prd" ] && [ -f "$_prd" ] || return 0
-    jq -r '(.configuration // {}) | with_entries(select(.key | startswith("$") | not)) | .. | strings | select(startswith("/"))' "$_prd" 2>/dev/null \
-        | sed 's:/*$::' | sort -u | while IFS= read -r _p; do [ -n "$_p" ] && [ -d "$_p" ] && printf '%s\n' "$_p"; done
+    {
+        jq -r '(.configuration // {}) | with_entries(select(.key | startswith("$") | not)) | .. | strings | select(startswith("/"))' "$_prd" 2>/dev/null
+        # WHAT THE CODELINE'S DEPENDENCIES LINK TO. A lane worktree's dependency directory links into
+        # the checkout it belongs to, and a sibling package into that sibling's checkout — both outside
+        # the worktree, so a runner that grants reads only under its working directory refused them
+        # (AMSD-2974 gotransit, 2026-10-04). From git and the story's own data, as the dependency facts.
+        if [ -n "${PROJECT_ROOT:-}" ] && [ -d "$PROJECT_ROOT" ]; then
+            local _common _checkout="$PROJECT_ROOT"
+            _common=$(git -C "$PROJECT_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && _checkout=$(dirname "$_common")
+            [ "$(cd "$_checkout" 2>/dev/null && pwd)" != "$(cd "$PROJECT_ROOT" && pwd)" ] && printf '%s\n' "$_checkout"
+            "${NODE_BIN:-node}" "${SCRIPT_DIR:-}/lib/handlers/sibling-providers.js" "$_prd" "$_checkout" 2>/dev/null | cut -f2
+        fi
+    } | sed 's:/*$::' | sort -u | while IFS= read -r _p; do [ -n "$_p" ] && [ -d "$_p" ] && printf '%s\n' "$_p"; done
 }
 
 provider_to_cli() {

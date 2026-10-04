@@ -132,7 +132,15 @@ _out="$(run_suite)"; _rc=$?
 # at the baseline, the step printed its verdict alone, and the pre-existing failures blocked the phase
 # twice. Whatever the path, the latest suite output is printed in full on a non-zero exit.
 _suite_out="$_out"
-trap '_x=$?; [ "$_x" -ne 0 ] && [ -n "$_suite_out" ] && { log "suite output (for the baseline comparison):"; printf "%s\n" "$_suite_out" >&2; }; exit $_x' EXIT
+_print_suite_on_red_exit() {
+    local _x=$?
+    if [ "$_x" -ne 0 ] && [ -n "$_suite_out" ]; then
+        log "suite output (for the baseline comparison):"
+        printf '%s\n' "$_suite_out" >&2
+    fi
+    exit "$_x"
+}
+trap _print_suite_on_red_exit EXIT
 if [ "$_rc" -eq 3 ]; then
     log "no supported test runner — nothing to do"; exit 0
 fi

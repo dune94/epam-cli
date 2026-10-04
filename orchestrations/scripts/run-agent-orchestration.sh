@@ -2291,12 +2291,7 @@ if [ -n "$main_stories" ]; then
             # reset below; it stands only for a phase where no story branch is created (no
             # remote, greenfield, ensure_story_branch declining), which would otherwise leave
             # every diff-based gate with no baseline at all.
-            _phase_baseline="$(qa_phase_baseline_sha "$PROJECT_ROOT" "${JIRA_BASELINE_BRANCH:-}" 2>/dev/null || echo "")"
-            if [ -n "$_phase_baseline" ]; then
-                echo "$_phase_baseline" > "$LOG_DIR/phase-baseline-sha.txt"
-            else
-                warning "[orch] could not resolve a baseline commit in $PROJECT_ROOT — every diff-based gate will compare against nothing"
-            fi
+            _phase_baseline="$(qa_record_phase_baseline "$PROJECT_ROOT" "${JIRA_BASELINE_BRANCH:-}" "$LOG_DIR" || echo "")"
         fi
         # _run_one_main_story: single-story execution body shared between the
         # main loop (fixed snapshot) and the tail-sweep pass (split children).
@@ -2651,6 +2646,8 @@ if [ "$need_worktrees" = true ] && [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
         ensure_story_branch "${PROJECT_ROOT:-}" "$_bf_wt_story" "${JIRA_BASELINE_BRANCH:-}" \
             || warning "  [story-branch] $_bf_wt_story: the worktree lane could not start on its story branch — see above"
     fi
+    # THE LANE'S PHASE BASELINE, as Step 8 records it for main-branch stories — a lane skips Step 8.
+    [ -e "${PROJECT_ROOT:-}/.git" ] && qa_record_phase_baseline "$PROJECT_ROOT" "${JIRA_BASELINE_BRANCH:-}" "$LOG_DIR" >/dev/null
 fi
 # END A BROWNFIELD WORKTREE LANE
 

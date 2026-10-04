@@ -215,3 +215,21 @@ qa_phase_baseline_sha() {
 
     printf '%s' "$_head"
 }
+
+# qa_record_phase_baseline <root> <base-branch> <log-dir> — WRITE THE PHASE BASELINE every gate reads.
+#
+# One recording for both ways a phase runs its stories. It lived only in Step 8 (main-branch stories),
+# so a brownfield lane that runs its story in a worktree — and skips Step 8 — had no
+# phase-baseline-sha.txt: every pre-existing failure was charged to its writer, eight attempts in a
+# row (£0 multi-lane run, 2026-10-04). Nothing resolvable is said out loud, never written as a guess.
+qa_record_phase_baseline() {
+    local _root="${1:-}" _branch="${2:-}" _log_dir="${3:-${LOG_DIR:-}}" _sha
+    [ -n "$_root" ] && [ -n "$_log_dir" ] || return 1
+    _sha="$(qa_phase_baseline_sha "$_root" "$_branch" 2>/dev/null || echo "")"
+    if [ -z "$_sha" ]; then
+        warning "[orch] could not resolve a baseline commit in $_root — every diff-based gate will compare against nothing"
+        return 1
+    fi
+    printf '%s\n' "$_sha" > "$_log_dir/phase-baseline-sha.txt"
+    printf '%s' "$_sha"
+}

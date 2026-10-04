@@ -15,7 +15,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawnSync } from 'child_process';
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'fs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { engineSource } from '../../lib/engine-source';
@@ -127,9 +127,17 @@ describe('the baseline has one meaning and one resolver', () => {
   it('says so when it cannot resolve one, instead of leaving no file', () => {
     // It ended in `|| true`: a repository the run could not read produced no file, every gate
     // compared against nothing, and that reads as "this story changed no files" — a false pass.
-    const first = ORCH_SRC.indexOf('_phase_baseline="$(qa_phase_baseline_sha');
-    expect(first).toBeGreaterThan(-1);
-    const writerBlock = ORCH_SRC.slice(first, first + 700);
-    expect(writerBlock, 'an unresolvable baseline is silent').toMatch(/warning .*baseline/);
+    // Step 8 and a worktree lane both record through qa_record_phase_baseline (2026-10-04), so the
+    // warning lives there once — EXECUTED here on a repository with no commit to resolve.
+    expect(ORCH_SRC, 'Step 8 no longer records through the one recording').toMatch(/_phase_baseline="\$\(qa_record_phase_baseline /);
+    const repo = mkdtempSync(join(tmpdir(), 'no-baseline-')); const logs = mkdtempSync(join(tmpdir(), 'no-baseline-logs-'));
+    try {
+      spawnSync('git', ['init', '-q', repo]);
+      const r = spawnSync('bash', ['-c', `warning(){ echo "WARN $*" >&2; }
+source ${JSON.stringify(join(__dirname, '../../../orchestrations/scripts/lib/qa-gate-evidence.sh'))}
+qa_record_phase_baseline ${JSON.stringify(repo)} develop ${JSON.stringify(logs)}`], { encoding: 'utf8' });
+      expect(r.stderr, 'an unresolvable baseline is silent').toMatch(/WARN .*baseline/);
+      expect(existsSync(join(logs, 'phase-baseline-sha.txt')), 'a guessed baseline was written').toBe(false);
+    } finally { rmSync(repo, { recursive: true, force: true }); rmSync(logs, { recursive: true, force: true }); }
   });
 });

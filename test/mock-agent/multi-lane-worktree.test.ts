@@ -31,6 +31,7 @@ import { ROOT, fixtureInstall, edgeFor, zeroCostEnv, run } from '../integration/
 import { MockAgent } from './agent';
 import { World } from './world';
 import { correct } from './seams';
+import { withScenario } from './negatives';
 import { configFor, standInsFor, vendorEdge, type ProjectRun } from './harness';
 
 const FIXTURE = join(ROOT, 'test/fixtures/multi-lane-estate');
@@ -139,7 +140,17 @@ describe('a ticket spanning four codelines runs through pause 1, pause 2 and the
     await agent.start();
     const { bin } = edgeFor(install, agent.url, children);
     const world = new World(codelines, () => prd, projDir);
-    agent.on('*', correct(world, install));
+    // THE PATHS A LIVE RUN TAKES WHEN SOMETHING GOES WRONG (AMSD-2974, 2026-10-03 — every defect that
+    // night was on one of them). The first lane's first reproducing test is prose: with one attempt the
+    // repro gate blocks, the phase exits remediated and the retry recreates the lane's worktrees. The
+    // retry's first two writer attempts are prose too: neither changes anything, and the third enters the
+    // next rung (rung = retry_count / 2), where the rung reset runs — live it ran at a rung boundary on
+    // the retry and deleted the lane's declaration. Every lane shares the story id, and attempts count
+    // per seam and story, so these hit the first lane only.
+    agent.on('*', withScenario(correct(world, install), [
+      { produces: 'repro-test', attempts: [1], negative: 'prose' },
+      { produces: 'implementation', attempts: [2, 3], negative: 'prose' },
+    ]));
     const codemie = await standInsFor(install, agent, journal, config);
     const r = { install, out: '', agent, project, prd, config, realOut: '', world, codemie } as ProjectRun;
 
@@ -151,6 +162,8 @@ describe('a ticket spanning four codelines runs through pause 1, pause 2 and the
       // As the operator launches this shape: lanes one at a time, both pauses on.
       EPAM_PARALLEL_CODELINES: '0', EPAM_PAUSE_AFTER_AGENT_MINT: '1', EPAM_PAUSE_BEFORE_WRITER: '1',
       SKIP_REGRESSION_GUARD: 'true',
+      // One reproducing-test attempt, so the scenario's prose answer fails the gate and drives the retry.
+      REPRO_TEST_WRITER_MAX_ATTEMPTS: '1',
       // The estate's packages come from the estate; npm never reaches a registry from this test.
       npm_config_offline: 'true', npm_config_audit: 'false', npm_config_fund: 'false', npm_config_update_notifier: 'false',
     });
@@ -270,6 +283,22 @@ describe('a ticket spanning four codelines runs through pause 1, pause 2 and the
           expect(readFileSync(join(installed, f), 'utf8'), `${c.dir}'s installed ${dep} was changed`).toBe(readFileSync(join(FIXTURE, 'codelines', provider.dir, f), 'utf8'));
         }
       }
+    }
+
+    // THE FAILURE PATHS RAN — otherwise everything above is the happy path again.
+    const laneLogs = readdirSync(join(install, 'orchestrations/logs')).filter((f) => f.endsWith('.log'))
+      .map((f) => readFileSync(join(install, 'orchestrations/logs', f), 'utf8')).join('\n');
+    const all3 = text3 + '\n' + strip(laneLogs);
+    expect(all3, 'the gate-remediation retry never ran').toMatch(/Gate remediation applied/);
+    expect(all3, 'the rung reset never ran').toMatch(/WorktreeReset\[[^\]]+\]: reset to/);
+    // …and on them: every model call reached a seam, nothing was provisioned from a registry, and no
+    // attempt was charged for a required package the codelines already lacked.
+    expect(all3, 'an agent call resolved to no seam').not.toMatch(/resolves to no seam/);
+    expect(all3, 'the writer provisioned the environment').not.toMatch(/Provisioning the environment/);
+    expect(all3, 'an attempt was failed for a package the codeline already lacked').not.toMatch(/import\(s\) not declared/);
+    for (const c of layout) {
+      const pj = git(join(codelineRoot, c.dir), 'diff', `origin/${c.branches[0]}`, 'HEAD', '--', 'package.json');
+      expect(pj, `${c.dir}'s package.json was changed by the story`).toBe('');
     }
 
     expect(agent.stale, 'the agent generated answers the current code cannot accommodate').toEqual([]);

@@ -126,6 +126,13 @@ run_suite() {
 }
 
 _out="$(run_suite)"; _rc=$?
+# THE SUITE'S RESULT LEAVES WITH EVERY RED EXIT. Step 3.545 subtracts the baseline from this step's
+# output (tee'd into the phase log), so a red exit that prints only its own messages leaves nothing to
+# subtract: AMSD-2974 (2026-10-04) — the agent answered REGRESSION over two suites that already failed
+# at the baseline, the step printed its verdict alone, and the pre-existing failures blocked the phase
+# twice. Whatever the path, the latest suite output is printed in full on a non-zero exit.
+_suite_out="$_out"
+trap '_x=$?; [ "$_x" -ne 0 ] && [ -n "$_suite_out" ] && { log "suite output (for the baseline comparison):"; printf "%s\n" "$_suite_out" >&2; }; exit $_x' EXIT
 if [ "$_rc" -eq 3 ]; then
     log "no supported test runner — nothing to do"; exit 0
 fi
@@ -228,9 +235,9 @@ fi
 
 # Re-run: the update only counts if it actually made the suite green.
 _out2="$(run_suite)"; _rc2=$?
+_suite_out="$_out2"
 if [ "$_rc2" -ne 0 ]; then
     log "BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)"
-    printf '%s' "$_out2" | tail -15 | sed 's/^/    /' >&2
     exit 1
 fi
 

@@ -14,7 +14,7 @@
  * EXECUTED: the real brownfield-repro-test-writer.sh with a stub agent, on a real git fixture.
  */
 import { describe, it, expect, afterAll } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, chmodSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, chmodSync, readFileSync, utimesSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -155,5 +155,19 @@ describe('the agent\'s reproducing test is accepted where the repository keeps i
     const committed = git(repo, ['log', '--oneline', '--name-only', 'develop..HEAD']);
     expect(committed, out).toContain('src/svc/__tests__/discount.spec.ts');
     expect(out).not.toMatch(/no valid test after/);
+  });
+
+  it('a leftover test from an earlier, killed run is NOT taken for the agent\'s when the agent wrote nothing', () => {
+    // Live 2026-10-03: the OOM-killed run left an untracked __tests__/ToastNotification.spec.tsx in the
+    // cx-shared checkout. Adoption is for what THIS attempt wrote; debris is not the agent's test.
+    const repo = makeRepo();
+    const stale = join(repo, 'src', 'svc', '__tests__', 'discount.spec.ts');
+    mkdirSync(join(repo, 'src', 'svc', '__tests__'), { recursive: true });
+    writeFileSync(stale, `import { it, expect } from 'vitest';\nit('old', () => expect(1).toBe(1));\n`);
+    const past = new Date(Date.now() - 3600_000); utimesSync(stale, past, past);
+    const { out, committed } = runWriter(repo, 'nothing');
+    expect(out, 'the stage never ran an attempt').toMatch(/attempt/i);
+    expect(committed, out).not.toContain('__tests__/discount.spec.ts');
+    expect(out).not.toMatch(/adopting it/);
   });
 });

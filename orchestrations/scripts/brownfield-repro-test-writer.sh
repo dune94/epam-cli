@@ -763,6 +763,8 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     # was called (the install), the GitHub Copilot CLI wrote the reproducing test into the INSTALL
     # folder and the codeline got nothing — the repro gate blocked a correct fix (multi-lane £0 run 11,
     # 2026-10-02). The spec and review seams already start their runners in PROJECT_ROOT.
+    # When this attempt began: only a file written after it can be this attempt's test (below).
+    _attempt_mark=$(mktemp); touch "$_attempt_mark"
     { printf '%s' "$_prompt"; [ -n "$_typecheck_feedback" ] && printf '%s' "$_typecheck_feedback"; [ -n "$_assertion_feedback" ] && printf '%s' "$_assertion_feedback"; [ -n "$_hook_feedback" ] && printf '%s' "$_hook_feedback"; } | \
       ( cd "$PROJECT_ROOT" || exit 1
       AI_GATE_ALLOW_TOOLS=1 \
@@ -787,6 +789,8 @@ for _attempt in $(seq 1 "$_max_attempts"); do
         ' "$AUTOMATION_DIR/plugins/codeline-context-plugin.js" "$PROJECT_ROOT" "$_primary_fix" 2>/dev/null \
           | while IFS= read -r _cand; do
               [ -f "$PROJECT_ROOT/$_cand" ] || continue
+              # Written by THIS attempt: a killed run's untracked draft is debris, not the agent's test.
+              [ "$PROJECT_ROOT/$_cand" -nt "$_attempt_mark" ] || continue
               [ -n "$BASELINE_SHA" ] && git -C "$PROJECT_ROOT" cat-file -e "${BASELINE_SHA}:${_cand}" 2>/dev/null && continue
               printf '%s\n' "$_cand"; break
             done)
@@ -795,11 +799,19 @@ for _attempt in $(seq 1 "$_max_attempts"); do
             _target_rel="$_adopted"
         fi
     fi
+    # THIS ATTEMPT'S TEST, AT THE NAMED PATH TOO. Once a __tests__/ directory exists the plugin names a
+    # path inside it, so a killed run's untracked draft sat at the named path and a bare existence check
+    # took it for the agent's work with nothing written (cx-shared, 2026-10-03).
+    _written_now=0
+    [ -f "$PROJECT_ROOT/$_target_rel" ] && [ "$PROJECT_ROOT/$_target_rel" -nt "$_attempt_mark" ] && _written_now=1
+    [ -f "$PROJECT_ROOT/$_target_rel" ] && [ "$_written_now" = 0 ] && \
+        log "${_target_rel} predates this attempt and was not rewritten — not this attempt's test"
+    rm -f "$_attempt_mark"
     # A file existing is NOT success. The agent can (and live, on 2026-07-24, DID)
     # write a test with a syntax error; committing it both proves nothing and
     # poisons every later gate. Validate that it actually PARSES AND RUNS first.
     _fclass_override=""
-    if [ -f "$PROJECT_ROOT/$_target_rel" ]; then
+    if [ "$_written_now" = 1 ]; then
         _validate_written_test "$_target_rel"
         _vrc=$?
         case "$_vrc" in

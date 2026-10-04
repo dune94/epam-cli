@@ -49,6 +49,12 @@ describe('the spec-inputs digest', () => {
     const j = JSON.parse(readFileSync(f, 'utf8')); j.brownfieldSiblingPackages = `${j.brownfieldSiblingPackages} (changed)`; writeFileSync(f, JSON.stringify(j));
     expect(digest(o)).not.toBe(before);
   });
+  it('moves when a template the spec seams render without owning it changes (the detective\'s assessment framing)', () => {
+    const o = engineCopy(); const before = digest(o);
+    const f = join(o, 'prompts/templates/estimation-assessment.json');
+    const j = JSON.parse(readFileSync(f, 'utf8')); j.version = (j.version || 0) + 1; writeFileSync(f, JSON.stringify(j));
+    expect(digest(o)).not.toBe(before);
+  });
   it('does not move for a template no spec seam runs', () => {
     const o = engineCopy(); const before = digest(o);
     const f = join(o, 'prompts/templates/update-invalidated-tests.json');

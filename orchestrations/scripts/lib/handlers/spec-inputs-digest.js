@@ -33,6 +33,10 @@ function specInputsDigest(orchDir) {
       if (id === t || id.startsWith(`${t}.`) || id.startsWith(`${t}-`)) parts.push(['template', f, fs.readFileSync(path.join(tplDir, f), 'utf8')]);
     }
   }
+  // Templates the spec seams render without owning them (config: templates).
+  for (const t of decl.templates || []) {
+    for (const f of tplFiles) if (f.slice(0, -5) === t) parts.push(['shared-template', f, fs.readFileSync(path.join(tplDir, f), 'utf8')]);
+  }
   for (const k of decl.contractSections || []) parts.push(['contract', k, contract[k] === undefined ? null : contract[k]]);
   return crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 }

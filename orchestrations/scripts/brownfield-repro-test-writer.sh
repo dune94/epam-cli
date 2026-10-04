@@ -773,6 +773,28 @@ for _attempt in $(seq 1 "$_max_attempts"); do
       AI_MODEL="$_model" \
       EPAM_AGENT_NAME="repro-test-writer" bash "$AI_RUNNER_CMD" "${_srw_provider_flag[@]}" --model "$_model" ) > "$_writer_log" 2>&1 || true
 
+    # THE AGENT'S TEST WHERE THE REPOSITORY KEEPS ITS TESTS. The named path is the plugin's best
+    # single guess; the repository may keep a source's tests elsewhere too (cx-shared: 84 component
+    # specs in __tests__/, 54 beside the source). Live AMSD-2974 (2026-10-03): the agent followed the
+    # repository, wrote __tests__/ToastNotification.spec.tsx — valid, passing with the fix — and every
+    # attempt was recorded no_file because only the sibling path was looked at. A NEW test (absent at
+    # the baseline) at one of the plugin's conventional locations for the fixed source is adopted;
+    # nothing outside what the plugin names is.
+    if [ ! -f "$PROJECT_ROOT/$_target_rel" ]; then
+        _adopted=$("${NODE_BIN:-node}" -e '
+          const p = require(process.argv[1]);
+          for (const c of p.candidateTestPaths(process.argv[2], process.argv[3])) console.log(c);
+        ' "$AUTOMATION_DIR/plugins/codeline-context-plugin.js" "$PROJECT_ROOT" "$_primary_fix" 2>/dev/null \
+          | while IFS= read -r _cand; do
+              [ -f "$PROJECT_ROOT/$_cand" ] || continue
+              [ -n "$BASELINE_SHA" ] && git -C "$PROJECT_ROOT" cat-file -e "${BASELINE_SHA}:${_cand}" 2>/dev/null && continue
+              printf '%s\n' "$_cand"; break
+            done)
+        if [ -n "$_adopted" ]; then
+            log "the agent wrote its test at ${_adopted} — a conventional location for ${_primary_fix} — adopting it"
+            _target_rel="$_adopted"
+        fi
+    fi
     # A file existing is NOT success. The agent can (and live, on 2026-07-24, DID)
     # write a test with a syntax error; committing it both proves nothing and
     # poisons every later gate. Validate that it actually PARSES AND RUNS first.

@@ -82,6 +82,9 @@ echo " Test Files  1 passed"; echo "      Tests  1 passed"; exit 0
 `,
   );
   chmodSync(join(bin, 'vitest'), 0o755);
+  // The codeline declares its suite, as provisioning writes it: the step runs the declared command.
+  mkdirSync(join(repo, '.epam'), { recursive: true });
+  writeFileSync(join(repo, '.epam', 'verification.json'), JSON.stringify({ test: { command: 'node_modules/.bin/vitest run' } }));
 }
 
 function stubAgent(repo: string): string {

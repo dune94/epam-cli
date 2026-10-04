@@ -65,6 +65,10 @@ done
 echo " Test Files  1 passed"; echo "      Tests  1 passed"; exit 0
 `);
   chmodSync(join(bin, 'vitest'), 0o755);
+  // THE CODELINE DECLARES ITS SUITE, as provisioning writes it (.epam/verification.json): the step
+  // runs the declared command, never a runner it finds by name (2026-10-03).
+  mkdirSync(join(repo, '.epam'), { recursive: true });
+  writeFileSync(join(repo, '.epam', 'verification.json'), JSON.stringify({ test: { command: 'node_modules/.bin/vitest run' } }));
 }
 
 /** Stub agent: applies the minimal expectation update, or refuses. */

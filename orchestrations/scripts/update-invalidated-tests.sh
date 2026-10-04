@@ -99,6 +99,8 @@ log() { echo "[update-invalidated-tests] $*" >&2; }
 # unbounded AND says so — a bound that cannot be applied must never fail the step.
 # shellcheck source=lib/bounded-exec.sh
 [ -f "$SCRIPT_DIR/lib/bounded-exec.sh" ] && . "$SCRIPT_DIR/lib/bounded-exec.sh"
+# shellcheck source=lib/tsc-baseline-gate.sh
+. "$SCRIPT_DIR/lib/tsc-baseline-gate.sh"
 _bounded() {
     if command -v run_test_bounded >/dev/null 2>&1; then
         run_test_bounded "$(resolve_test_workers)" "$@"
@@ -107,12 +109,20 @@ _bounded() {
         "$@"
     fi
 }
+# THE PROJECT'S DECLARED SUITE, THROUGH THE ONE DEFINITION EVERY OTHER SUITE RUN USES
+# (_run_project_verification <root> test → the verification plugin's testCommandFor: the declared
+# command, its clock pin, its worker cap). This probed node_modules/.bin/vitest, then jest, then
+# `npm test` — stack names in mainline code — and ignored the declaration: AMSD-2974 (2026-10-03),
+# jest sized its pool from all 16 cores, 5.6 GB, and the run was OOM-killed after the writer merged.
+# Exit 3 is "nothing declared to run" (the plugin's 2), as before. Still bounded: affinity set on
+# the plugin's process is inherited by the suite it spawns.
 run_suite() {
     ( cd "$PROJECT_ROOT" || exit 3
-      if   [ -x node_modules/.bin/vitest ]; then _bounded node_modules/.bin/vitest run 2>&1
-      elif [ -x node_modules/.bin/jest ];   then _bounded node_modules/.bin/jest 2>&1
-      elif [ -f package.json ] && grep -q '"test"' package.json 2>/dev/null; then _bounded npm test 2>&1
-      else exit 3; fi )
+      _rc=0
+      _bounded bash -c '. "$1" && _run_project_verification "$2" test' _ \
+          "$SCRIPT_DIR/lib/tsc-baseline-gate.sh" "$PROJECT_ROOT" 2>&1 || _rc=$?
+      [ "$_rc" -eq 2 ] && exit 3
+      exit "$_rc" )
 }
 
 _out="$(run_suite)"; _rc=$?

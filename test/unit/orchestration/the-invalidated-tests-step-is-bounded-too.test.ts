@@ -70,6 +70,10 @@ describe('the invalidated-tests step is bounded too', () => {
     writeFileSync(join(proj, 'node_modules/.bin/jest'),
       `#!/bin/bash\ngrep Cpus_allowed_list /proc/self/status | awk '{print $2}' > ${JSON.stringify(seen)}\nexit 0\n`);
     chmodSync(join(proj, 'node_modules/.bin/jest'), 0o755);
+    // The codeline declares its suite (.epam/verification.json, as provisioning writes it); the step
+    // runs the declaration, never a runner it finds by name.
+    mkdirSync(join(proj, '.epam'), { recursive: true });
+    writeFileSync(join(proj, '.epam/verification.json'), JSON.stringify({ test: { command: 'node_modules/.bin/jest' } }));
 
     const harness = join(d, 'h.sh');
     writeFileSync(harness, [

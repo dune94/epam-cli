@@ -60,7 +60,11 @@ function composedSi(agent, projectConfigDir, registryFile, invocationSeam, proje
   const { constitution } = require('./agent-contract.js');
   const rules = constitution(projectRoot);
   const si = siForAgent(agent, projectConfigDir, registryFile, invocationSeam);
-  return [si, rules].filter(Boolean).join('\n\n');
+  // Brownfield only: how this codeline's dependencies resolve (config/agent-contract.json).
+  const deps = process.env.EPAM_BROWNFIELD === '1'
+    ? require('./agent-contract.js').brownfieldDependencies(projectRoot, process.env.MAIN_PRD_FILE || process.env.PRD_FILE)
+    : '';
+  return [si, rules, deps].filter(Boolean).join('\n\n');
 }
 
 module.exports = { siForAgent, composedSi };

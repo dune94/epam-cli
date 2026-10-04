@@ -48,5 +48,14 @@
     "$comment": "Rendered into the reviewer and the writer when vc-coverage-check.sh found a verification criterion with no test behind it. The artifact was written and read by nothing until 2026-08-11; on AMSD-2041 it had recorded that the feature's central behaviour was unverified and that one test re-implemented the function it was supposed to be testing.",
     "header": "VERIFICATION CRITERIA WITH NO TEST BEHIND THEM\n\nA deterministic check compared this story's verification criteria against the tests it actually produced. The criteria below have none. Each is followed by why nothing covers it.\n\n{findings}\n\nThese are findings, not accusations: a criterion may be genuinely untestable in this environment — an unreachable third-party service, a behaviour only observable in a real browser. Judge each one. If it is testable, it needs a test. If it is not, say which and why, so the gap is a recorded decision rather than an omission nobody noticed.",
     "rules": []
-  }
+  },
+  "$brownfieldDependenciesComment": "Every brownfield agent receives these after the constitution, on the same SI channel (lib/agent-si.js composedSi). Operator-approved 2026-10-04: the AMSD-2974 writer added a package to a client manifest from the registry, and a detective prescribed a version bump and an install, because nothing said how a lane's dependencies resolve. Generic wording only: the sibling packages are filled at run time from the story's own data, never named here.",
+  "brownfieldDependencies": {
+    "header": "DEPENDENCIES IN THIS CODELINE:",
+    "rules": [
+      "The dependency directory is this codeline's existing install. Read it to learn what a package provides; never change it, and never install, upgrade or add a package — nothing is fetched from a package registry.",
+      "A manifest or lockfile change is not part of a fix unless an acceptance criterion requires it."
+    ]
+  },
+  "brownfieldSiblingPackages": "These packages already resolve to the change another codeline of this story is making, so their current source is what this codeline builds and tests against: {siblingPackages}. Never change their version range or reinstall to get that change."
 }

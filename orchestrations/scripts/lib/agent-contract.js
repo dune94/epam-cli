@@ -37,7 +37,46 @@ function constitutionRuleCount(file) {
   return Array.isArray(c.constitution && c.constitution.rules) ? c.constitution.rules.length : 0;
 }
 
-module.exports = { constitution, constitutionRuleCount };
+// WHAT A BROWNFIELD AGENT IS TOLD ABOUT ITS DEPENDENCIES (catalog: brownfieldDependencies, and
+// brownfieldSiblingPackages only when the story has sibling packages). The sibling packages come from
+// the story's own data — its PRD's codelines and their manifests (handlers/sibling-providers.js) —
+// for the codeline the agent works in: its checkout, or the checkout a lane worktree belongs to.
+function siblingPackagesFor(projectRoot, prdFile) {
+  if (!projectRoot || !prdFile || !fs.existsSync(prdFile)) return [];
+  const { execFileSync } = require('child_process');
+  let root = projectRoot;
+  try {
+    const common = execFileSync('git', ['-C', projectRoot, 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    if (common) root = path.dirname(common);
+  } catch { /* not a git checkout: the root as given */ }
+  let out = '';
+  try {
+    out = execFileSync(process.execPath, [path.join(__dirname, 'handlers', 'sibling-providers.js'), prdFile, root],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch { return []; }
+  let dirs = [];
+  try { dirs = (JSON.parse(fs.readFileSync(prdFile, 'utf8')).project || {}).outputDirs || []; } catch { dirs = []; }
+  return out.split('\n').filter(Boolean).map((l) => {
+    const [name, providerRoot] = l.split('\t');
+    const d = dirs.find((x) => x && x.path && path.resolve(x.path) === path.resolve(providerRoot || ''));
+    return { name, codeline: (d && d.codeline) || path.basename(providerRoot || '') };
+  });
+}
+
+function brownfieldDependencies(projectRoot, prdFile, file) {
+  const c = readContract(file);
+  const parts = [];
+  if (c.brownfieldDependencies) parts.push(render(c.brownfieldDependencies, {}, 1, c));
+  const sib = siblingPackagesFor(projectRoot, prdFile);
+  if (sib.length && typeof c.brownfieldSiblingPackages === 'string') {
+    const list = sib.map((s) => `\`${s.name}\` — the ${s.codeline} codeline`).join('; ');
+    parts.push(render(c.brownfieldSiblingPackages, { siblingPackages: list }, 1, c));
+  }
+  return parts.filter(Boolean).join('\n\n');
+}
+
+module.exports = { constitution, constitutionRuleCount, brownfieldDependencies };
 
 if (require.main === module) {
   const arg = process.argv[2];

@@ -471,6 +471,34 @@ _reclaim_run_state() {
     return 0
 }
 
+_spec_inputs_digest() {
+    local _o="${AUTOMATION_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+    "${NODE_BIN:-node}" "$_o/scripts/lib/handlers/spec-inputs-digest.js" "$_o" 2>/dev/null || true
+}
+
+# lane_spec_is_current <lane_checkpoint_dir> <lane_work_prd>
+# 0 — resume the lane from its checkpoint: its story is completed, or its spec was built from today's
+#     inputs. 1 — specify it again: its checkpoint recorded no spec-inputs digest, or a different one
+#     (AMSD-2974 gotransit, 2026-10-04: a spec approved before the dependency facts existed sent twelve
+#     writer attempts after a version bump the SI forbids). Operator-approved 2026-10-04.
+lane_spec_is_current() {
+    local _ck="$1" _work="$2" _rec _now
+    if [ -f "$_work" ] && [ "$(jq -r '[(.stories // [])[] | (.completed == true)] | (length > 0 and all)' "$_work" 2>/dev/null)" = "true" ]; then
+        return 0
+    fi
+    _rec=$(jq -r '.specInputsDigest // empty' "$_ck/checkpoint.json" 2>/dev/null)
+    _now=$(_spec_inputs_digest)
+    if [ -z "$_rec" ]; then
+        warning "[orch]   its spec was approved before spec inputs were recorded — specifying it again; pause 2 holds it for review"
+        return 1
+    fi
+    if [ -n "$_now" ] && [ "$_rec" != "$_now" ]; then
+        warning "[orch]   its spec inputs changed since the spec was approved (${_rec:0:12} -> ${_now:0:12}) — specifying it again; pause 2 holds it for review"
+        return 1
+    fi
+    return 0
+}
+
 save_run_checkpoint() {
     local _phase="${1:-${PHASE:-main}}"
     local _stage="${2:-post-spec}"
@@ -532,8 +560,11 @@ save_run_checkpoint() {
     local _sha; _sha=$(_engine_sha)
     local _stories; _stories=$(jq -r '(.stories // []) | length' "$_dir/prd.json" 2>/dev/null || echo 0)
 
+    # WHAT THE SPEC WAS BUILT FROM (config/spec-inputs.json) — a resume compares it, lane_spec_is_current.
+    local _sid; _sid=$(_spec_inputs_digest)
     # Written last — see above.
     jq -n \
+        --arg specInputsDigest "$_sid" \
         --arg runId "$_rid" \
         --arg phase "$_phase" \
         --arg stage "$_stage" \
@@ -541,7 +572,8 @@ save_run_checkpoint() {
         --arg engineSha "$_sha" \
         --argjson storyCount "${_stories:-0}" \
         '{runId:$runId, phase:$phase, stage:$stage, createdAt:$createdAt,
-          engineSha:$engineSha, storyCount:$storyCount}' \
+          engineSha:$engineSha, storyCount:$storyCount}
+         + (if $specInputsDigest != "" then {specInputsDigest:$specInputsDigest} else {} end)' \
         > "$_dir/checkpoint.json" || return 1
 
     printf '%s\n' "$_dir"

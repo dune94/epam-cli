@@ -1,0 +1,6 @@
+{
+  "$what": "What a lane's specification is built from. A lane's pre-writer checkpoint records a digest of these (lib/handlers/spec-inputs-digest.js); on resume, a lane whose story is not completed and whose recorded digest differs from today's is specified again, then stops at pause 2 — its approved spec was made from inputs that no longer hold.",
+  "$why": "AMSD-2974, 2026-10-04: the gotransit lane resumed a spec approved before the dependency facts existed. The spec told the writer to bump a version its SI now forbids; twelve opus attempts each concluded 'nothing to change'. Nothing recorded what the spec was made from, so nothing could tell it was stale. Operator-approved 2026-10-04.",
+  "produces": ["spec-assignments", "fix-plan", "story-specification", "guard-vocabulary", "vc-coverage-report", "change-verdict", "estimate"],
+  "contractSections": ["constitution", "brownfieldShared", "brownfieldExisting", "brownfieldNovel", "brownfieldDependencies", "brownfieldSiblingPackages"]
+}

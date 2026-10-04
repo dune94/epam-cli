@@ -25,6 +25,7 @@ const e = lines.findIndex((l, i) => i > s && l === `${indent}}`);
 const fn = lines.slice(s, e + 1).join('\n');
 
 const work = mkdtempSync(join(tmpdir(), 'lane-resume-'));
+const SPEC_INPUTS = spawnSync(process.execPath, [join(LIB, 'handlers/spec-inputs-digest.js'), join(LIB, '../..')], { encoding: 'utf8' }).stdout.trim();
 afterAll(() => rmSync(work, { recursive: true, force: true }));
 
 function lane(name: string, stage: string | null, opts: { edited?: boolean } = {}) {
@@ -33,7 +34,9 @@ function lane(name: string, stage: string | null, opts: { edited?: boolean } = {
   const out = join(work, name, 'site-prd.json');
   mkdirSync(join(ck, 'reviewed'), { recursive: true });
   if (stage) {
-    writeFileSync(join(ck, 'checkpoint.json'), JSON.stringify({ stage }));
+    // As a run writes it today: with the digest of what its spec was built from (lib/run-checkpoint.sh).
+    // A checkpoint without one is specified again — a-lane-whose-spec-inputs-changed-is-specified-again.
+    writeFileSync(join(ck, 'checkpoint.json'), JSON.stringify({ stage, specInputsDigest: SPEC_INPUTS }));
     writeFileSync(join(ck, 'prd.json'), JSON.stringify({ stories: [{ id: 'S-1', approved: true }] }));
   }
   // What the pause showed the operator, and the lane's working PRD as it stands now.

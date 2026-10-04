@@ -34,7 +34,7 @@ const path = require('path');
 const PROJECT_PROMPT_GENERATOR_ID = 'project-prompt-generation';
 const crypto = require('crypto');
 
-const { checkGeneratedPrompt, buildGeneratedDoc } = require('./project-prompt-contract.js');
+const { checkGeneratedPrompt, buildGeneratedDoc, generatedTemplateDigest } = require('./project-prompt-contract.js');
 
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
 
@@ -611,9 +611,26 @@ async function buildProjectPrompts({
   // for this run is kept byte-for-byte — no call, no rewrite — and only the missing ones are built.
   // An interrupted build left 15 of 43 prompts and a resume either skipped provisioning (so the
   // failure analyst had no prompt) or would have rebuilt all of them (found 2026-09-25).
-  const _alreadyInstalled = (id) => keepExisting && fs.existsSync(path.join(outDir, `${id}.json`));
+  //
+  // KEPT ONLY WHILE IT IS STILL THE COPY OF ITS TEMPLATE. Each copy records the digest of the template
+  // it came from (derivedFromSha256); a resume that kept it regardless went on executing the old
+  // template's text after the template was corrected — a fix could not reach a resumed run (the
+  // analysts' fix-site input, 2026-10-04). A copy whose template moved on is rebuilt, and says so.
+  const _verbatimDigest = (doc) => (doc.bodies !== undefined
+    ? crypto.createHash('sha256').update(JSON.stringify(doc.bodies, null, 0)).digest('hex')
+    : crypto.createHash('sha256').update(String(doc.body)).digest('hex'));
+  const _alreadyInstalled = (id, kind) => {
+    const file = path.join(outDir, `${id}.json`);
+    if (!keepExisting || !fs.existsSync(file)) return false;
+    let installed; let tpl;
+    try { installed = readJson(file); tpl = readJson(_tplPath(id)); } catch { return false; }
+    const want = kind === 'generated' ? generatedTemplateDigest(tpl) : _verbatimDigest(tpl);
+    if (installed && installed.derivedFromSha256 === want) return true;
+    log(`[prompt-builder] ${id}: its template changed since this copy was made — rebuilding it`);
+    return false;
+  };
   for (const id of copyVerbatim) {
-    if (_alreadyInstalled(id)) { copied.push(id); log(`[prompt-builder] kept ${id} (installed for this run)`); continue; }
+    if (_alreadyInstalled(id, 'verbatim')) { copied.push(id); log(`[prompt-builder] kept ${id} (installed for this run)`); continue; }
     const src = _tplPath(id);
     const doc = readJson(src);
 
@@ -631,9 +648,7 @@ async function buildProjectPrompts({
     // RAW body string. Picking one would have silently invalidated every copy of the other
     // shape. Matched rather than unified — unifying them is a change to what "unchanged"
     // means for prompts already in the field.
-    doc.derivedFromSha256 = doc.bodies !== undefined
-      ? crypto.createHash('sha256').update(JSON.stringify(doc.bodies, null, 0)).digest('hex')
-      : crypto.createHash('sha256').update(String(doc.body)).digest('hex');
+    doc.derivedFromSha256 = _verbatimDigest(doc);
     doc.authority = 'project';
 
     fs.writeFileSync(path.join(outDir, `${id}.json`), JSON.stringify(doc, null, 2) + '\n');
@@ -766,7 +781,7 @@ async function buildProjectPrompts({
       : b === _reviewerTemplate ? 1 : 0));
   }
   for (const id of generated) {
-    if (_alreadyInstalled(id)) { built.push(id); log(`[prompt-builder] kept ${id} (installed for this run)`); continue; }
+    if (_alreadyInstalled(id, 'generated')) { built.push(id); log(`[prompt-builder] kept ${id} (installed for this run)`); continue; }
     const template = readJson(_tplPath(id));
     // Per-template, only when it could matter: a template whose seam name differs from its id is
     // the one case where losing `seams` is visible at all. 36 of 37 hide the same rewrite.

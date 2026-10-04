@@ -166,6 +166,14 @@ function outputFieldsIn(body) {
  * has moved on since this copy was generated. Without it, a project prompt generated from a
  * since-corrected template looks indistinguishable from a current one.
  */
+/** The template digest a GENERATED copy records — one definition, also read when a resume keeps a copy. */
+function generatedTemplateDigest(template) {
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify({ id: template.id, body: template.body, placeholders: sorted(template.placeholders) }))
+    .digest('hex');
+}
+
 function buildGeneratedDoc(template, generatedBody) {
   const body = String(generatedBody);
   return {
@@ -176,10 +184,7 @@ function buildGeneratedDoc(template, generatedBody) {
     ],
     authority: 'project',
     body,
-    derivedFromSha256: crypto
-      .createHash('sha256')
-      .update(JSON.stringify({ id: template.id, body: template.body, placeholders: sorted(template.placeholders) }))
-      .digest('hex'),
+    derivedFromSha256: generatedTemplateDigest(template),
     derivedFromVersion: template.version == null ? null : template.version,
     id: template.id,
     // NO `seams` FIELD. It was a hand-maintained inverse index of something the registry already
@@ -402,5 +407,5 @@ function parseSegmentsReply(text, expectedCount) {
   throw new Error('[project-prompt-contract] no --- SEGMENT n --- blocks and no usable JSON in the reply');
 }
 
-module.exports = { checkGeneratedPrompt, buildGeneratedDoc, placeholdersIn, outputFieldsIn,
+module.exports = { checkGeneratedPrompt, buildGeneratedDoc, generatedTemplateDigest, placeholdersIn, outputFieldsIn,
   splitByPlaceholders, assembleFromSegments, extractSegmentsReply, parseSegmentsReply, formatSegments };

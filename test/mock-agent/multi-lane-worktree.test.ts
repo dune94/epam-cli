@@ -291,6 +291,19 @@ describe('a ticket spanning four codelines runs through pause 1, pause 2 and the
     const all3 = text3 + '\n' + strip(laneLogs);
     expect(all3, 'the gate-remediation retry never ran').toMatch(/Gate remediation applied/);
     expect(all3, 'the rung reset never ran').toMatch(/WorktreeReset\[[^\]]+\]: reset to/);
+    // shared-ui carries a suite that fails on its baseline (fixture src/datepicker/datepicker.test.js): Step 3.545
+    // must find the suite red, fail to reconcile it, and subtract it as pre-existing — live it was
+    // charged to the fix and blocked the phase twice.
+    expect(all3, 'the invalidated-tests step never saw the pre-existing failure').toMatch(/suite is RED after the fix/);
+    expect(all3, 'the pre-existing failure was not subtracted').toMatch(/every failing suite was already failing at the baseline/);
+    expect(all3, 'a pre-existing failure blocked the phase').not.toMatch(/the test suite is RED for/);
+    // impl-failure-analyst is shown where the spec pass's detective found the fix (lib/handlers/fix-sites.js).
+    const implAnalyst = calls3.filter((c) => c.seam === 'impl-failure-analyst');
+    expect(implAnalyst.length, 'no impl-failure-analyst call ran — the assertion below would be vacuous').toBeGreaterThan(0);
+    for (const c of implAnalyst) {
+      expect(JSON.stringify(c.req), `impl-failure-analyst call #${c.n} was not shown the detective's fix sites`)
+        .toMatch(/WHERE THE SPEC PASS'S DETECTIVE FOUND THE FIX[\s\S]*Prescribed minimal fix/);
+    }
     // …and on them: every model call reached a seam, nothing was provisioned from a registry, and no
     // attempt was charged for a required package the codelines already lacked.
     expect(all3, 'an agent call resolved to no seam').not.toMatch(/resolves to no seam/);

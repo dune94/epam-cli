@@ -25,6 +25,7 @@ import { codelineSelection } from './discovery';
 import { fixPlan } from './fixplan';
 import { reproWriter } from './repro';
 import { acClassification } from './classify';
+import { storySpecification, guardVocabulary } from './spec';
 
 type FillerFor = (world: World, prompt: string, fields: Field[], call: Call) => Filler;
 
@@ -37,6 +38,8 @@ export const FILLERS: Record<string, FillerFor> = {
   'estate-survey': (w, p) => estateSurvey(w, p),
   'agent-roster': (w, p, f) => agentMint(w, p, f),
   'role-assignments': (w, p, f) => roleAssigner(w, p, f),
+  'story-specification': (w, p, f, c) => storySpecification(w, p, f, c),
+  'guard-vocabulary': (_w, p) => guardVocabulary(p),
 };
 
 /** Seams whose whole answer is built from the world rather than from a rendered schema. */

@@ -308,12 +308,19 @@ run_dependency_check() {
               git -C "$project_root" ls-files --others --exclude-standard 2>/dev/null \
               | while IFS= read -r _uf; do [ -f "$project_root/$_uf" ] && cat "$project_root/$_uf" 2>/dev/null; done )
 
+    # The manifest as it stood before this change (HEAD — the change is the uncommitted diff, as for
+    # _added above), so a required package the codeline already lacked is not charged to the story.
+    local _scan_manifest _before_manifest=""
+    _scan_manifest=$(_project_dep_config_value "$project_root" manifestFile)
+    [ -n "$_scan_manifest" ] && _before_manifest=$(git -C "$project_root" show "HEAD:$_scan_manifest" 2>/dev/null) || _before_manifest=""
+
     local _out
-    _out=$(EPAM_SCAN_CHANGED_FILES="$_changed" EPAM_SCAN_ADDED_LINES="$_added" "$_node" -e '
+    _out=$(EPAM_SCAN_CHANGED_FILES="$_changed" EPAM_SCAN_ADDED_LINES="$_added" EPAM_SCAN_BEFORE_MANIFEST="$_before_manifest" EPAM_SCAN_HAS_BEFORE="${_scan_manifest:+1}" "$_node" -e '
       const p = require(process.argv[1]);
       const changed = String(process.env.EPAM_SCAN_CHANGED_FILES || "")
         .split("").map((s) => s.trim()).filter(Boolean);
-      const r = p.scanImports(process.argv[2], process.env, { changedFiles: changed, introducedLines: String(process.env.EPAM_SCAN_ADDED_LINES || "").split("\n") });
+      const before = process.env.EPAM_SCAN_HAS_BEFORE === "1" && process.env.EPAM_SCAN_BEFORE_MANIFEST ? process.env.EPAM_SCAN_BEFORE_MANIFEST : undefined;
+      const r = p.scanImports(process.argv[2], process.env, { changedFiles: changed, introducedLines: String(process.env.EPAM_SCAN_ADDED_LINES || "").split("\n"), baselineManifestText: before });
       if (r.status === "unknown") { console.log("UNKNOWN\t" + r.reason); process.exit(0); }
       for (const f of r.findings) console.log(f.verdict + "\t" + f.specifier + "\t" + f.file);
       // Only when it could have changed the answer. A clean scan stays silent — a note on every
@@ -349,6 +356,10 @@ run_dependency_check() {
                 # for exactly this reason, and every gate passed because tsc validates against
                 # node_modules, never against what the manifest can reproduce.
                 warning "  [dependency-scan] imported but NOT DECLARED (present in a vendor dir only): ${_rest}"
+                ;;
+            required_undeclared_before)
+                # The codeline's standing condition, not this change: reported, never charged.
+                warning "  [dependency-scan] required package not declared — already so before this change, not this story's: ${_rest}"
                 ;;
             NOTE)
                 info "  [dependency-scan] ${_rest}"

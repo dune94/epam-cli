@@ -236,10 +236,14 @@ function declaredAliases(projectRoot, cfg) {
 
 /** What the project's manifest declares, across the keys the project says hold dependencies. */
 function declaredDependencies(projectRoot, cfg) {
-  const out = new Set();
   const file = join(projectRoot, String(cfg.manifestFile));
-  if (!existsSync(file)) return out;
-  const text = readFileSync(file, 'utf8');
+  if (!existsSync(file)) return new Set();
+  return declaredInManifestText(readFileSync(file, 'utf8'), cfg);
+}
+
+// The same reading, of manifest TEXT — the manifest as it stood before the change, for instance.
+function declaredInManifestText(text, cfg) {
+  const out = new Set();
   // THE ECOSYSTEM THAT OWNS THIS MANIFEST PARSES IT — the same deps() every other reader of the
   // manifest uses, so a requirements.txt, a Gemfile or a go.mod declares through its own rules.
   try {
@@ -449,11 +453,18 @@ function scanImports(projectRoot, env = process.env, opts = {}) {
   const required = Array.isArray(cfg.requiredDevDependencies) ? cfg.requiredDevDependencies : [];
   if (required.length) {
     const declared = declaredDependencies(projectRoot, cfg);
+    // THE CHANGE IS JUDGED, NOT THE CODELINE. Given the manifest as it stood before the change, a
+    // required package it already lacked is the codeline's standing condition, reported as such —
+    // AMSD-2974 (2026-10-03): cx-shared never declared @types/node, every attempt was failed with
+    // "your change imports ...", and the writer added it from the registry. One the change removed
+    // is still the change's.
+    const before = typeof opts.baselineManifestText === 'string' ? declaredInManifestText(opts.baselineManifestText, cfg) : null;
     for (const pkg of required) {
       if (typeof pkg !== 'string' || !pkg.trim()) continue;
       if (declared.has(pkg)) continue;
       if (findings.some((f) => f.specifier === pkg)) continue;   // already flagged by the scan
-      findings.push({ specifier: pkg, verdict: 'unknown_external', file: String(cfg.manifestFile) });
+      const verdict = before && !before.has(pkg) ? 'required_undeclared_before' : 'unknown_external';
+      findings.push({ specifier: pkg, verdict, file: String(cfg.manifestFile) });
     }
   }
 

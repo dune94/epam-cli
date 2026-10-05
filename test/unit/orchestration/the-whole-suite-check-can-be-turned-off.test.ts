@@ -34,6 +34,27 @@ function call(fn: 'verify' | 'step19', flag?: string) {
   return { status: r.status, ran: existsSync(ran), out: r.stdout + r.stderr };
 }
 
+describe('Step 3.545 (update-invalidated-tests.sh) reads the same switch', () => {
+  const run = (flag?: string) => {
+    rmSync(ran, { force: true });
+    const env: Record<string, string> = { ...(process.env as any), PROJECT_ROOT: join(root, 'cl'), LOG_DIR: root, NODE_BIN: process.execPath, EPAM_BROWNFIELD: '1', JIRA_BASELINE_BRANCH: 'develop', STORY_VERIFICATION_CRITERIA: 'x' };
+    delete env.EPAM_WHOLE_SUITE_CHECK;
+    if (flag !== undefined) env.EPAM_WHOLE_SUITE_CHECK = flag;
+    const r = spawnSync('bash', [join(SCRIPTS, 'update-invalidated-tests.sh'), 'S-1'], { encoding: 'utf8', env, timeout: 120_000 });
+    return { status: r.status, ran: existsSync(ran), out: r.stdout + r.stderr };
+  };
+  it('off — exits 0 without running the codeline\'s suite, and says so', () => {
+    const r = run('0');
+    expect(r.ran, 'the suite ran although the check is off').toBe(false);
+    expect(r.status).toBe(0);
+    expect(r.out).toMatch(/EPAM_WHOLE_SUITE_CHECK=0/);
+  });
+  it('default — the suite still runs', () => {
+    const r = run();
+    expect(r.ran, `the suite never ran — the "off" case proves nothing:\n${r.out.slice(-800)}`).toBe(true);
+  });
+});
+
 describe('the whole-suite check', () => {
   for (const fn of ['verify', 'step19'] as const) {
     it(`${fn}: off — passes without running the codeline's suite, and says so`, () => {

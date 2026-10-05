@@ -94,7 +94,7 @@ exit 0
   chmodSync(p, 0o755);
 }
 
-type Mode = 'valid' | 'syntax-broken' | 'assertion-fails' | 'broken-then-valid' | 'nothing';
+type Mode = 'valid' | 'syntax-broken' | 'assertion-fails' | 'broken-then-valid' | 'nothing' | 'valid-once';
 
 /** Stub agent: writes a test of the requested shape to the scoped path. */
 function stubRunner(repo: string, mode: Mode): string {
@@ -108,6 +108,10 @@ function stubRunner(repo: string, mode: Mode): string {
 if [ "$n" -le 1 ]; then printf "// SYNTAX_BROKEN\\nconst x = { a: 1 } as any,\\n  prices: [\\n" > "$target"
 else printf "import { it, expect } from 'vitest';\\nit('repro', () => expect(1).toBe(1));\\n" > "$target"; fi`,
     nothing: `exit 0`,
+    // Writes its test on the first attempt only — later attempts change nothing (the test was right;
+    // only its commit was refused).
+    'valid-once': `n=$(cat ${JSON.stringify(counter)} 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > ${JSON.stringify(counter)}
+[ "$n" -le 1 ] && printf "import { it, expect } from 'vitest';\\nit('repro', () => expect(1).toBe(1));\\n" > "$target"; exit 0`,
   };
   writeFileSync(stub, `#!/usr/bin/env bash
 # The analyst reuses this same runner; only the writer passes EPAM_ALLOWED_WRITE_PATHS.
@@ -156,6 +160,19 @@ describe('repro-test-writer — validates the test before committing', () => {
     const repo = makeRepo();
     const { out } = runWriter(repo, 'syntax-broken');
     expect(out).toMatch(/self-heal analyst|invalid/i);
+  });
+
+  // Live AMSD-2974 2026-10-05 (gotransit): validated on attempt 1, the repository's hook refused only
+  // the COMMIT, and attempts 2 and 3 recorded no_file over the same correct, untouched test.
+  it('after the repository refuses only the commit, the next attempt commits the same test', () => {
+    const repo = makeRepo();
+    const hook = join(repo, '.git', 'hooks', 'pre-commit');
+    writeFileSync(hook, `#!/usr/bin/env bash\nf=${JSON.stringify(join(repo, '.git', 'refused-once'))}\n[ -f "$f" ] && exit 0\n: > "$f"; echo "check-types: refused by the repository"; exit 1\n`);
+    chmodSync(hook, 0o755);
+    const { out, committed } = runWriter(repo, 'valid-once', { REPRO_TEST_WRITER_MAX_ATTEMPTS: '3' });
+    expect(out, 'the hook never refused — the test proves nothing').toMatch(/refused to commit/);
+    expect(out).not.toMatch(/predates this attempt and was not rewritten/);
+    expect(committed, `the refused test was never committed:\n${out.slice(-1500)}`).toMatch(/add bug-reproducing test|discount\.spec\.ts/);
   });
 
   it('retries after an invalid test and commits the valid one from the next attempt', () => {

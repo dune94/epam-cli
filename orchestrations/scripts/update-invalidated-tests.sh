@@ -125,6 +125,15 @@ run_suite() {
       exit "$_rc" )
 }
 
+# EPAM_WHOLE_SUITE_CHECK=0 — the operator's choice: stories are judged by their own tests, not by the
+# codeline's whole suite (lib/pre-review-gate.sh says why). This step exists only to read the WHOLE
+# suite for tests the fix invalidated; with that check off it has nothing to judge, and a flaky
+# pre-existing test would otherwise be stamped suiteState=red and block the phase at Step 3.55.
+if [ "${EPAM_WHOLE_SUITE_CHECK:-1}" = "0" ]; then
+    log "the whole-suite check is off (EPAM_WHOLE_SUITE_CHECK=0) — no invalidated-test pass for $STORY_ID"
+    exit 0
+fi
+
 _out="$(run_suite)"; _rc=$?
 # THE SUITE'S RESULT LEAVES WITH EVERY RED EXIT. Step 3.545 subtracts the baseline from this step's
 # output (tee'd into the phase log), so a red exit that prints only its own messages leaves nothing to

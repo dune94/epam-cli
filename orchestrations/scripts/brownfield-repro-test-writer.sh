@@ -804,6 +804,15 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     # took it for the agent's work with nothing written (cx-shared, 2026-10-03).
     _written_now=0
     [ -f "$PROJECT_ROOT/$_target_rel" ] && [ "$PROJECT_ROOT/$_target_rel" -nt "$_attempt_mark" ] && _written_now=1
+    # …OR AN EARLIER ATTEMPT OF THIS SAME INVOCATION WROTE IT. The rule above refuses a killed run's
+    # draft; it also refused this invocation's own test after the repository refused only its COMMIT:
+    # live AMSD-2974 2026-10-05, gotransit — validated on attempt 1, the hook refused the commit, and
+    # attempts 2 and 3 recorded no_file over the same correct test. It is re-validated and re-committed.
+    if [ "$_written_now" = 0 ] && [ -f "$PROJECT_ROOT/$_target_rel" ] && [ "${_own_test:-}" = "$_target_rel" ]; then
+        log "${_target_rel} was written by attempt ${_own_test_attempt:-?} of this invocation — validating and committing it again"
+        _written_now=1
+    fi
+    [ "$_written_now" = 1 ] && [ -z "${_own_test:-}" ] && { _own_test="$_target_rel"; _own_test_attempt="$_attempt"; }
     [ -f "$PROJECT_ROOT/$_target_rel" ] && [ "$_written_now" = 0 ] && \
         log "${_target_rel} predates this attempt and was not rewritten — not this attempt's test"
     rm -f "$_attempt_mark"

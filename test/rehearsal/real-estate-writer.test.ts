@@ -53,7 +53,7 @@ describe.runIf(R && RUN && TICKET && PROJECT)('the operator relaunch on a copy o
     const codemie = await standInsFor(install, agent, journal, config);
     const r = { install, out: '', agent, project: PROJECT, prd, config, realOut: '', world, codemie } as ProjectRun;
 
-    const passthrough = Object.fromEntries(['EPAM_PASSED_LANES', 'EPAM_ESTIMATION_MANIFEST', 'EPAM_AGENT_MEMORY_SHARE', 'NODE_OPTIONS']
+    const passthrough = Object.fromEntries(['EPAM_PASSED_LANES', 'EPAM_ESTIMATION_MANIFEST', 'EPAM_AGENT_MEMORY_SHARE', 'NODE_OPTIONS', 'EPAM_WHOLE_SUITE_CHECK']
       .filter((k) => process.env[k]).map((k) => [k, process.env[k] as string]));
     const env = zeroCostEnv(bin, agent.url, {
       ...configFor(install, PROJECT, config), ...vendorEdge(r), ...passthrough,
@@ -64,7 +64,9 @@ describe.runIf(R && RUN && TICKET && PROJECT)('the operator relaunch on a copy o
       EPAM_PARALLEL_CODELINES: '0', EPAM_PAUSE_AFTER_AGENT_MINT: '1', EPAM_PAUSE_BEFORE_WRITER: '1',
       SKIP_REGRESSION_GUARD: 'true',
     });
-    delete env.COPILOT_GITHUB_TOKEN; delete env.GH_TOKEN; delete env.GITHUB_TOKEN;
+    // vendorEdge set the set's credential to a placeholder no service accepts; any other token is dropped.
+    delete env.GH_TOKEN; delete env.GITHUB_TOKEN;
+    expect(env.COPILOT_GITHUB_TOKEN || '', 'a real-looking Copilot token reached the rehearsal').not.toMatch(/^(gho_|ghp_|ghu_|github_pat_)/);
 
     const res = await run('bash', [join(install, 'orchestrations/scripts/pipeline'), '--jira', TICKET], { cwd: install, env, timeout: 4 * 60 * 60_000 });
     const text = strip(res.stdout + res.stderr);

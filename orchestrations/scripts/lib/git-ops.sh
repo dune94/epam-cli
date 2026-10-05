@@ -545,6 +545,35 @@ record_story_changes() {
     return 0
 }
 
+# worktree_commit_flags <root> — one flag per line for a pipeline commit at <root>: --no-verify when
+# <root> is a LINKED WORKTREE (its git dir is not the common dir), nothing otherwise.
+#
+# A codeline's hooks are written for its own checkout and branches. next.gotransit.com's pre-commit
+# sources an untracked, generated .husky/_/husky.sh (absent from every new worktree) and refuses any
+# branch outside its naming rule, which `wt-primary` is — so the story commit failed inside the
+# worktree and Step 17 merged nothing (real-estate rehearsal, 2026-10-05; the live writer had got past
+# it only with --no-verify of its own). Operator decision: commits INSIDE a worktree skip the hooks;
+# what lands on the story branch is still judged by them (the Step 17 merge runs commit-msg there).
+worktree_commit_flags() {
+    local _r="${1:-}" _gd _cd
+    [ -n "$_r" ] || return 0
+    _gd=$(git -C "$_r" rev-parse --path-format=absolute --git-dir 2>/dev/null) || return 0
+    _cd=$(git -C "$_r" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
+    [ "$_gd" != "$_cd" ] && echo "--no-verify"
+    return 0
+}
+
+# worktree_uncommitted_work <worktree> — prints the tracked files a worktree changed but never committed;
+# empty when there are none (or no worktree). Step 17 used to call a lane with no commits and completed
+# stories "nothing to merge" — with the writer's changes still sitting uncommitted in the worktree (its
+# commit refused by the codeline's hooks): the work was silently dropped (real-estate rehearsal,
+# 2026-10-05). Untracked files are not counted: the pipeline provisions its own (.epam/) there.
+worktree_uncommitted_work() {
+    local _w="${1:-}"
+    [ -n "$_w" ] && [ -e "$_w/.git" ] || return 0
+    git -C "$_w" status --porcelain --untracked-files=no 2>/dev/null | sed 's/^...//'
+}
+
 # commit_completed_story <story_id>
 # Stages and commits whatever a completed story wrote, scoped to the current
 # GIT_WORK_ROOT (the worktree checkout when running --worktree, the main repo
@@ -652,7 +681,8 @@ commit_completed_story() {
     # it; both were updated in the SAME change (see their own comments).
     set +e
     local _commit_output
-    _commit_output=$(git -C "$_commit_root" commit -m "${story_id}: story complete (${_changed_count} file(s))" 2>&1)
+    local _hook_flags=(); mapfile -t _hook_flags < <(worktree_commit_flags "$_commit_root")
+    _commit_output=$(git -C "$_commit_root" commit ${_hook_flags[@]+"${_hook_flags[@]}"} -m "${story_id}: story complete (${_changed_count} file(s))" 2>&1)
     local _commit_rc=$?
     set -e
     if [ "$_commit_rc" -eq 0 ]; then

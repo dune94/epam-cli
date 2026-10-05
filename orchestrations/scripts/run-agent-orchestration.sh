@@ -2813,6 +2813,16 @@ if [ "$need_worktrees" = true ]; then
             # lane, an earlier invocation); a branch with no commits is then the expected shape.
             _lane_list="$primary_stories"; [ "$_wt_branch" = "wt-independent" ] && _lane_list="$independent_stories"
             if lane_stories_all_completed "$_lane_list"; then
+                # …UNLESS ITS WORK IS STILL SITTING UNCOMMITTED in the worktree: then the commit failed,
+                # and "nothing to merge" would drop the writer's work without a word.
+                _lane_wt="$(dirname "$_merge_git_root")/$(basename "$_merge_git_root")-${_wt_branch}"
+                _lane_dirty="$(worktree_uncommitted_work "$_lane_wt")"
+                if [ -n "$_lane_dirty" ]; then
+                    error "  Lane $_wt_branch's stories are completed but its work was never committed — nothing reached $_merge_current_branch:"
+                    printf '%s\n' "$_lane_dirty" | sed 's/^/      /' >&2
+                    MERGE_FAILED=true
+                    continue
+                fi
                 log "  Lane $_wt_branch has no new commits and every story it was given is completed — nothing to merge"
                 continue
             fi

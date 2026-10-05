@@ -89,6 +89,9 @@ export function writerDelivers(world: World, install: string): Behaviour {
     const prompt0 = call.req.messages.find((m) => m.role === 'user')?.text || '';
     const listed = ((/## Files to Create\/Modify[^\n]*\n([\s\S]*?)(?:\n## |$)/.exec(prompt0) || [, ''])[1])
       .split('\n').map((l) => l.trim()).filter((l) => /^[^\s]+\.[A-Za-z0-9]+$/.test(l) || /^\/[^\s]+$/.test(l));
+    // The brownfield prompt names each file it hands over as "- <path> (EXISTS — …)" / "(NEW …)" — the
+    // real AMSD-2974 writer prompt (real-estate rehearsal, 2026-10-05: the stand-in found no file in it).
+    for (const m of prompt0.matchAll(/^\s*-\s+(\S+\.[A-Za-z0-9]+)\s+\((?:EXISTS|NEW)\b/gm)) listed.push(m[1]);
     const declared = (story.technicalNotes?.files || []).filter((f): f is string => typeof f === 'string' && f.trim() !== '');
     const files = [...new Set([...declared, ...listed])];
     const d = deliveries(install, cwd, world.prdPath(), files) || files.map((f) => ({ path: f, content: `${f}: delivered\n`, kind: 'other' as const }));
@@ -120,7 +123,19 @@ export function writerDelivers(world: World, install: string): Behaviour {
     // change replaces the ticket's old literal; with none, the stand-in is appended after the last line.
     const edit = editTool(call.req.tools);
     const createRefusesExisting = /cannot be used if the specified path already exists/i.test(tool.description || '');
-    const calls: ToolCall[] = d.map((x) => {
+    // A FILE IT HAS NOTHING TO SAY TO IS LEFT ALONE: an existing file the ticket's literals do not touch
+    // and that takes no comment (JSON) — appending the stand-in broke the real gotransit package.json
+    // (real-estate rehearsal, 2026-10-05), which no model working this ticket would do.
+    const untouched = (x: { path: string }) => {
+      const at0 = isAbsolute(x.path) ? x.path : given(x.path) || x.path;
+      const onDisk = isAbsolute(at0) ? at0 : join(cwd, at0);
+      if (!existsSync(onDisk)) return false;
+      const text = readFileSync(onDisk, 'utf8');
+      // JSON takes no comment, whatever its strings hold ("src/**/*.ts" read as a block comment).
+      const isJson = (() => { try { JSON.parse(text); return true; } catch { return false; } })();
+      return !literalChange(text, ticket) && (isJson || commentLine(text, 'x') === null);
+    };
+    const calls: ToolCall[] = d.filter((x) => !untouched(x)).map((x) => {
       const at0 = isAbsolute(x.path) ? x.path : given(x.path) || x.path;
       const onDisk = isAbsolute(at0) ? at0 : join(cwd, at0);
       if (existsSync(onDisk) && edit && createRefusesExisting) {

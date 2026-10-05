@@ -740,6 +740,16 @@ _review_tree_fingerprint() {
 }
 
 # Did the last cycle reject with a blocker AND leave the tree unchanged since?
+# _review_feedback_has_code_blocker <review-feedback.json> — 0 when the rejection carries a blocker
+# about the CODE. A blocker the pipeline injected because the reviewer contradicted itself (approved
+# while marking a criterion unmet — origin "review-self-contradiction", lib/handlers/vc-assessment-gate.js)
+# is answered by a coherent review, not by a code change, so it does not arm the give-up rule below.
+_review_feedback_has_code_blocker() {
+    local _f="${1:-}"
+    [ -f "$_f" ] || return 1
+    jq -e '[.issues // [] | .[] | select((.severity // "") == "blocker" and (.origin // "") != "review-self-contradiction")] | length > 0' "$_f" >/dev/null 2>&1
+}
+
 _review_approval_is_giveup() {
     local _prev_had_blocker="$1" _prev_fp="$2" _now_fp="$3"
     [ "$_prev_had_blocker" = "1" ] || return 1

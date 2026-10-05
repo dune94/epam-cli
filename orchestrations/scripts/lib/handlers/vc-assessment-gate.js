@@ -56,6 +56,12 @@ function judge(review, criteria) {
         issues: [
           ...unmet.map((a) => ({
             severity: 'blocker',
+            // NOT A FINDING ABOUT THE CODE: the reviewer contradicted itself. A later coherent
+            // approval needs no code change to answer it — review-cycle's give-up rule reads this
+            // (_review_feedback_has_code_blocker). Live AMSD-2974 2026-10-05: cycle 2 approved while
+            // marking a manual screen-reader/axe criterion unmet; cycle 3 assessed it coherently and
+            // approved — and was refused as "approved with the codeline unchanged", HALTing the lane.
+            origin: 'review-self-contradiction',
             file: '',
             line: 0,
             description:

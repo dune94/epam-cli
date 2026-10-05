@@ -185,7 +185,8 @@ while true; do
     _review_prev_blocker=0
     for _fbf in "${LOG_DIR}"/review-feedback-*.json; do
         [ -f "$_fbf" ] || continue
-        if jq -e '[.issues // [] | .[] | select((.severity // "") == "blocker")] | length > 0' "$_fbf" >/dev/null 2>&1; then
+        # A blocker about the CODE — not the reviewer's own self-contradiction (lib/phase-assessment.sh).
+        if _review_feedback_has_code_blocker "$_fbf"; then
             _review_prev_blocker=1; break
         fi
     done

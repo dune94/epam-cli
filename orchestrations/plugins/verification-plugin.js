@@ -409,13 +409,21 @@ function parseFailures(projectRoot, output, section = 'typecheck', env = process
     ? sec.failureIdentity
     : '{0}';
 
+  // LINE BY LINE. A failure is a line of the checker's output; matched across the whole text, a
+  // pattern like ^([^(]+)\( crossed newlines and the FIRST failure's identity swallowed the lines
+  // before it (npm's "> pkg check-types" banner). An error that became first was then reported under
+  // an identity no line carries, the report came out empty, and empty read as "nothing new" — a real
+  // new type error passed (next.gotransit.com copy, 2026-10-05).
   const out = [];
   const seen = new Set();
-  let m;
-  while ((m = re.exec(String(output || ''))) !== null) {
-    if (m[0] === '') { re.lastIndex += 1; continue; }
-    const key = identity.replace(/\{(\d+)\}/g, (_w, g) => String(m[Number(g)] ?? '').trim());
-    if (key && !seen.has(key)) { seen.add(key); out.push(key); }
+  for (const line of String(output || '').split('\n')) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(line)) !== null) {
+      if (m[0] === '') { re.lastIndex += 1; continue; }
+      const key = identity.replace(/\{(\d+)\}/g, (_w, g) => String(m[Number(g)] ?? '').trim());
+      if (key && !seen.has(key)) { seen.add(key); out.push(key); }
+    }
   }
   return out;
 }

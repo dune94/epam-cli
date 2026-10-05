@@ -101,6 +101,8 @@ log() { echo "[update-invalidated-tests] $*" >&2; }
 [ -f "$SCRIPT_DIR/lib/bounded-exec.sh" ] && . "$SCRIPT_DIR/lib/bounded-exec.sh"
 # shellcheck source=lib/tsc-baseline-gate.sh
 . "$SCRIPT_DIR/lib/tsc-baseline-gate.sh"
+# shellcheck source=lib/pipeline-commit.sh
+. "$SCRIPT_DIR/lib/pipeline-commit.sh"
 _bounded() {
     if command -v run_test_bounded >/dev/null 2>&1; then
         run_test_bounded "$(resolve_test_workers)" "$@"
@@ -272,7 +274,7 @@ if [ -n "$_dirty" ]; then
     # reject for ANY reason, and this pipeline cannot and should not
     # hardcode every possible hook's exact rule set per project; surfacing
     # the hook's own output is the generic fix.
-    _commit_output=$(git -C "$PROJECT_ROOT" commit -m "${STORY_ID}: update tests invalidated by the fix" --quiet 2>&1)
+    _commit_output=$(git -C "$PROJECT_ROOT" commit $(pipeline_commit_flags) -m "${STORY_ID}: update tests invalidated by the fix" --quiet 2>&1)
     _commit_rc=$?
     if [ "$_commit_rc" -eq 0 ]; then
         log "committed updated test(s) — suite green"

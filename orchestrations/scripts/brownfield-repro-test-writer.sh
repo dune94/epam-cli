@@ -38,6 +38,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Immediately after SCRIPT_DIR, because the source line NEEDS it: placed earlier (as it
 # briefly was) the script dies with "SCRIPT_DIR: unbound variable" before doing anything.
 source "$SCRIPT_DIR/lib/jq-vals.sh"
+# shellcheck source=lib/pipeline-commit.sh
+. "$SCRIPT_DIR/lib/pipeline-commit.sh"
 
 # THE PROMPT RENDERER THIS SCRIPT CALLS EIGHT TIMES.
 #
@@ -671,7 +673,7 @@ _commit_written_test() {
         return 0
     fi
     local _commit_output _commit_rc
-    _commit_output=$(git -C "$PROJECT_ROOT" commit -m "${STORY_ID}: add ${_commit_noun}" --quiet 2>&1)
+    _commit_output=$(git -C "$PROJECT_ROOT" commit $(pipeline_commit_flags) -m "${STORY_ID}: add ${_commit_noun}" --quiet 2>&1)
     _commit_rc=$?
     if [ "$_commit_rc" -eq 0 ]; then
         _test_committed=1

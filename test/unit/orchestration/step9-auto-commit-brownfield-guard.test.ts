@@ -234,10 +234,10 @@ describe('Step 9 auto-commit — surfaces the REAL hook output on ANY commit rej
     const hooksDir = join(repo, '.git', 'hooks');
     mkdirSync(hooksDir, { recursive: true });
     writeFileSync(
-      join(hooksDir, 'commit-msg'),
-      `#!/usr/bin/env bash\necho "ARBITRARY_REJECTION_MARKER_71ae: needs a work-order tag" >&2\nexit 1\n`,
+      join(hooksDir, 'reference-transaction'),
+      `#!/usr/bin/env bash\n[ "$1" = prepared ] || exit 0\ncat >/dev/null\necho "ARBITRARY_REJECTION_MARKER_71ae: needs a work-order tag" >&2\nexit 1\n`,
     );
-    chmodSync(join(hooksDir, 'commit-msg'), 0o755);
+    chmodSync(join(hooksDir, 'reference-transaction'), 0o755);
 
     const { stdout, exitCode } = runStep9(repo, {
       mainStories: 'STORY-REAL',

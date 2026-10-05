@@ -60,16 +60,23 @@ function fixture() {
   git(proj, 'add', '.'); git(proj, 'commit', '-q', '-m', 'FX-1: story complete');
   const storySha = git(proj, 'rev-parse', 'HEAD').trim();
 
-  // THE CLIENT'S HOOK: rejects a test file that exports anything. Its message is the evidence.
-  writeFileSync(join(proj, '.git/hooks/pre-commit'), [
+  // THE REPOSITORY REFUSES a test file that exports anything; its message is the evidence. The refusal
+  // lives in reference-transaction, which `git commit --no-verify` still runs: the pipeline's commits
+  // skip the codeline's pre-commit/commit-msg hooks (operator decision, 2026-10-05), and a refusal of
+  // any other kind must still reach the next attempt.
+  writeFileSync(join(proj, '.git/hooks/reference-transaction'), [
     '#!/bin/bash',
-    'for f in $(git diff --cached --name-only); do',
-    '  case "$f" in *.spec.ts) if grep -q "^export" "$f"; then',
-    '    echo "✖ eslint $f"; echo "  1:1  error  Do not export from a test file  jest/no-export"; exit 1; fi ;;',
-    '  esac',
+    '[ "$1" = prepared ] || exit 0',
+    'while read -r _old new ref; do',
+    '  [ "$ref" = "refs/heads/bugfix/AI-FX-1" ] || continue',
+    '  for f in $(git diff-tree --no-commit-id --name-only -r "$new"); do',
+    '    case "$f" in *.spec.ts) if git show "$new:$f" | grep -q "^export"; then',
+    '      echo "✖ eslint $f" >&2; echo "  1:1  error  Do not export from a test file  jest/no-export" >&2; exit 1; fi ;;',
+    '    esac',
+    '  done',
     'done',
   ].join('\n') + '\n');
-  chmodSync(join(proj, '.git/hooks/pre-commit'), 0o755);
+  chmodSync(join(proj, '.git/hooks/reference-transaction'), 0o755);
 
   // THE STUB MODEL: attempt 1 writes a test with an export (the hook rejects it); attempt 2 writes
   // a clean one. It records the prompt it received each time, so the test can assert what the

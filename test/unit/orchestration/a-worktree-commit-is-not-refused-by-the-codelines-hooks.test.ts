@@ -71,11 +71,16 @@ describe('the pipeline commits a story inside a worktree of a codeline whose hoo
     expect(dirty(wt)).toBe('a.txt');
   });
 
-  it('in the checkout (on a valid branch): the hooks still run — a refusing hook still refuses', () => {
+  // Operator decision, 2026-10-05 (second): the checkout too — next.gotransit.com's hook fails its own
+  // untouched checkout (a whole-project type check its team's node_modules cannot pass), so it refused
+  // every pipeline commit there, whatever it held.
+  it('in the checkout: a hook that refuses everything does not refuse the pipeline\'s commit', () => {
     const { repo } = codeline();
     writeFileSync(join(repo, '.husky', 'pre-commit'), '#!/bin/bash\necho "refused by the codeline"; exit 1\n');
     const before = git(repo, 'rev-parse', 'HEAD');
-    commitStory(repo);
-    expect(git(repo, 'rev-parse', 'HEAD'), 'a commit in the checkout skipped the codeline\'s hooks').toBe(before);
+    const plain = spawnSync('git', ['commit', '--allow-empty', '-m', 'plain'], { cwd: repo, encoding: 'utf8' });
+    expect(plain.status, 'the hook did not refuse a plain commit — the test proves nothing').not.toBe(0);
+    const r = commitStory(repo);
+    expect(git(repo, 'rev-parse', 'HEAD'), `the pipeline's commit was refused:\n${r.stdout}\n${r.stderr}`).not.toBe(before);
   });
 });

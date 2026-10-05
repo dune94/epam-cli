@@ -2589,7 +2589,7 @@ if [ -n "${main_stories:-}" ] && \
         # reintroducing the exact defect this capture exists to fix (same
         # guard commit_completed_story() uses, lib/git-ops.sh).
         set +e
-        _step9_commit_output=$(git -C "$PROJECT_ROOT" commit -m "$_step9_commit_msg" 2>&1)
+        _step9_commit_output=$(git -C "$PROJECT_ROOT" commit $(pipeline_commit_flags) -m "$_step9_commit_msg" 2>&1)
         _step9_commit_rc=$?
         set -e
         if [ "$_step9_commit_rc" -eq 0 ]; then
@@ -3782,8 +3782,8 @@ if ! is_truthy "${SKIP_PRE_REVIEW_GATE:-}" && [ -f "$PROJECT_ROOT/package.json" 
         # No stack precondition — see lib/story-guards.sh. An undeclared project is refused
         # by the helper, not skipped, so there is nothing to pre-check here.
         if true; then
-            _run_project_verification "$PROJECT_ROOT" 2>&1 | tee -a "$_pre_review_log"
-            _tsc_exit=${PIPESTATUS[0]}
+            # Judged against the phase baseline (lib/pre-review-gate.sh pre_review_typecheck).
+            pre_review_typecheck "$PROJECT_ROOT" "$LOG_DIR" "$_pre_review_log" || _tsc_exit=$?
             if [ "$_tsc_exit" -eq 0 ]; then
                 success "  tsc: PASS"
             else
@@ -3858,8 +3858,8 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
     _lint_tsc_exit=0
     # No stack precondition — see lib/story-guards.sh.
     if true; then
-        _run_project_verification "$PROJECT_ROOT" 2>&1 | tee -a "$_lint_log"
-        _lint_tsc_exit=${PIPESTATUS[0]}
+        # Judged against the phase baseline (lib/pre-review-gate.sh pre_review_typecheck).
+        pre_review_typecheck "$PROJECT_ROOT" "$LOG_DIR" "$_lint_log" || _lint_tsc_exit=$?
         if [ "$_lint_tsc_exit" -eq 0 ]; then
             success "  [lint] tsc: PASS"
         else

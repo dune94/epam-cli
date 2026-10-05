@@ -473,7 +473,10 @@ while IFS= read -r _lf; do
     _dest="$ARCHIVE_DIR/$_rel"
     mkdir -p "$(dirname "$_dest")" 2>/dev/null || true
     mv "$_lf" "$_dest" 2>/dev/null && _ARCHIVED_LOGS=$((_ARCHIVED_LOGS+1)) || true
-done < <(find "$LOG_DIR" -type f \( -name '*.log' -o -name 'story-outputs-*.txt' -o -name 'eslint-baseline-*.json' \) -not -path "$ARCHIVE_DIR/*" -not -path "$LOG_DIR/archive/*" 2>/dev/null || true)
+# baseline-failures-*.txt TOO: a cache holds identities parsed by the rules of the run that built it.
+# Kept across runs it outlived a change to them — identities parsed across lines (banner-prefixed)
+# against line-by-line ones — and would have charged pre-existing errors as new (2026-10-05).
+done < <(find "$LOG_DIR" -type f \( -name '*.log' -o -name 'story-outputs-*.txt' -o -name 'eslint-baseline-*.json' -o -name 'baseline-failures-*.txt' \) -not -path "$ARCHIVE_DIR/*" -not -path "$LOG_DIR/archive/*" 2>/dev/null || true)
 
 # ── The inference ladder's rung counters ────────────────────────────────────
 # story-retry-state/<story>.count records how far up the model ladder a story

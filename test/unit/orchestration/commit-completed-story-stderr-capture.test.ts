@@ -80,10 +80,11 @@ describe('commit_completed_story — real git commit failure surfaces real stder
   it('logs the pre-commit hook\'s actual rejection message, not a generic failure line', () => {
     const repo = makeRepo();
     mkdirSync(join(repo, '.git/hooks'), { recursive: true });
-    const hookPath = join(repo, '.git/hooks/pre-commit');
+    // --no-verify (lib/pipeline-commit.sh) still runs reference-transaction: ANY refusal must be surfaced.
+    const hookPath = join(repo, '.git/hooks/reference-transaction');
     writeFileSync(
       hookPath,
-      '#!/usr/bin/env bash\necho "DISTINCTIVE_HOOK_REJECTION: lint failed on src/hello.ts" >&2\nexit 1\n',
+      '#!/usr/bin/env bash\n[ "$1" = prepared ] || exit 0\ncat >/dev/null\necho "DISTINCTIVE_HOOK_REJECTION: lint failed on src/hello.ts" >&2\nexit 1\n',
     );
     chmodSync(hookPath, 0o755);
 

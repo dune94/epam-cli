@@ -187,8 +187,8 @@ _auto_commit_worktree() {
     fi
     rm -f "$_wt_vals"
 
-    # Inside a worktree the codeline's hooks are skipped (lib/git-ops.sh worktree_commit_flags).
-    local _hook_flags=(); mapfile -t _hook_flags < <(worktree_commit_flags "$wt_path")
+    # The codeline's hooks are skipped for pipeline commits (lib/pipeline-commit.sh).
+    local _hook_flags=(); mapfile -t _hook_flags < <(pipeline_commit_flags)
     if git -C "$wt_path" commit ${_hook_flags[@]+"${_hook_flags[@]}"} -m "$commit_msg"; then
         success "Auto-committed $changed_count file(s) in worktree '$lane'"
     else

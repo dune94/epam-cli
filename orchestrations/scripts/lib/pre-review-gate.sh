@@ -54,3 +54,27 @@ pre_review_suite() {
     rm -f "$_out"
     return 1
 }
+
+# pre_review_typecheck <project_root> <log_dir> <gate_log> — Steps 19 and 20's type check, judged as the
+# writer's is: errors already present at the phase baseline are subtracted (baseline_new_failures
+# typecheck). It ran the whole-project check raw: next.gotransit.com's develop fails it untouched with 6
+# errors (its team's node_modules is older than the branch expects — an `npm install` the pipeline may not
+# run), so both steps would fail every story on errors none of them made (AMSD-2974, 2026-10-05). A
+# type error the phase introduced still fails.
+#   0 — passed, or every error was already present at the baseline
+#   1 — an error this phase introduced (or a failing check that could not be judged)
+pre_review_typecheck() {
+    local _root="$1" _log_dir="$2" _gate_log="$3" _out _rc=0 _new
+    _out=$(mktemp "${TMPDIR:-/tmp}/pre-review-tsc-XXXXXX")
+    _run_project_verification "$_root" > "$_out" 2>&1 || _rc=$?
+    cat "$_out" >> "$_gate_log"
+    if [ "$_rc" -eq 0 ]; then rm -f "$_out"; return 0; fi
+    if _new=$(baseline_new_failures "$_root" "${NODE_CMD:-${NODE_BIN:-node}}" "$_log_dir" typecheck "$_out" 2>&1); then
+        success "  the type check fails only on errors already present at the baseline — none introduced by this phase"
+        rm -f "$_out"; return 0
+    fi
+    error "  the type check has errors this phase introduced:"
+    printf '%s\n' "$_new" | head -40 | sed 's/^/    /'
+    rm -f "$_out"
+    return 1
+}

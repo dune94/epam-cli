@@ -166,9 +166,12 @@ describe('repro-test-writer — validates the test before committing', () => {
   // the COMMIT, and attempts 2 and 3 recorded no_file over the same correct, untouched test.
   it('after the repository refuses only the commit, the next attempt commits the same test', () => {
     const repo = makeRepo();
-    const hook = join(repo, '.git', 'hooks', 'pre-commit');
-    writeFileSync(hook, `#!/usr/bin/env bash\nf=${JSON.stringify(join(repo, '.git', 'refused-once'))}\n[ -f "$f" ] && exit 0\n: > "$f"; echo "check-types: refused by the repository"; exit 1\n`);
-    chmodSync(hook, 0o755);
+    // The repository refuses the FIRST commit with something the pipeline's --no-verify does not skip
+    // (a signing program that fails once and switches signing off), and accepts the next.
+    const signer = join(repo, '.git', 'sign-once.sh');
+    writeFileSync(signer, `#!/usr/bin/env bash\ngit -C ${JSON.stringify(repo)} config --unset commit.gpgsign\necho "refused by the repository" >&2\nexit 1\n`);
+    chmodSync(signer, 0o755);
+    git(repo, ['config', 'gpg.program', signer]); git(repo, ['config', 'commit.gpgsign', 'true']);
     const { out, committed } = runWriter(repo, 'valid-once', { REPRO_TEST_WRITER_MAX_ATTEMPTS: '3' });
     expect(out, 'the hook never refused — the test proves nothing').toMatch(/refused to commit/);
     expect(out).not.toMatch(/predates this attempt and was not rewritten/);

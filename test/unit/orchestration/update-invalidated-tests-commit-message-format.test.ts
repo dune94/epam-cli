@@ -139,10 +139,10 @@ describe('update-invalidated-tests.sh — surfaces the REAL hook output on ANY c
     const repo = makeRepo();
     const hooksDir = join(repo, '.git', 'hooks');
     writeFileSync(
-      join(hooksDir, 'commit-msg'),
-      `#!/usr/bin/env bash\necho "ARBITRARY_REJECTION_MARKER_2b71: needs a linked PR number" >&2\nexit 1\n`,
+      join(hooksDir, 'reference-transaction'),
+      `#!/usr/bin/env bash\n[ "$1" = prepared ] || exit 0\ncat >/dev/null\necho "ARBITRARY_REJECTION_MARKER_2b71: needs a linked PR number" >&2\nexit 1\n`,
     );
-    chmodSync(join(hooksDir, 'commit-msg'), 0o755);
+    chmodSync(join(hooksDir, 'reference-transaction'), 0o755);
     const { out, committed, status } = run(repo);
     expect(out).toMatch(/ARBITRARY_REJECTION_MARKER_2b71/);
     expect(out).not.toMatch(/commit failed \(non-fatal\)$/m);

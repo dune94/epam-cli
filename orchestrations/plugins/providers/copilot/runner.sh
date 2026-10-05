@@ -100,7 +100,21 @@ copilot_invoke() {
     # NO COPILOT_AUTO_UPDATE=false: like --no-auto-update it pins the loader to the npm-bundled build,
     # which can be far older than the CLI the operator runs (1.0.18 vs 1.0.85, 2026-09-28) and refuses
     # current models. The build a call ran on is in the CLI's own log under $home/logs.
-    cat "$prompt_file" | COPILOT_HOME="$home" NO_COLOR=1 "$bin" "${args[@]}" > "$ev" 2> "$err"
+    # THE AGENT RUNS IN ITS OWN MEMORY SCOPE. An agent's shell tool can start anything — the AMSD-2974
+    # writer ran a bare `npx jest` (a worker per core) and the run's scope was OOM-killed (2026-10-05);
+    # telling it the declared command did not stop it (proven with a real call). Here a heavy command is
+    # stopped at the ceiling of the agent's own scope (scripts/run-bounded.sh --high-pct 100: no throttle
+    # band, which froze a command instead of failing it) and the agent sees it fail; the run carries on; the scope is bound to the run's, so killing the run stops it. Where bounding
+    # is unavailable the call runs unbounded and run-bounded.sh says so.
+    # NO `env` PREFIX: `env` is resolved on PATH, and a PATH entry named env that is not
+    # coreutils' (uv's ~/.local/bin/env is a sourcing snippet) ran nothing and exited 0 — the call
+    # "produced no answer and said nothing" (2026-10-05). The shell's own assignment prefix instead.
+    if [ "${EPAM_AGENT_BOUNDED:-1}" = "1" ] && [ -x "$_copilot_orch/scripts/run-bounded.sh" ]; then
+        cat "$prompt_file" | COPILOT_HOME="$home" NO_COLOR=1 EPAM_BOUNDED_ALLOW_UNBOUNDED=1 \
+            "$_copilot_orch/scripts/run-bounded.sh" --share "${EPAM_AGENT_MEMORY_SHARE:-25}" --high-pct 100 --oom-policy continue -- "$bin" "${args[@]}" > "$ev" 2> "$err"
+    else
+        cat "$prompt_file" | COPILOT_HOME="$home" NO_COLOR=1 "$bin" "${args[@]}" > "$ev" 2> "$err"
+    fi
     mkdir -p "$(dirname "$events_keep")" 2>/dev/null && cp "$ev" "$events_keep" 2>/dev/null || true
     "$node" "$_copilot_libdir/copilot-result.js" "$ev" "$err" "$result_json" "$home/session-state"
     rc=$?

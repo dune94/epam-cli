@@ -18,9 +18,26 @@
 set -uo pipefail
 
 _share="${EPAM_BOUNDED_SHARE:-40}"          # percent of total RAM this command may use
-if [ "${1:-}" = "--share" ]; then _share="$2"; shift 2; fi
-[ "${1:-}" = "--" ] && shift
-[ $# -eq 0 ] && { echo "usage: run-bounded.sh [--share N] -- <command> [args...]" >&2; exit 2; }
+_high_pct=80                                # MemoryHigh as a percent of the ceiling
+_oom_policy=""                              # the scope's OOMPolicy; empty = systemd's default
+# --high-pct 100 is NO THROTTLE BAND: the command is stopped at the ceiling instead of slowed below it.
+# With swap bounded to 0, a process past MemoryHigh cannot be reclaimed, so it is throttled
+# indefinitely — an agent's `node` allocating past it froze at 1536MB and its call hung until the
+# caller's timeout (real copilot call, 2026-10-05). Where a stopped command is the right outcome
+# (an agent's tool command: the agent sees it fail and carries on), the caller asks for 100.
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --share)    _share="$2"; shift 2 ;;
+        --high-pct) _high_pct="$2"; shift 2 ;;
+        # --oom-policy continue: the OOM killer takes the one process over the ceiling and the scope
+        # carries on. The scope default (stop) ended the whole unit — the agent with its command —
+        # so the agent never saw the failure and answered nothing (real copilot call, 2026-10-05).
+        --oom-policy) _oom_policy="$2"; shift 2 ;;
+        --)         shift; break ;;
+        *)          break ;;
+    esac
+done
+[ $# -eq 0 ] && { echo "usage: run-bounded.sh [--share N] [--high-pct N] -- <command> [args...]" >&2; exit 2; }
 
 _total_kb="$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null || echo 0)"
 if [ "${_total_kb:-0}" -le 0 ]; then
@@ -28,10 +45,11 @@ if [ "${_total_kb:-0}" -le 0 ]; then
     exit 1
 fi
 _max_mb=$(( _total_kb / 1024 * _share / 100 ))
-_high_mb=$(( _max_mb * 80 / 100 ))
+_high="$(( _max_mb * _high_pct / 100 ))M"
+[ "$_high_pct" -ge 100 ] && _high=infinity
 
 if command -v systemd-run >/dev/null 2>&1 && [ -d /sys/fs/cgroup ]; then
-    echo "[bounded] ${_share}% of $(( _total_kb / 1024 ))MB -> MemoryHigh=${_high_mb}M MemoryMax=${_max_mb}M : $*" >&2
+    echo "[bounded] ${_share}% of $(( _total_kb / 1024 ))MB -> MemoryHigh=${_high} MemoryMax=${_max_mb}M : $*" >&2
     # SWAP IS BOUNDED TOO, OR THE CEILING IS ADVISORY.
     #
     # Proven here: a process told to allocate 4GB under a 698MB ceiling allocated all of it. The
@@ -48,8 +66,16 @@ if command -v systemd-run >/dev/null 2>&1 && [ -d /sys/fs/cgroup ]; then
     # real home while every other variable survived intact.
     #
     # Every caller-set variable is preserved; HOME is named because it is the one the scope takes.
+    #
+    # BOUND TO THE CALLER'S SCOPE when it runs in one (a run launched bounded): stopping or killing the
+    # run stops this scope too, so nothing it started outlives it (an agent call's own scope, 2026-10-05).
+    _bind=()
+    _caller="$(basename "$(cut -d: -f3 /proc/self/cgroup 2>/dev/null | head -1)")"
+    case "$_caller" in *.scope) _bind=(-p "BindsTo=$_caller" -p "After=$_caller") ;; esac
+    [ -n "$_oom_policy" ] && _bind+=(-p "OOMPolicy=$_oom_policy")
     exec systemd-run --user --scope --quiet --collect \
-        -p MemoryHigh="${_high_mb}M" -p MemoryMax="${_max_mb}M" -p MemorySwapMax=0 \
+        -p MemoryHigh="${_high}" -p MemoryMax="${_max_mb}M" -p MemorySwapMax=0 \
+        ${_bind[@]+"${_bind[@]}"} \
         --setenv=HOME="$HOME" \
         -- "$@"
 fi

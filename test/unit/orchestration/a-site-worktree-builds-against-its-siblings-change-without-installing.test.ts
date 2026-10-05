@@ -125,6 +125,22 @@ _link_entry "" ${JSON.stringify(lib)}; echo "rc=$?"`], { encoding: 'utf8' });
     expect(rcs[2], 'an empty path must be refused').toBe('rc=1');
   });
 
+  it('_place_sibling_package replaces only a copy it made — a directory without its marker is refused and kept', () => {
+    const at = mkdtempSync(join(tmpdir(), 'place-'));
+    mkdirSync(join(at, 'foreign')); writeFileSync(join(at, 'foreign', 'keep.txt'), 'mine');
+    const run = (target: string) => spawnSync('bash', ['-c', `warning(){ echo "WARN $*"; }; log(){ :; }
+source ${JSON.stringify(join(SCRIPTS, 'lib/codeline-lanes.sh'))}
+_place_sibling_package ${JSON.stringify(target)} ${JSON.stringify(lib)} node_modules; echo "rc=$?"`], { encoding: 'utf8' }).stdout;
+    const refused = run(join(at, 'foreign'));
+    expect(refused).toMatch(/rc=1/);
+    expect(refused).toMatch(/not a copy this pipeline made/);
+    expect(readFileSync(join(at, 'foreign', 'keep.txt'), 'utf8')).toBe('mine');
+    expect(run(join(at, 'ours'))).toMatch(/rc=0/);
+    expect(existsSync(join(at, 'ours', '.epam-sibling-copy'))).toBe(true);
+    expect(existsSync(join(at, 'ours', 'node_modules')), 'the sibling\'s own dependency directory came along').toBe(false);
+    expect(run(join(at, 'ours')), 'a marked copy is replaced').toMatch(/rc=0/);
+    rmSync(at, { recursive: true, force: true });
+  });
   it('a site that declares no sibling package keeps the plain link to its own vendor dir', () => {
     provision(plain, prd);
     expect(lstatSync(join(plain.wt, 'node_modules')).isSymbolicLink()).toBe(true);

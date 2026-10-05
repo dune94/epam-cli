@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+# lane_declared_passed <codeline> — the operator declared this lane already passed in this run
+# (EPAM_PASSED_LANES, space/comma separated). AMSD-2974, 2026-10-04: cx-shared reached GO before
+# lanes recorded it; a resume re-ran it (--reset) and was OOM-killed. Operator-chosen.
+lane_declared_passed() {
+    local _l
+    for _l in ${EPAM_PASSED_LANES//,/ }; do [ "$_l" = "${1:-}" ] && return 0; done
+    return 1
+}
+
 # codeline-lanes.sh — moved verbatim out of run-agent-orchestration.sh by tools/split-main-into-modules.py
 # (12 functions). Sourced by run-agent-orchestration.sh; SCRIPT_DIR and the globals it sets
 # are in scope exactly as they were. A move, not an edit: every body is byte-identical to
@@ -925,6 +934,10 @@ _run_codeline_loop() {
         log "[orch] Codeline '${_cl}': no stories — skipping"
         continue
       fi
+      if lane_declared_passed "$_cl"; then
+        log "[orch] Codeline '${_cl}': declared passed in this run (EPAM_PASSED_LANES) — not run again"
+        continue
+      fi
       _p_cls+=("$_cl"); _p_wts+=("$_wt"); _p_prds+=("$_cl_prd"); _p_spec+=("${_lane_spec_mode}")
       log "[orch] Codeline '${_cl}' — ${_n_stories} stories → ${_wt}"
     done
@@ -1164,6 +1177,10 @@ _run_codeline_loop() {
 
     if [ "${_n_stories:-0}" -eq 0 ]; then
       log "[orch] Codeline '${_cl}': no stories — skipping"
+      continue
+    fi
+    if lane_declared_passed "$_cl"; then
+      log "[orch] Codeline '${_cl}': declared passed in this run (EPAM_PASSED_LANES) — not run again"
       continue
     fi
 

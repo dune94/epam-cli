@@ -37,7 +37,10 @@ AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 # Respect PROJECT_ROOT from environment (set by run-agent-orchestration.sh when PRD_FILE is external)
 PROJECT_ROOT="${PROJECT_ROOT:-$(dirname "$AUTOMATION_DIR")}"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
-LOG_DIR="$AUTOMATION_DIR/logs"
+# THE CALLER'S LOG_DIR, as run-agent-orchestration.sh takes it. A lane runs with its own
+# (logs/lanes/<codeline>/); hardcoding the install's logs/ here sent every worktree writer's gates to
+# the run-wide phase-baseline-sha.txt and story-retry-state/, whichever lane they belonged to.
+LOG_DIR="${LOG_DIR:-$AUTOMATION_DIR/logs}"
 # EXPORTED: every child — the agent-io store above all — must be in THIS run (lib/agent-io.js).
 export LOG_DIR
 

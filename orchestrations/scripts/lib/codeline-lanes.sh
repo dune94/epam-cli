@@ -1226,6 +1226,14 @@ _run_codeline_loop() {
     _rebuild_cross
     log "[orch] Codeline '${_cl}' — ${_n_stories} stories → ${_wt}"
 
+    # A SEQUENTIAL LANE GETS ITS OWN LOG_DIR TOO. The parallel loop scoped it (2026-07-29: state
+    # files read back across lanes); this loop did not, so every lane shared phase-baseline-sha.txt
+    # and story-retry-state/. Live AMSD-2974 2026-10-05: cx-shared's baseline commit was recorded in
+    # the upexpress and metrolinx checkpoints (a commit their repos do not have), and the gotransit
+    # writer resumed at attempt 10/12 on a counter the lanes had shared.
+    local _lane_log_dir="${LOG_DIR:-/tmp}/lanes/${_cl}"
+    mkdir -p "$_lane_log_dir" 2>/dev/null || true
+
     local _phases=()
     mapfile -t _phases < <(_prd_phases "$_cl_prd")
     local _cl_failed=0
@@ -1243,6 +1251,9 @@ _run_codeline_loop() {
       log "[orch] Phase '${_phase}' — codeline '${_cl}'..."
       local _pex=0
       JIRA_CODELINE_RUN=1 \
+      EPAM_CODELINE="$_cl" \
+      LOG_DIR="$_lane_log_dir" \
+      AGENT_IO_DIR="$_lane_log_dir/agent-io" \
       PRD_FILE="$_cl_prd" \
       EPAM_SPEC_MODE="${_lane_spec_mode:-${EPAM_SPEC_MODE:-}}" \
       PROJECT_ROOT="$_wt" \
@@ -1260,6 +1271,9 @@ _run_codeline_loop() {
         log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying with SKIP_GATE_REMEDIATION=1"
         _pex=0
         JIRA_CODELINE_RUN=1 \
+        EPAM_CODELINE="$_cl" \
+        LOG_DIR="$_lane_log_dir" \
+        AGENT_IO_DIR="$_lane_log_dir/agent-io" \
         PRD_FILE="$_cl_prd" \
         EPAM_SPEC_MODE="${_lane_spec_mode:-${EPAM_SPEC_MODE:-}}" \
         PROJECT_ROOT="$_wt" \
@@ -1281,6 +1295,13 @@ _run_codeline_loop() {
         _cl_failed=1; _overall=1; break
       fi
       log "[orch] Phase '${_phase}' — '${_cl}' done."
+    done
+
+    # The append-only ledgers back into the parent, as the parallel loop folds them.
+    for _ledger in phase-cost.jsonl agent-activity.jsonl healing-events.jsonl; do
+      if [ -n "${LOG_DIR:-}" ] && [ -s "${_lane_log_dir}/${_ledger}" ]; then
+        cat "${_lane_log_dir}/${_ledger}" >> "${LOG_DIR}/${_ledger}" 2>/dev/null || true
+      fi
     done
 
     [ "$_cl_failed" = "0" ] && \

@@ -242,6 +242,20 @@ describe('a ticket spanning four codelines runs through pause 1, pause 2 and the
     }
     expect(calls3.some((c) => WRITER.has(c.seam)), `the writer was never invoked — log tail:\n${tail(t3)}`).toBe(true);
 
+    // EACH LANE'S BASELINE IS A COMMIT OF ITS OWN REPOSITORY, IN ITS OWN LOG DIR. Sequential lanes
+    // shared one LOG_DIR, so a lane's gates read the phase-baseline-sha.txt another lane wrote — a
+    // commit their repo does not have (live AMSD-2974, 2026-10-05: cx-shared's a8ea130 recorded for
+    // upexpress and metrolinx), and its writer resumed on the retry counter the lanes had shared.
+    const laneLogDir = join(install, 'orchestrations', 'logs', 'lanes');
+    const shaFor = (l: string) => { const f = join(laneLogDir, l, 'phase-baseline-sha.txt'); return existsSync(f) ? readFileSync(f, 'utf8').trim() : ''; };
+    const laneShas = lanes.map(shaFor);
+    expect(laneShas.filter(Boolean).length, `a lane has no baseline of its own under ${laneLogDir}:${JSON.stringify(Object.fromEntries(lanes.map((l, i) => [l, laneShas[i]])))}`).toBe(lanes.length);
+    expect(new Set(laneShas).size, `lanes share a baseline commit: ${JSON.stringify(laneShas)}`).toBe(lanes.length);
+    const ownerOf = (sha: string) => codelines().filter((c) => spawnOk(c, ['cat-file', '-e', `${sha}^{commit}`]));
+    for (const [i, l] of lanes.entries()) {
+      expect(ownerOf(laneShas[i]).length, `lane ${l}'s baseline ${laneShas[i]} is not a commit of exactly one codeline`).toBe(1);
+    }
+
     // NEVER IN THE CHECKOUT: no lane ran its story on the main branch, and every lane cut a worktree.
     const text3 = strip(t3);
     expect(text3, 'a lane ran its story in the codeline\'s checkout (Step 8)').not.toMatch(/Step 8: Running main-branch stories/);
@@ -286,8 +300,9 @@ describe('a ticket spanning four codelines runs through pause 1, pause 2 and the
     }
 
     // THE FAILURE PATHS RAN — otherwise everything above is the happy path again.
-    const laneLogs = readdirSync(join(install, 'orchestrations/logs')).filter((f) => f.endsWith('.log'))
-      .map((f) => readFileSync(join(install, 'orchestrations/logs', f), 'utf8')).join('\n');
+    // The run's logs AND each lane's own (logs/lanes/<lane>/): a lane writes its worktree logs there.
+    const logDirs = [join(install, 'orchestrations/logs'), ...lanes.map((l) => join(laneLogDir, l))].filter((d) => existsSync(d));
+    const laneLogs = logDirs.flatMap((d) => readdirSync(d).filter((f) => f.endsWith('.log')).map((f) => readFileSync(join(d, f), 'utf8'))).join('\n');
     const all3 = text3 + '\n' + strip(laneLogs);
     expect(all3, 'the gate-remediation retry never ran').toMatch(/Gate remediation applied/);
     expect(all3, 'the rung reset never ran').toMatch(/WorktreeReset\[[^\]]+\]: reset to/);

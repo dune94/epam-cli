@@ -33,15 +33,18 @@ const pkg = (dir: string, json: object, files: Record<string, string> = {}) => {
 // The shared library, changed on its story branch: its build writes what it ships.
 const lib = join(work, 'codelines', 'lib');
 pkg(lib, { name: '@scope/lib', version: '2.0.0', main: 'dist/index.js', scripts: { build: 'node build.js' } },
-  { 'build.js': "require('fs').mkdirSync('dist',{recursive:true});require('fs').writeFileSync('dist/index.js',\"module.exports='NEW'\")" });
+  { 'build.js': "require('fs').mkdirSync('dist',{recursive:true});require('fs').writeFileSync('dist/index.js',\"module.exports='NEW'\");require('fs').writeFileSync('dist/peer.js',\"module.exports=require('shared-dep')\")" });
+// THE SIBLING'S OWN INSTALL holds its own copy of a dependency the site also has (React, live).
+pkg(join(lib, 'node_modules', 'shared-dep'), { name: 'shared-dep', main: 'index.js' }, { 'index.js': "module.exports='LIB-OWN'" });
 
 // A site: declares the library; its installed vendor dir holds the RELEASE and other packages.
 function site(name: string, declaresLib: boolean) {
   const root = join(work, 'codelines', name);
   pkg(root, { name, dependencies: declaresLib ? { '@scope/lib': '^1.0.0', other: '^1.0.0' } : { other: '^1.0.0' } }, { '.gitignore': 'node_modules\n' });
-  pkg(join(root, 'node_modules', '@scope', 'lib'), { name: '@scope/lib', version: '1.0.0', main: 'index.js' }, { 'index.js': "module.exports='OLD'" });
+  pkg(join(root, 'node_modules', '@scope', 'lib'), { name: '@scope/lib', version: '1.0.0', main: 'index.js' }, { 'index.js': "module.exports='OLD'", 'release-only/index.js': "module.exports='FROM-RELEASE'" });
   pkg(join(root, 'node_modules', '@scope', 'kit'), { name: '@scope/kit', version: '1.0.0', main: 'index.js' }, { 'index.js': "module.exports='KIT'" });
   pkg(join(root, 'node_modules', 'other'), { name: 'other', version: '1.0.0', main: 'index.js' }, { 'index.js': "module.exports='OTHER'" });
+  pkg(join(root, 'node_modules', 'shared-dep'), { name: 'shared-dep', main: 'index.js' }, { 'index.js': "module.exports='SITE'" });
   git(work, 'init', '-q', '-b', 'develop', root); git(root, 'add', '-A'); git(root, 'commit', '-q', '-m', 'base');
   const wt = join(work, 'codelines', `${name}-wt-primary`);
   git(root, 'worktree', 'add', '-q', '-b', `wt-${name}`, wt, 'HEAD');
@@ -78,6 +81,18 @@ describe('a site worktree builds against its sibling\'s change without installin
 
   it('the consumer worktree resolves the sibling package to the sibling\'s NEW build', () => {
     expect(resolveIn(consumer.wt, '@scope/lib'), r.stdout + r.stderr).toBe('NEW');
+  });
+  it('the sibling\'s dependencies resolve from the SITE, never from the sibling\'s own install (one React)', () => {
+    // AMSD-2974 gotransit, 2026-10-04: linked to the whole checkout, cx-shared's built code loaded
+    // cx-shared's own React beside gotransit's; hooks broke and the site's tests failed whatever the
+    // writer did. Node and Jest resolve from a module's real path, so the package must be IN the lane.
+    expect(resolveIn(consumer.wt, '@scope/lib/dist/peer.js')).toBe('SITE');
+  });
+  it('what the release ships and the sibling\'s build does not regenerate is still there', () => {
+    // AMSD-2974 gotransit, 2026-10-04: the release carries migration-tool-build, which cx-shared's own
+    // build does not produce; a lane copy made from the checkout alone lost it ("Cannot find module").
+    expect(resolveIn(consumer.wt, '@scope/lib/release-only')).toBe('FROM-RELEASE');
+    expect(resolveIn(consumer.wt, '@scope/lib'), 'the new build must still win').toBe('NEW');
   });
   it('every other package still comes from the codeline\'s own install', () => {
     expect(resolveIn(consumer.wt, '@scope/kit')).toBe('KIT');

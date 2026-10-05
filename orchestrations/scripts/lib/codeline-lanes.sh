@@ -231,6 +231,45 @@ _link_entry() {
     ln -s "$_to" "$_at"
 }
 
+# _place_sibling_package <at> <provider_checkout> <vendor_dir> — THE SIBLING'S PACKAGE, AS AN INSTALL HAS IT.
+# A hard-linked copy of every entry of the provider's checkout except its own dependency directory and
+# .git: real files inside the lane, so Node and Jest resolve the package's dependencies from the SITE.
+# A link to the checkout loaded cx-shared's own React beside gotransit's (AMSD-2974, 2026-10-04): two
+# React instances, hooks broken, the site's tests failing whatever the writer did. Same disk, no copy
+# cost, nothing fetched. Only a copy this function made (its marker) is ever replaced.
+_place_sibling_package() {
+    local _at="$1" _from="$2" _vd="$3" _release="${4:-}" _e _n
+    [ -n "$_at" ] && [ -n "$_vd" ] && [ -d "$_from" ] || return 1
+    if [ -L "$_at" ]; then
+        rm -f -- "$_at"
+    elif [ -e "$_at" ]; then
+        if [ -f "$_at/.epam-sibling-copy" ]; then
+            rm -rf -- "${_at:?}"
+        else
+            warning "  [sibling] $_at is not a copy this pipeline made — left as it is"
+            return 1
+        fi
+    fi
+    mkdir -p "$_at" || return 1
+    # SEEDED FROM THE RELEASE THE SITE HAS INSTALLED: what a release ships and the sibling's own build
+    # does not regenerate (cx-shared's migration-tool-build, built by its release process) stays.
+    if [ -n "$_release" ] && [ -d "$_release" ]; then
+        for _e in "$_release"/* "$_release"/.[!.]*; do
+            [ -e "$_e" ] || continue
+            cp -al "$_e" "$_at/$(basename "$_e")" 2>/dev/null || cp -a "$_e" "$_at/$(basename "$_e")"
+        done
+    fi
+    # The sibling's change on top: each of its entries replaces the release's.
+    for _e in "$_from"/* "$_from"/.[!.]*; do
+        [ -e "$_e" ] || continue
+        _n=$(basename "$_e")
+        case "$_n" in "$_vd"|.git) continue ;; esac
+        [ -e "$_at/$_n" ] || [ -L "$_at/$_n" ] && rm -rf -- "${_at:?}/${_n:?}"
+        cp -al "$_e" "$_at/$_n" 2>/dev/null || cp -a "$_e" "$_at/$_n"
+    done
+    : > "$_at/.epam-sibling-copy"
+}
+
 link_sibling_builds() {
     local _root="$1" _wt="$2" _vd="$3" _pairs _name _prov _bc _scope _base _e _stamp
     [ -n "${PRD_FILE:-}" ] && [ -f "$PRD_FILE" ] && [ -d "$_root/$_vd" ] || return 0
@@ -265,8 +304,8 @@ link_sibling_builds() {
                      for _e in "$_root/$_vd/$_scope"/*; do [ -e "$_e" ] && ln -s "$_e" "$_wt/$_vd/$_scope/$(basename "$_e")"; done
                  fi
                  mkdir -p "$_wt/$_vd/$_scope"
-                 _link_entry "$_wt/$_vd/$_scope/$_base" "$_prov" ;;
-            *)   _link_entry "$_wt/$_vd/$_name" "$_prov" ;;
+                 _place_sibling_package "$_wt/$_vd/$_scope/$_base" "$_prov" "$_vd" "$_root/$_vd/$_scope/$_base" ;;
+            *)   _place_sibling_package "$_wt/$_vd/$_name" "$_prov" "$_vd" "$_root/$_vd/$_name" ;;
         esac
         log "  [sibling] ${_name} → ${_prov} in $(basename "$_wt") (the codeline keeps its installed release)"
     done <<< "$_pairs"

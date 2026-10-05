@@ -673,7 +673,8 @@ _commit_written_test() {
         return 0
     fi
     local _commit_output _commit_rc
-    _commit_output=$(git -C "$PROJECT_ROOT" commit $(pipeline_commit_flags) -m "${STORY_ID}: add ${_commit_noun}" --quiet 2>&1)
+    local _pcf=(); mapfile -t _pcf < <(pipeline_commit_flags)
+    _commit_output=$(git -C "$PROJECT_ROOT" commit ${_pcf[@]+"${_pcf[@]}"} -m "${STORY_ID}: add ${_commit_noun}" --quiet 2>&1)
     _commit_rc=$?
     if [ "$_commit_rc" -eq 0 ]; then
         _test_committed=1

@@ -274,7 +274,8 @@ if [ -n "$_dirty" ]; then
     # reject for ANY reason, and this pipeline cannot and should not
     # hardcode every possible hook's exact rule set per project; surfacing
     # the hook's own output is the generic fix.
-    _commit_output=$(git -C "$PROJECT_ROOT" commit $(pipeline_commit_flags) -m "${STORY_ID}: update tests invalidated by the fix" --quiet 2>&1)
+    _pcf=(); mapfile -t _pcf < <(pipeline_commit_flags)
+    _commit_output=$(git -C "$PROJECT_ROOT" commit ${_pcf[@]+"${_pcf[@]}"} -m "${STORY_ID}: update tests invalidated by the fix" --quiet 2>&1)
     _commit_rc=$?
     if [ "$_commit_rc" -eq 0 ]; then
         log "committed updated test(s) — suite green"

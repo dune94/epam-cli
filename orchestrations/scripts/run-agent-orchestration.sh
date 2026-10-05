@@ -2589,7 +2589,8 @@ if [ -n "${main_stories:-}" ] && \
         # reintroducing the exact defect this capture exists to fix (same
         # guard commit_completed_story() uses, lib/git-ops.sh).
         set +e
-        _step9_commit_output=$(git -C "$PROJECT_ROOT" commit $(pipeline_commit_flags) -m "$_step9_commit_msg" 2>&1)
+        _pcf=(); mapfile -t _pcf < <(pipeline_commit_flags)
+        _step9_commit_output=$(git -C "$PROJECT_ROOT" commit ${_pcf[@]+"${_pcf[@]}"} -m "$_step9_commit_msg" 2>&1)
         _step9_commit_rc=$?
         set -e
         if [ "$_step9_commit_rc" -eq 0 ]; then

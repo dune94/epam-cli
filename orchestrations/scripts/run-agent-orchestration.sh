@@ -2874,8 +2874,13 @@ if [ "$need_worktrees" = true ]; then
             continue
         fi
 
+        # THE STORY ID FIRST, as the story commit writes it (lib/git-ops.sh): a codeline's commit-msg
+        # hook judges this merge commit too. "merge: phase …" was refused by next.gotransit.com's
+        # commitlint (jira rules) after the writer had passed, and the lane failed (AMSD-2974, 2026-10-05).
+        _merge_lane_list="$primary_stories"; [ "$_wt_branch" = "wt-independent" ] && _merge_lane_list="$independent_stories"
+        _merge_story_id="$(printf '%s\n' "$_merge_lane_list" | tr ' ' '\n' | grep -m1 . || true)"
         if git -C "$_merge_git_root" merge --no-ff -X ours "$_wt_branch" \
-            -m "merge: phase $PHASE ${_wt_branch#wt-} lane ($_ahead commits)" 2>&1; then
+            -m "${_merge_story_id:+${_merge_story_id}: }merge phase $PHASE ${_wt_branch#wt-} lane ($_ahead commits)" 2>&1; then
             success "  Merged $_wt_branch into $_merge_current_branch"
             "$SCRIPT_DIR/update-monitor.sh" event "merge_back" \
                 "Merged $_wt_branch into $_merge_current_branch ($_ahead commits)" "" "main" "orchestrator" 2>/dev/null || true

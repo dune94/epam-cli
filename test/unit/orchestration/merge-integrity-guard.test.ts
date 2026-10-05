@@ -147,7 +147,7 @@ describe('Step 3.2 merge — merge-integrity guard against silent -X ours data l
       // master specifically, no *silent* merge commit landed overwriting it
       // without a trace.
       const log = git(dir, 'log', '--oneline', '-5');
-      expect(log).not.toMatch(/merge: phase/);
+      expect(log).not.toMatch(/merge:? phase/);
       void finalContent;
     } finally {
       rmSync(dir, { recursive: true, force: true });

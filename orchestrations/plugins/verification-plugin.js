@@ -112,9 +112,13 @@ function runVerification(projectRoot, timeoutMs, section) {
   const suite = section === 'test' ? testCommandFor(projectRoot) : '';
   const command = (suite || m.command).replace(/\$\{PROJECT_ROOT\}/g, projectRoot);
   try {
+    // NO OUTPUT CAP. execSync's default maxBuffer (1 MiB) KILLS the suite once a stream passes it and
+    // reports exit 1: a jest run full of console noise was judged "failed" with a cut-off log no
+    // parser could read, and every pre-existing failure was charged to the story (AMSD-2974
+    // gotransit, 2026-10-05; tests/unit/orchestration/a-suite-that-says-a-lot-is-judged-on-all-of-it).
     const out = execSync(command, {
       cwd: projectRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: timeoutMs || 600000,
+      timeout: timeoutMs || 600000, maxBuffer: Infinity,
     });
     return { status: 'pass', exitCode: 0, output: out || '' };
   } catch (e) {
@@ -237,7 +241,7 @@ function runTests(projectRoot, timeoutMs) {
   try {
     const out = execSync(command, {
       cwd: projectRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: timeoutMs || 1800000,
+      timeout: timeoutMs || 1800000, maxBuffer: Infinity,   // no output cap — see runVerification
     });
     return { status: 'pass', exitCode: 0, output: out || '', command };
   } catch (e) {

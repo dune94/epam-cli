@@ -24,6 +24,13 @@ _PRG_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #   2 — the project declares no test suite
 pre_review_suite() {
     local _root="$1" _log_dir="$2" _gate_log="$3" _out _rc=0
+    # EPAM_WHOLE_SUITE_CHECK=0 — the operator's choice: the story is judged by its own tests, not by the
+    # codeline's whole suite against a baseline (next.gotransit.com carries a test that fails 2 runs in 4
+    # on its untouched baseline, so a single baseline run charged it to whichever story ran; 2026-10-05).
+    if [ "${EPAM_WHOLE_SUITE_CHECK:-1}" = "0" ]; then
+        warning "  Step 19: the whole-suite check is off (EPAM_WHOLE_SUITE_CHECK=0) — the stories were judged by their own tests"
+        return 0
+    fi
     _out=$(mktemp "${TMPDIR:-/tmp}/pre-review-suite-XXXXXX")
     local _run=(bash -c '. "$1" && _run_project_verification "$2" test' _ "$_PRG_LIB_DIR/tsc-baseline-gate.sh" "$_root")
     if command -v run_test_bounded >/dev/null 2>&1; then

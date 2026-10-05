@@ -1251,6 +1251,11 @@ verify_codeline_suite() {
     local story_id="$1" output_file="${2:-/dev/null}" ran_cmd="${3:-}"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
     local whole_cmd
+    # EPAM_WHOLE_SUITE_CHECK=0: judged by its own tests only (lib/pre-review-gate.sh says why).
+    if [ "${EPAM_WHOLE_SUITE_CHECK:-1}" = "0" ]; then
+        log "  The whole-suite check is off (EPAM_WHOLE_SUITE_CHECK=0) — $story_id is judged by its own tests"
+        return 0
+    fi
     whole_cmd=$(_project_test_command "$PROJECT_ROOT")
     [ -n "$whole_cmd" ] || return 0
     [ "$whole_cmd" = "$ran_cmd" ] && return 0

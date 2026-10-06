@@ -85,10 +85,14 @@ describe('the detective of a spanning story is given those facts', () => {
     finally { if (prev === undefined) delete process.env.PRD_FILE; else process.env.PRD_FILE = prev; }
   });
 
-  it('a story confined to one codeline gets today\'s instructions, byte for byte', () => {
+  // ONE CODELINE, ONE PLAN, SAME PROCESS (operator, 2026-10-06): asked for its plan, given no package facts.
+  it('a story confined to one codeline is asked for its plan, and given no cross-codeline package facts', () => {
     const base = runner.detectivePrescription('novel');
     expect(base.length).toBeGreaterThan(100);
-    expect(runner.detectivePrescription('novel', { id: 'S-2', codeline: 'lib' }, prd)).toBe(base);
+    const one = runner.detectivePrescription('novel', { id: 'S-2', codeline: 'lib' }, prd);
+    expect(one.startsWith(base)).toBe(true);
+    expect(one).toContain('<OVERALL_PLAN>');
+    expect(one).not.toContain('PACKAGE FACTS');
   });
 });
 

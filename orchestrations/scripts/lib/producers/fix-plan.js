@@ -117,6 +117,29 @@ function sharedFact(sh) {
 }
 
 /**
+ * THE STORY'S OVERALL PLAN, as every agent of every codeline reads it — one rendering, so the detective of a
+ * later codeline, the spec agent, the writer and both reviewers are told the same plan (2026-10-06). The
+ * codeline being worked is marked, so each sees its own part within the whole.
+ */
+function overallPlanText(plan, here) {
+  if (!plan || !Array.isArray(plan.codelines) || !plan.codelines.length) return '';
+  const lines = ['THE OVERALL PLAN for this story — written once, for every codeline it is worked in:'];
+  const ordered = [...plan.codelines].sort((a, b) => (a.order == null ? 1e9 : a.order) - (b.order == null ? 1e9 : b.order));
+  for (const c of ordered) {
+    lines.push(`- ${c.order != null ? `${c.order}. ` : ''}${c.codeline}${c.codeline === here ? ' (THIS CODELINE)' : ''}: ${c.part}`);
+  }
+  for (const p of (Array.isArray(plan.packages) ? plan.packages : [])) {
+    lines.push(`Package \`${p.package}\`${p.providedBy ? `, provided by ${p.providedBy}` : ''}.`);
+    for (const l of p.releaseLines || []) lines.push(`  release line ${l.line}: cut from ${l.base}, ships as ${l.version}`);
+    for (const c of p.consumers || []) {
+      lines.push(`  consumer ${c.codeline}${c.codeline === here ? ' (THIS CODELINE)' : ''}: declares ${c.declaredRange}, receives ${c.receivesVia}; its own change: ${c.change || 'none'}`);
+      for (const u of c.usage || []) lines.push(`    uses: ${u}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+/**
  * @param {Array|null|undefined} sites  the detective's fixSiteAnalysis, verbatim
  * @returns {string} markdown, or '' when there is nothing to say
  */
@@ -198,7 +221,9 @@ function renderShared(templateId, story, prd, sites) {
       if (s && s.shared && typeof s.shared === 'object') shared.push(`- ${cl}: ${s.file} — ${sharedFact(s.shared)}`);
     }
   }
-  if (shared.length === 0) return '';
+  // THE STORY'S PLAN COMES FIRST, when there is one: it is what this codeline is worked from.
+  const plan = story && story.overallPlan ? overallPlanText(story.overallPlan, here) : '';
+  if (shared.length === 0 && !plan) return '';
 
   const dirs = (prd && prd.project && Array.isArray(prd.project.outputDirs)) ? prd.project.outputDirs : [];
   const dirOf = (cl) => (dirs.find((d) => d && d.codeline === cl) || {}).path;
@@ -211,7 +236,7 @@ function renderShared(templateId, story, prd, sites) {
   // eslint-disable-next-line global-require
   const { renderEngineTemplate } = require('../engine-prompt.js');
   return renderEngineTemplate(templateId, {
-    __SHARED_SITES__: shared.join('\n'),
+    __SHARED_SITES__: [plan, ...shared].filter(Boolean).join('\n'),
     __SIBLING_LOCATIONS__: locations.join('\n') || '- none recorded',
   });
 }
@@ -239,7 +264,8 @@ function publishFixPlans(prd, env) {
   return published;
 }
 
-module.exports = { renderFixPlan, renderStoryPlan, renderShared, publishFixPlans, sharedFact, KIND, PRODUCER };
+module.exports = {
+  overallPlanText, renderFixPlan, renderStoryPlan, renderShared, publishFixPlans, sharedFact, KIND, PRODUCER };
 
 // CLI: node fix-plan.js <prd.json> <story-id>   — emits the rendered plan on stdout.
 // The shell consumers call it this way; it is the same function either way, never a second copy.

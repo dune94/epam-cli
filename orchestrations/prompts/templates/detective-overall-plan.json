@@ -1,0 +1,21 @@
+{
+  "$why": [
+    "Operator, 2026-10-06: \"when code detection returns multiple codelines we need an overall plan passed to each",
+    "codeline as a shared artefact\"; \"when there is only one codeline — one plan, same process\"; \"the manifest or",
+    "detective at the shared level should have recognised the consumer code blast radius and provided the plan for ALL",
+    "codelines\". AMSD-2974: each codeline's detective planned alone, so a library change shipped one major version",
+    "past two consumers' locked ranges and the only remedy anyone could name was editing those ranges. A real team",
+    "plans a change once, across every codeline it touches, and ships it on every release line its consumers are on.",
+    "2026-10-06, the real-model probe: the plan said consumers receive the release via their update script, which installs the latest release and would rewrite the very range the plan keeps."
+  ],
+  "description": "Composed into every code-graph detective's prescription: before naming fix sites, write the one plan the whole story is worked from — every codeline's part, every consumer's blast radius, every release line.",
+  "id": "detective-overall-plan",
+  "seams": [
+    "code-graph-detective"
+  ],
+  "placeholders": [
+    "__PLAN_CODELINES__"
+  ],
+  "version": 1,
+  "body": "\nTHE OVERALL PLAN. This story is worked in the codelines below, and every one of them is worked from the plan you write here — it is the one plan for the whole story, not this codeline's notes. You can read each codeline at the location given.\n__PLAN_CODELINES__\nEstablish, by reading the code, not by assuming:\n1. EACH CODELINE'S PART: what it must change in its own code, or that it changes nothing — and the order the codelines must be worked in, when one needs another's change first.\n2. FOR EVERY PACKAGE ONE OF THESE CODELINES PROVIDES AND ANOTHER CONSUMES: the BLAST RADIUS — in each consumer, the files and calls that reach the code being changed, read in that consumer; and whether the change alters anything those calls depend on.\n3. THE RELEASE LINES the change must ship on, so that every consumer receives it through the range it ALREADY declares. A consumer's declared range is never changed by this story. Say how each consumer receives its release: within its declared range (an update the range already allows) — never by installing the latest release, which can move the range; read what a consumer's own scripts do before naming one. One line per distinct line the consumers' ranges require; for each, the base it is cut from (the newest existing release on that line, from the release facts above) and the version it ships as.\n\nWrite the plan as ONE JSON object between these tags, before your fix-site answer:\n<OVERALL_PLAN>\n{\"codelines\":[{\"codeline\":\"<name>\",\"part\":\"<what it changes in its own code, or that it changes nothing and how it receives the change>\",\"order\":1}],\"packages\":[{\"package\":\"<name, as its manifest declares it>\",\"providedBy\":\"<codeline>\",\"releaseLines\":[{\"line\":\"<the release line>\",\"base\":\"<the existing release it is cut from>\",\"version\":\"<the version it ships as>\"}],\"consumers\":[{\"codeline\":\"<codeline>\",\"declaredRange\":\"<as its manifest declares it>\",\"receivesVia\":\"<the version, from the release lines above>\",\"usage\":[\"<file>: <how it reaches the code being changed>\"],\"change\":\"<what this consumer changes in its own code, or none>\"}]}]}\n</OVERALL_PLAN>\nA story worked in ONE codeline writes the same plan: one entry under codelines, and packages empty unless that codeline provides one another codeline consumes.\n"
+}

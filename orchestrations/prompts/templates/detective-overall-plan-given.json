@@ -1,0 +1,18 @@
+{
+  "$why": [
+    "Operator, 2026-10-06: one plan for the story, written once and passed to every codeline as a shared artefact.",
+    "The first detective writes it (detective-overall-plan); the detective of every later codeline is given it here and",
+    "investigates its own codeline's part, rather than planning the story again from one codeline's view."
+  ],
+  "description": "Composed into the code-graph detective's prescription once the story has an overall plan: work this codeline's part of it, and say plainly where this codeline's code contradicts it.",
+  "id": "detective-overall-plan-given",
+  "seams": [
+    "code-graph-detective"
+  ],
+  "placeholders": [
+    "__OVERALL_PLAN__",
+    "__THIS_CODELINE__"
+  ],
+  "version": 1,
+  "body": "\nTHIS STORY ALREADY HAS ITS PLAN, written by the first investigation for every codeline it is worked in. You are investigating codeline \"__THIS_CODELINE__\": locate the fix sites for ITS part of the plan below, and nothing the plan gives to another codeline.\n__OVERALL_PLAN__\nThe plan is the story's, not a lead to re-derive. Where this codeline's own code contradicts it — a use of the changed code the plan does not list, a part that cannot be done as stated — say so in the fix site's reason, naming what you found; do not write a different plan.\n"
+}

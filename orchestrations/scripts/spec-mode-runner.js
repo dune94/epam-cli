@@ -5924,7 +5924,7 @@ async function regenerateVcViaOpenspec({ story, flags, cycle, logDir, findings =
       // whose vagueness the cap was meant to be fixing.
       + findings.map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n')
       + `\nDo NOT write criteria about areas unrelated to this code.\n`
-      + sharedSpecBlock(findings)
+      + sharedSpecBlock(findings, story)
     : '';
 
   const prompt = buildVcRegeneratePrompt({ story, flags, siteBlock });
@@ -6277,7 +6277,7 @@ function detectivePrescription(kind, story, prd) {
   // OPPOSITE things about the most consequential field — brokenLine is required for a defect and
   // must be empty for novel work — and a branching prompt hides which set an agent received.
   return renderEngineTemplate('detective-prescription', {}, kind === 'defect' ? 'defect' : 'novel')
-    + detectiveSharedBlock(story, prd);
+    + detectiveSharedBlock(story, prd) + overallPlanBlock(story, prd);
 }
 
 /** The lane's PRD as the spec pass runs it (PRD_FILE), or null. */
@@ -6300,6 +6300,7 @@ function codelinePackagesBlock(lanes, prd) {
     const declared = Object.entries(f.declares || {});
     if (f.provides && facts.some((o) => o.codeline !== f.codeline && Object.prototype.hasOwnProperty.call(o.declares || {}, f.provides.name))) {
       lines.push(`- ${f.codeline} provides ${f.provides.name}, version ${f.provides.version || 'not stated in its manifest'}`);
+      if (Array.isArray(f.releases) && f.releases.length) lines.push(`  its releases (git tags, newest first): ${f.releases.join(', ')}`);
     }
     for (const [name, range] of declared) if (provided.has(name)) lines.push(`- ${f.codeline} declares ${name} ${range}`);
   }
@@ -6323,12 +6324,41 @@ function codelinePackagesBlock(lanes, prd) {
  * the spec agent never saw it, and every consumer's description and criteria contradicted each
  * other. Empty when no finding is shared, so every other prompt is unchanged.
  */
-function sharedSpecBlock(findings) {
+function sharedSpecBlock(findings, story) {
   const shared = (Array.isArray(findings) ? findings : []).filter((f) => f && f.shared && typeof f.shared === 'object');
-  if (!shared.length) return '';
-  const { sharedFact } = require('./lib/producers/fix-plan.js');
+  const plan = story && story.overallPlan;
+  if (!shared.length && !plan) return '';
+  const { sharedFact, overallPlanText } = require('./lib/producers/fix-plan.js');
   return renderEngineTemplate('spec-shared-consumer', {
-    __SHARED_FACTS__: shared.map((f) => `- ${f.file} — ${sharedFact(f.shared)}`).join('\n'),
+    __SHARED_FACTS__: [plan ? overallPlanText(plan, story.codeline) : '', ...shared.map((f) => `- ${f.file} — ${sharedFact(f.shared)}`)].filter(Boolean).join('\n'),
+  });
+}
+
+/** The codelines a story is worked in, each with where its working copy is (the lane PRD's outputDirs). */
+function storyCodelineRoots(story, prd) {
+  const p = prd || lanePrdFromEnv();
+  const dirs = (p && p.project && Array.isArray(p.project.outputDirs)) ? p.project.outputDirs : [];
+  const lanes = (story && Array.isArray(story.codelines) && story.codelines.length) ? story.codelines.filter(Boolean)
+    : [story && story.codeline].filter(Boolean);
+  return lanes.map((cl) => ({ codeline: cl, path: (dirs.find((d) => d && d.codeline === cl) || {}).path || '' }));
+}
+
+/**
+ * THE OVERALL PLAN (detective-overall-plan): every story, one codeline or many, is planned once and worked
+ * from that plan (operator, 2026-10-06). Empty only when the story names no codeline at all.
+ */
+function overallPlanBlock(story, prd) {
+  const roots = storyCodelineRoots(story, prd);
+  if (!roots.length) return '';
+  if (story && story.overallPlan) {
+    // eslint-disable-next-line global-require
+    return renderEngineTemplate('detective-overall-plan-given', {
+      __OVERALL_PLAN__: require('./lib/producers/fix-plan.js').overallPlanText(story.overallPlan, story.codeline),
+      __THIS_CODELINE__: String(story.codeline || ''),
+    });
+  }
+  return renderEngineTemplate('detective-overall-plan', {
+    __PLAN_CODELINES__: roots.map((r) => `- ${r.codeline}${r.path ? ` — ${r.path}` : ''}${r.codeline === (story && story.codeline) ? ' (the codeline you are in)' : ''}`).join('\n'),
   });
 }
 
@@ -6550,8 +6580,35 @@ function firstJsonArrayOfObjects(out) {
   }
 }
 
+/**
+ * THE OVERALL PLAN in a detective's answer (detective-overall-plan), or null. Read on its own: the plan holds
+ * lists of objects, and read as part of the answer it was taken for the fix-site list — the real reply that
+ * proved the plan (2026-10-06) parsed to zero fix sites. Kept only in the shape the template states.
+ */
+function parseOverallPlan(out) {
+  const m = String(out || '').match(/<OVERALL_PLAN>([\s\S]*?)<\/OVERALL_PLAN>/);
+  if (!m) return null;
+  let v = null;
+  try { v = JSON.parse(m[1].trim()); } catch { try { v = _jsonrepair ? JSON.parse(_jsonrepair(m[1].trim())) : null; } catch { v = null; } }
+  if (!v || typeof v !== 'object' || !Array.isArray(v.codelines)) return null;
+  const str = (x) => (typeof x === 'string' ? x : '');
+  const codelines = v.codelines.filter((c) => c && typeof c.codeline === 'string' && c.codeline)
+    .map((c) => ({ codeline: c.codeline, part: str(c.part), order: Number.isFinite(Number(c.order)) ? Number(c.order) : null }));
+  if (!codelines.length) return null;
+  const packages = (Array.isArray(v.packages) ? v.packages : []).filter((p) => p && typeof p.package === 'string' && p.package)
+    .map((p) => ({
+      package: p.package, providedBy: str(p.providedBy),
+      releaseLines: (Array.isArray(p.releaseLines) ? p.releaseLines : []).filter((l) => l && typeof l === 'object')
+        .map((l) => ({ line: str(l.line), base: str(l.base), version: str(l.version) })),
+      consumers: (Array.isArray(p.consumers) ? p.consumers : []).filter((c) => c && typeof c.codeline === 'string')
+        .map((c) => ({ codeline: c.codeline, declaredRange: str(c.declaredRange), receivesVia: str(c.receivesVia),
+          usage: (Array.isArray(c.usage) ? c.usage : []).filter((u) => typeof u === 'string'), change: str(c.change) })),
+    }));
+  return { codelines, packages };
+}
+
 function parseDetectiveFindings(out, repoPath) {
-  const arr = firstJsonArrayOfObjects(out);
+  const arr = firstJsonArrayOfObjects(String(out || '').replace(/<OVERALL_PLAN>[\s\S]*?<\/OVERALL_PLAN>/g, ''));
   if (arr === null) return null;
   const seen = new Set();
   const findings = [];
@@ -6993,6 +7050,8 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
         // grandchild `epam run` through runClaude's env merge (spawn env).
         EPAM_ALLOWED_TOOLS: process.env.CODEGRAPH_DETECTIVE_ALLOWED_TOOLS || 'bash',
         PROJECT_ROOT: repoPath,
+        // EVERY CODELINE OF THE STORY IS READABLE: the overall plan is written from all of them, not this one.
+        EPAM_READ_ROOTS: storyCodelineRoots(story).map((r) => r.path).filter((p) => p && p !== repoPath).join('\n'),
         // Iteration budget. HARD-WON lesson (2026-07-23): a GENEROUS cap is
         // actively harmful here. At 40 the model THRASHED — 40 tool calls,
         // 680K input tokens, ~$0.17, and it hit the cap returning "Agent reached
@@ -7061,6 +7120,8 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
         timeoutMs: (Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS) || seamDeclares('code-graph-detective').timeoutMs),
       });
       let findings = parseFindings(out);
+      // THE STORY'S PLAN, written once: the first detective to write one writes it for every codeline.
+      if (story && !story.overallPlan) { const _plan = parseOverallPlan(out); if (_plan) story.overallPlan = _plan; }
       const _phase1Findings = Array.isArray(findings) ? findings.length : 0;
       // PHASE 2 — EXTRACT (no tools). Phase 1 investigated but ended in prose
       // (no JSON). Hand that investigation text to a NO-TOOLS turn whose ONLY
@@ -7083,6 +7144,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
           EPAM_MAX_ITERATIONS: '2',
         }, { salvageOutputOnFailure: true, costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '', timeoutMs: (Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS) || seamDeclares('code-graph-detective').timeoutMs) });
         findings = parseFindings(out2);
+        if (story && !story.overallPlan) { const _plan = parseOverallPlan(out2); if (_plan) story.overallPlan = _plan; }
         if (findings && findings.length) {
           console.warn(`spec-mode: code-graph-detective phase-2 extraction recovered ${findings.length} fix-site(s) for ${story.id} from a narrative phase-1 answer.`);
         }
@@ -7745,7 +7807,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   const fixSiteBlock = detectiveFindings.length
     ? `\n\nLOCATED FIX SITE(S) — traced in this repository before you were asked. Anchor every criterion to the behaviour THIS code produces:\n`
       + detectiveFindings.slice(0, evidenceWindow('fixSitesInPrompt')).map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n') + '\n'
-      + sharedSpecBlock(detectiveFindings)
+      + sharedSpecBlock(detectiveFindings, story)
     : '';
   // detectiveFindings, not story.fixSiteAnalysis: the field is not set until later.
   const declaredFileBlock = manifestFileExcerpts(story, prd, { located: detectiveFindings });
@@ -8108,7 +8170,7 @@ async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runI
       __FORCED_RETRY_BLOCK__: forcedRetryBlock,
       // What the detective reported as shared between this story's codelines — speckit can rewrite
       // the description, and must keep it consistent with how a shared change is verified.
-      __SHARED_BLOCK__: sharedSpecBlock(story && story.fixSiteAnalysis),
+      __SHARED_BLOCK__: sharedSpecBlock(story && story.fixSiteAnalysis, story),
       __PHASE__: phase,
       __STORY_ID__: story.id,
       __EXISTING_CHILDREN__: JSON.stringify(openspecOutput?.splitStories || [], null, 2),
@@ -8125,7 +8187,7 @@ async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runI
       __FORCED_RETRY_BLOCK__: forcedRetryBlock,
       // What the detective reported as shared between this story's codelines — speckit can rewrite
       // the description, and must keep it consistent with how a shared change is verified.
-      __SHARED_BLOCK__: sharedSpecBlock(story && story.fixSiteAnalysis),
+      __SHARED_BLOCK__: sharedSpecBlock(story && story.fixSiteAnalysis, story),
       __PHASE__: phase,
       __STORY_ID__: story.id,
       __OPENSPEC_OUTPUT__: JSON.stringify({
@@ -11101,6 +11163,8 @@ module.exports = {
   getDeterministicCandidateFiles,
   buildBrownfieldSearchQuery,
   parseDetectiveFindings,
+  parseOverallPlan,
+  sharedSpecBlock,
   prescriptionMissingSource,
   runCodeGraphDetective,
   runSpecAgent,

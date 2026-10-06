@@ -43,7 +43,16 @@ function codelinePackages(prd, codelines) {
       } catch { provides = null; }
       try { ranges = (typeof m.eco.depRanges === 'function' && m.eco.depRanges(m.text)) || {}; } catch { ranges = {}; }
     }
-    return { codeline: cl, provides, ranges };
+    // ITS RELEASES, from its own history: a consumer locked to an older line receives a change only if
+    // the provider ships it there too, and the base of that line is the newest release on it (2026-10-06).
+    let releases = [];
+    if (provides) {
+      try {
+        releases = require('child_process').execFileSync('git', ['-C', rootOf(cl), 'tag', '--sort=-v:refname'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+          .split('\n').map((t) => t.trim()).filter(Boolean);
+      } catch { releases = []; }
+    }
+    return { codeline: cl, provides, ranges, releases };
   });
   return read.map((r) => {
     const declares = {};
@@ -51,7 +60,7 @@ function codelinePackages(prd, codelines) {
       if (!o.provides) continue;
       if (Object.prototype.hasOwnProperty.call(r.ranges, o.provides.name)) declares[o.provides.name] = String(r.ranges[o.provides.name]);
     }
-    return { codeline: r.codeline, provides: r.provides, declares };
+    return { codeline: r.codeline, provides: r.provides, declares, releases: r.releases };
   });
 }
 

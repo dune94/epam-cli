@@ -152,6 +152,8 @@ function mergeLaneIntoCanonical({ canonical, updated, codeline }) {
       verificationCriteriaPerCodeline: vcPerCodeline,
       verificationCriteria: unionCriteria(vcPerCodeline, s.codelines),
       fixSiteAnalysisPerCodeline: fsPerCodeline,
+      // THE STORY'S PLAN IS WRITTEN ONCE (detective-overall-plan): the first lane's stands for every codeline.
+      ...((s.overallPlan || u.overallPlan) ? { overallPlan: s.overallPlan || u.overallPlan } : {}),
       fixSiteAnalysis: concatFindings(fsPerCodeline, s.codelines),
       codelines: s.codelines,
       completed: everyLaneDone,

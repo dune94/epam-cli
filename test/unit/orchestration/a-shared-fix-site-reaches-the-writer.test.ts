@@ -63,10 +63,15 @@ describe('the detective of a spanning story is asked whether a fix site is share
       expect(out).toContain('src/toast.tsx');
     });
 
-    it(`${kind}: a story confined to one codeline gets today's instructions, byte for byte`, () => {
+    // ONE CODELINE, ONE PLAN, SAME PROCESS (operator, 2026-10-06): it is asked for the story's plan like any
+    // story, and is given none of the cross-codeline shared block.
+    it(`${kind}: a story confined to one codeline is asked for its plan, and nothing about other codelines`, () => {
       const base = runner.detectivePrescription(kind);
       expect(base.length, 'the prescription rendered nothing').toBeGreaterThan(100);
-      expect(runner.detectivePrescription(kind, single)).toBe(base);
+      const one = runner.detectivePrescription(kind, single);
+      expect(one.startsWith(base)).toBe(true);
+      expect(one).toContain('<OVERALL_PLAN>');
+      expect(one).not.toContain('THIS STORY SPANS CODELINES');
       expect(base).not.toContain('"shared"');
     });
   }

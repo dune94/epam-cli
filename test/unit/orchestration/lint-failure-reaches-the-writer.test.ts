@@ -110,47 +110,25 @@ printf 'VF_START<<%s>>' "$VERIFICATION_FAILURE"
   };
 }
 
-describe('a repo-lint rejection reaches the next attempt', () => {
+describe('a repo-lint rejection is reported, never blocking', () => {
   const MESSAGE = "/src.ts\n  1:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any";
 
   beforeAll(() => { dir = makeRepo(1, MESSAGE); });
   afterAll(() => { rmSync(dir, { recursive: true, force: true }); });
 
-  it('the gate actually ran and rejected — otherwise every assertion below is vacuous', () => {
+  // Operator, 2026-10-06: report, never block. Pipeline commits skip the codeline's hooks
+  // (lib/pipeline-commit.sh), so the hook that made a lint rejection fatal no longer refuses anything.
+  it('the gate ran and REPORTED the violation, naming the rule — it did not fail the attempt', () => {
     const r = runLintGate(dir);
-    expect(r.rc, `gate did not fail; stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toMatch(/repo-lint/);
+    expect(r.stderr, 'the gate did not report the rejection — the test proves nothing').toMatch(/repo-lint/);
+    expect(r.stderr).toContain('@typescript-eslint/no-explicit-any');
+    expect(r.rc, `a lint rejection failed the attempt; stderr: ${r.stderr}`).toBe(0);
   });
 
-  it('it writes the feedback text, naming the actual violation', () => {
+  it('it neither raises the deterministic-failure flag nor keys a rejection', () => {
     const r = runLintGate(dir);
-    expect(r.vfLen, 'VERIFICATION_FAILURE is empty').toBeGreaterThan(0);
-    expect(r.vf, 'the eslint rule the writer must fix is not in the feedback')
-      .toContain('@typescript-eslint/no-explicit-any');
-  });
-
-  it('THE DEFECT: it sets DETERMINISTIC_CHECK_FAILURE, so the text is DELIVERED, not dropped', () => {
-    const r = runLintGate(dir);
-    // Without this flag the retry loop does not route VERIFICATION_FAILURE into
-    // COORDINATOR_PROMPT_AMENDMENT; delivery falls to the analyst's discretionary target, which
-    // chose `kb` live — a channel that reaches future runs, never this retry.
-    expect(r.flag, 'lint feedback is assigned and dropped — the writer is never told').toBe(1);
-  });
-
-  it('it sets a rejection key, so an identical lint failure escalates the ladder', () => {
-    const r = runLintGate(dir);
-    expect(r.key, 'no rejection key — a lint failure repeating forever looks novel each time')
-      .toMatch(/^lint:/);
-    // 'lint:' alone would satisfy the prefix while carrying no signal, and every distinct lint
-    // failure would then look identical — escalating the ladder on the first repeat forever. The
-    // key is derived from the FAILURES (the identities the codeline declares, else the diagnostic
-    // lines): the same rejection keys the same, a different one keys differently.
-    expect(r.key, 'the key carries nothing beyond the prefix').not.toMatch(/^lint:$/);
-    expect(r.key, 'the key is the story id — every distinct lint failure collides').not.toBe('lint:STORY-1');
-    const again = runLintGate(makeRepo(1, MESSAGE));
-    expect(again.key, 'the same rejection must key the same').toBe(r.key);
-    const other = runLintGate(makeRepo(1, '/tmp/x/src.ts\n  4:1  error  Missing semicolon  semi\n'));
-    expect(other.key, 'a different rejection must key differently').not.toBe(r.key);
+    expect(r.flag).toBe(0);
+    expect(r.key || '').not.toMatch(/^lint:/);
   });
 
   it('a CLEAN lint run neither fails nor sets the flag', () => {

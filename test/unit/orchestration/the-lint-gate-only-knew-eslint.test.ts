@@ -152,10 +152,12 @@ describe('the gate runs what the codeline declares', () => {
     expect(out).toMatch(/RC=0/);
   });
 
-  it('BLOCKS when the declared command rejects the change', () => {
+  // Report, never block (operator, 2026-10-06): pipeline commits skip the hooks that made this fatal.
+  it('REPORTS, without blocking, when the declared command rejects the change', () => {
     const out = lint({ declare: 'fixturelint', stub: 'echo "src/a.ts: no-explicit-any" >&2; exit 1' });
-    expect(out).toMatch(/ERROR:/);
-    expect(out).not.toMatch(/RC=0/);
+    expect(out).toMatch(/rejects/i);
+    expect(out).toMatch(/no-explicit-any/);
+    expect(out).toMatch(/RC=0/);
   });
 
   it('does not require eslint to exist', () => {

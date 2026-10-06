@@ -1251,7 +1251,13 @@ _run_declared_lint_gate() {
     # REPORTED; they fail the story only where a pre-commit hook would have refused the commit
     # anyway. A repo without one is held to its own standard, not ours — the rule this gate was
     # written with, preserved now that the linter runs whether or not a hook exists.
-    local _dl_enforcing="${4:-1}"
+    # NOTHING REFUSES A PIPELINE COMMIT NOW: they skip the codeline's hooks (lib/pipeline-commit.sh,
+    # operator decision 2026-10-05), so the reason to fail here is gone. Operator, 2026-10-06: report,
+    # never block — live AMSD-2974 (upexpress) this ran `npm run lint <files>` as `next lint <file>…`,
+    # which Next reads as directories, and blocked every attempt on a command error. Step 20's lint gate
+    # still judges the change against the baseline.
+    local _dl_enforcing=0
+    : "${4:-}"
     local _dl_changed _dl_testable="" _dl_files=() _dl_f
 
     _dl_changed=$( { git -C "$PROJECT_ROOT" diff --name-only --diff-filter=d 2>/dev/null
@@ -1298,7 +1304,7 @@ _run_declared_lint_gate() {
     fi
 
     if [ "$_dl_enforcing" != "1" ]; then
-        warning "  [repo-lint] $story_id: the repository lint [$_cmd] rejects ${#_dl_files[@]} changed file(s), and this repo does not enforce lint at commit time — reported, not failed"
+        warning "  [repo-lint] $story_id: the repository lint [$_cmd] rejects ${#_dl_files[@]} changed file(s) — reported, not failed (pipeline commits skip the codeline's hooks; Step 20 judges lint)"
         printf '%s\n' "$_dl_out" | head -40 >&2
         return 0
     fi

@@ -168,23 +168,14 @@ describe('the fixture reproduces the live condition', () => {
   });
 });
 
-describe('THE DEFECT: the violation is caught before the commit', () => {
-  it('the gate fails the attempt', () => {
-    expect(
-      runGate(repo()).rc,
-      'the story proceeds to commit, husky rejects it, and lint-staged reverts the work away',
-    ).not.toBe(0);
-  });
-
-  it('the feedback names the file, the rule and the symbol so the writer can fix it', () => {
-    const { feedback } = runGate(repo());
-    expect(feedback).toContain('src/services/contentstack.ts');
-    expect(feedback).toContain('no-unused-vars');
-    expect(feedback).toContain('CONTENTSTACK_DEFAULT_PREVIEW_HOST');
-  });
-
-  it('it says why it is failing, not just that it failed', () => {
-    expect(runGate(repo()).log).toMatch(/lint|eslint/i);
+// Operator, 2026-10-06: report, never block. Pipeline commits skip the codeline's hooks
+// (lib/pipeline-commit.sh), so the hook that made a lint rejection fatal refuses nothing now; Step 20's
+// lint gate judges the change against the baseline.
+describe('a violation is reported before the commit, and does not fail the attempt', () => {
+  it('the gate reports the rejection', () => {
+    const r = runGate(repo());
+    expect(r.log, 'the gate did not report the rejection — the test proves nothing').toMatch(/WARN:.*repo-lint.*rejects/);
+    expect(r.rc, 'a lint rejection failed the attempt').toBe(0);
   });
 });
 
@@ -229,9 +220,11 @@ describe("engine artefacts are not the story's code", () => {
     expect(rc, "the gate linted the engine's own artefacts and failed the story").toBe(0);
   });
 
-  it("the story's real violation is still caught with engine artefacts present", () => {
+  it("the story's real violation is still reported with engine artefacts present", () => {
     // The paired positive: excluding engine paths must not excuse the client code beside them.
-    expect(runGate(repo({ engineArtifacts: true })).rc).not.toBe(0);
+    const r = runGate(repo({ engineArtifacts: true }));
+    expect(r.log).toMatch(/WARN:.*repo-lint.*rejects/);
+    expect(r.rc).toBe(0);
   });
 });
 
@@ -331,30 +324,19 @@ ${block}
   });
 });
 
-describe('the hook is found however the repo configures it', () => {
-  it('via core.hooksPath pointing somewhere other than .husky', () => {
-    // husky is not the only pre-commit manager, and hooksPath can name any directory. Only the
-    // first discovery branch can find this one.
-    expect(runGate(repo({ hooksPath: '.githooks' })).rc).not.toBe(0);
+describe('with any hook configuration, a rejection is reported and does not fail', () => {
+  it('via core.hooksPath, .husky/pre-commit, or the stock .git/hooks/pre-commit', () => {
+    for (const r of [runGate(repo({ hooksPath: '.githooks' })), runGate(repo())]) {
+      expect(r.log).toMatch(/WARN:.*repo-lint.*rejects/);
+      expect(r.rc).toBe(0);
+    }
   });
 
-  it('via .husky/pre-commit with no core.hooksPath set at all', () => {
-    const d = repo();
-    execFileSync('git', ['-C', d, 'config', '--unset', 'core.hooksPath']);
-    expect(runGate(d).rc).not.toBe(0);
-  });
-
-  it('via the stock .git/hooks/pre-commit', () => {
-    const d = repo({ hook: false });
-    writeFileSync(join(d, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nexit 0\n');
-    expect(runGate(d).rc).not.toBe(0);
-  });
-
-  it('and a repo with none of the three is still left alone', () => {
-    // The paired negative: the three branches must not collapse into "always run".
+  it('and a repo with no hook is still left alone', () => {
     expect(runGate(repo({ hook: false })).rc).toBe(0);
   });
 });
+
 
 /**
  * A GATE THAT DOES NOT SET VERIFICATION_FAILURE IS NOT WIRED TO THE WRITER.
@@ -383,36 +365,15 @@ describe('the hook is found however the repo configures it', () => {
  * is the default state of a gate, and only an assertion on the channel the writer really reads
  * distinguishes one that works.
  */
-describe('the finding reaches the next attempt, not just the log', () => {
-  it('VERIFICATION_FAILURE is set when lint rejects the work', () => {
-    expect(
-      runGate(repo()).vf.trim(),
-      'the writer never learns why it was rejected and repeats the same code',
-    ).not.toBe('');
-  });
-
-  it('it names the file, the rule and the symbol', () => {
-    const { vf } = runGate(repo());
-    expect(vf).toContain('src/services/contentstack.ts');
-    expect(vf).toContain('no-unused-vars');
-    expect(vf).toContain('CONTENTSTACK_DEFAULT_PREVIEW_HOST');
-  });
-
-  it('it says the commit will be refused, so the fix is not treated as optional', () => {
-    expect(runGate(repo()).vf).toMatch(/pre-commit|refuse|revert/i);
-  });
-
-  it('it follows the shape every other gate uses, so the analyst parses it the same way', () => {
-    expect(runGate(repo()).vf).toContain('## Verification Failure');
+describe('a rejection is not fed back as a verification failure', () => {
+  it('VERIFICATION_FAILURE stays empty when lint rejects the work', () => {
+    const r = runGate(repo());
+    expect(r.log, 'the gate did not reject — the test proves nothing').toMatch(/rejects/);
+    expect(r.vf.trim()).toBe('');
   });
 
   it('a passing gate leaves VERIFICATION_FAILURE empty', () => {
-    // Stale failure text is worse than none: it is what the analyst diagnosed from.
     expect(runGate(repo({ dirtyFileClean: true })).vf.trim()).toBe('');
   });
-
-  it('a skipped gate leaves it empty too', () => {
-    expect(runGate(repo({ hook: false })).vf.trim()).toBe('');
-    expect(runGate(repo({ eslint: false })).vf.trim()).toBe('');
-  });
 });
+

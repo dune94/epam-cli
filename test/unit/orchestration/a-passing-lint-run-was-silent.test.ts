@@ -83,10 +83,12 @@ describe('every outcome of the lint gate is distinguishable from the others', ()
       .toMatch(/repo-lint/);
   });
 
-  it('a FAILING lint run still says so, and still fails', () => {
+  // Report, never block (operator, 2026-10-06): pipeline commits skip the hooks that made this fatal.
+  it('a FAILING lint run still says so, and does not fail the attempt', () => {
     const r = runGate(repo(1, '/src/a.ts  1:1  error  Unexpected any  @typescript-eslint/no-explicit-any'));
-    expect(r.rc, 'a lint failure must fail the attempt — the hook would revert the work').toBe(1);
     expect(r.out).toMatch(/repo-lint/);
+    expect(r.out).toMatch(/rejects/i);
+    expect(r.rc, 'a lint rejection failed the attempt').toBe(0);
   });
 
   it('pass and fail are not confusable with each other', () => {

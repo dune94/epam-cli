@@ -6,7 +6,8 @@
     "criteria about the manifest, the VC guard rejected those as mechanism, and the description and the",
     "criteria left contradicted each other; the change reviewer rejected it on every attempt.",
     "Appended to the located fix sites only when a finding is shared, so every other story's prompt is",
-    "unchanged."
+    "unchanged.",
+    "Operator, 2026-10-06: a consumer's declared range is never changed by a story ('avoid package.json upgrades in this change'; a range may be locked for a reason); the provider ships the change on a release line inside each consumer's range."
   ],
   "description": "Composed into the spec agent's located fix sites when the detective reported a shared fix site: the shared facts, and how a codeline that consumes or provides a shared change is verified.",
   "id": "spec-shared-consumer",
@@ -14,6 +15,6 @@
   "placeholders": [
     "__SHARED_FACTS__"
   ],
-  "version": 1,
-  "body": "\nSHARED WITH ANOTHER CODELINE OF THIS STORY — the investigation reported:\n__SHARED_FACTS__\nHOW A SHARED CHANGE IS VERIFIED HERE. Where this codeline CONSUMES a package another codeline provides and its declared range does not take the change, the dependency entry is part of this codeline's change, but it is not what this codeline's verification observes: a criterion that reads the dependency entry, the lock file or what an install resolves describes HOW, not what a tester sees, and will be rejected. State each of this codeline's criteria as behaviour a tester observes through THIS codeline's own user-facing surface once it builds against the changed package — the place in this codeline that shows the shared behaviour now does what the story asks. Keep the description consistent with those criteria: never say this codeline's verification is limited to the dependency range, and never put out of scope the behaviour the criteria observe. Where this codeline PROVIDES the package, its criteria observe the behaviour through its own tests or its own surface. NEVER DECLARE ANOTHER CODELINE'S CHANGE out of scope, \"tracked separately\" or \"not needed\" unless the ticket itself says so: this story spans those codelines, and each of them is specified in its own right.\n"
+  "version": 2,
+  "body": "\nSHARED WITH ANOTHER CODELINE OF THIS STORY — the investigation reported:\n__SHARED_FACTS__\nHOW A SHARED CHANGE IS VERIFIED HERE. Where this codeline CONSUMES a package another codeline provides, its declared range is never part of this codeline's change: where the range does not take the version, the provider ships the change on a release line inside it, and this codeline receives it unedited. The dependency entry is not what this codeline's verification observes either: a criterion that reads the dependency entry, the lock file or what an install resolves describes HOW, not what a tester sees, and will be rejected. State each of this codeline's criteria as behaviour a tester observes through THIS codeline's own user-facing surface once it builds against the changed package from a release its declared range already takes — the place in this codeline that shows the shared behaviour now does what the story asks. Keep the description consistent with those criteria: never say this codeline's verification is limited to the dependency range, and never put out of scope the behaviour the criteria observe. Where this codeline PROVIDES the package, its criteria observe the behaviour through its own tests or its own surface. NEVER DECLARE ANOTHER CODELINE'S CHANGE out of scope, \"tracked separately\" or \"not needed\" unless the ticket itself says so: this story spans those codelines, and each of them is specified in its own right.\n"
 }

@@ -4,7 +4,8 @@
     "changing a shared package and a consumer at once builds and tests the consumer against the",
     "package's working copy, and saves none of that redirection: it is how they test, not what they",
     "ship. The location is RELATIVE to this codeline (operator, 2026-10-01: no absolute paths in a",
-    "prompt). Rendered by the fix-plan producer only when a site of this story carries 'shared'."
+    "prompt). Rendered by the fix-plan producer only when a site of this story carries 'shared'.",
+    "Operator, 2026-10-06: a consumer's declared range is never changed by a story ('avoid package.json upgrades in this change'; a range may be locked for a reason); the provider ships the change on a release line inside each consumer's range."
   ],
   "description": "Appended to a writer's fix plan when the detective reported a shared fix site: what is shared, where each sibling codeline's working copy is, and how to build and test against it without saving the redirection.",
   "id": "fix-plan-shared",
@@ -13,6 +14,6 @@
     "__SHARED_SITES__",
     "__SIBLING_LOCATIONS__"
   ],
-  "version": 1,
-  "body": "\n\nSHARED WITH OTHER CODELINES OF THIS STORY — the investigation found these fix sites are shared:\n__SHARED_SITES__\nThe other codelines' working copies, relative to this codeline's root:\n__SIBLING_LOCATIONS__\nWhere this codeline consumes a package another codeline provides, that codeline's current working copy (with this run's changes in it) is already installed in this codeline's dependencies by the pipeline, without being saved to the manifest: build and test as they are, and do not change how the dependency resolves. Where a consumer's declared range does not take the version the change ships in, the manifest entry is part of this codeline's change and must be edited. Where this codeline provides the package, its change is not finished until each consumer above can build against it; say in your final message what each consumer needs."
+  "version": 2,
+  "body": "\n\nSHARED WITH OTHER CODELINES OF THIS STORY — the investigation found these fix sites are shared:\n__SHARED_SITES__\nThe other codelines' working copies, relative to this codeline's root:\n__SIBLING_LOCATIONS__\nWhere this codeline consumes a package another codeline provides, that codeline's current working copy (with this run's changes in it) is already installed in this codeline's dependencies by the pipeline, without being saved to the manifest: build and test as they are, and do not change how the dependency resolves. Never edit a consumer's declared range of a shared package — not here, not in any codeline: where a consumer's range does not take the version the change ships in, the providing codeline also ships the change on a release line inside that range (cut from the newest release the range takes), and the consumer's manifest stays exactly as it is. Where this codeline provides the package, its change is not finished until every consumer above can receive it through the range that consumer ALREADY declares — on each release line that range requires; say in your final message which release line serves which consumer."
 }

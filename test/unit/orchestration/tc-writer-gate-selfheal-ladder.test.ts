@@ -31,7 +31,8 @@ const GATE = GATE_RAW.split('\n').filter(l => !/^\s*#/.test(l)).join('\n');
 
 describe('B23 — TC writer gets self-heal', () => {
   it('invokes the agent-attempt-analyst on a failed attempt', () => {
-    expect(GATE).toMatch(/agent-attempt-analyst\.sh/);
+    // Through the shell helper, which carries the failure's reason (lib/attempt-analyst.sh, 2026-10-06).
+    expect(GATE).toMatch(/\brun_attempt_analyst\s/);
   });
 
   it('feeds the corrective directive into the NEXT attempt', () => {

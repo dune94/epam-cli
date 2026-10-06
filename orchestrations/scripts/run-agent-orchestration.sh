@@ -3043,7 +3043,7 @@ elif [ "${_tc_writer_needed:-0}" -gt 0 ]; then
             grep -qiE "ai-run failed|no error output" "$LOG_DIR/tc-writer-${PHASE}.log" 2>/dev/null && _tc_batch_fclass="provider"
             log "  [tc-writer] batch attempt ${_tc_batch_attempt} failed (class=${_tc_batch_fclass}) — invoking self-heal analyst"
             AGENT_ANALYST_STORY_ID="${_tc_batch_still_missing%%,*}" STORY_ROLE="${STORY_ROLE:-tc-writer}" \
-                bash "$SCRIPT_DIR/agent-attempt-analyst.sh" "$_tc_batch_fclass" "$LOG_DIR/tc-writer-${PHASE}.log" 2>>"$LOG_DIR/tc-writer-${PHASE}.log" \
+                run_attempt_analyst "$_tc_batch_fclass" "attempt ${_tc_batch_attempt}/3 left these stories with no testCriteria: ${_tc_batch_still_missing}" "$LOG_DIR/tc-writer-${PHASE}.log" 2>>"$LOG_DIR/tc-writer-${PHASE}.log" \
                 || warning "  [tc-writer] self-heal analyst FAILED (class=${_tc_batch_fclass}) — attempt $((_tc_batch_attempt + 1)) retries WITHOUT corrective guidance"
         fi
     done

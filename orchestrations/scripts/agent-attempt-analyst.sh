@@ -166,12 +166,19 @@ case "$FAILURE_CLASS" in
     max_iterations)    _class_hint="$(_body hint_max_iterations)" ;;
     no_file)           _class_hint="$(_body hint_no_file)" ;;
     no_json|malformed) _class_hint="$(_body hint_no_json)" ;;
+    rejected)          _class_hint="$(_body hint_rejected)" ;;
     invalid_test)      _class_hint="$(_body hint_invalid_test)" ;;
     *)                 _class_hint="$(_body hint_default)" ;;
 esac
 
 # Values via a FILE, never argv: a failed agent's output is routinely megabytes and argv is
 # capped at ARG_MAX. This is the same crash that took out the failure analyst on 2026-08-15.
+# WHY THE CALLER REFUSED THIS ATTEMPT (AGENT_ANALYST_REASON). Every caller knows it — a reviewer's
+# finding, a validator's verdict, a contract refusal — and none of it reached this prompt until
+# 2026-10-06. Absent is said aloud, in the prompt and here: a caller that drops it is a defect.
+_reason="${AGENT_ANALYST_REASON:-}"
+[ -n "${AGENT_ANALYST_REASON_FILE:-}" ] && [ -f "$AGENT_ANALYST_REASON_FILE" ] && _reason="$(cat "$AGENT_ANALYST_REASON_FILE")"
+[ -n "${_reason//[[:space:]]/}" ] || { log "WARNING: no reason was given for this ${FAILURE_CLASS} failure — the caller dropped it; the analyst diagnoses from the output alone"; _reason="(the caller gave no reason — diagnose from the output alone)"; }
 _aa_vals=$(mktemp "${TMPDIR:-/tmp}/agent-failure-analyst-vals-XXXXXX.json")
 # Where the spec pass's detective found the fix, for the story whose agent failed — the same
 # rendering the reviewer and impl-failure-analyst read (lib/handlers/fix-sites.js).
@@ -181,10 +188,11 @@ if [ -n "${AGENT_ANALYST_STORY_ID:-}" ] && [ -f "${MAIN_PRD_FILE:-${PRD_FILE:-}}
 fi
 jq_vals --arg class_hint "$_class_hint" \
       --arg failure_class "$FAILURE_CLASS" \
+      --arg failure_reason "$_reason" \
       --arg failed_output "${_failed_output:-(empty — it produced nothing)}" \
       --arg context "${_context:-(not provided)}" \
       --arg fix_sites "${_fix_sites:-(the spec pass recorded none for this story)}" \
-      '{"__CLASS_HINT__":$class_hint,"__FAILURE_CLASS__":$failure_class,"__FAILED_OUTPUT__":$failed_output,"__CONTEXT__":$context,"__FIX_SITES__":$fix_sites}' \
+      '{"__CLASS_HINT__":$class_hint,"__FAILURE_CLASS__":$failure_class,"__FAILURE_REASON__":$failure_reason,"__FAILED_OUTPUT__":$failed_output,"__CONTEXT__":$context,"__FIX_SITES__":$fix_sites}' \
       > "$_aa_vals"
 if ! _prompt=$(render_engine_prompt agent-failure-analyst "$_aa_vals" prompt); then
     rm -f "$_aa_vals"

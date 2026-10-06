@@ -782,11 +782,11 @@ async function buildProjectPrompts({
   }
   // ONE ROUTE TO THE ANALYST for every refusal of a generated prompt — the contract's and the
   // reviewer's, of a fresh generation, a cached copy or a kept one — with the text that was refused.
-  const _heal = (id, template, reason, output) => {
+  const _heal = (id, template, reason, output, failureClass) => {
     try {
       // eslint-disable-next-line global-require
       const _sh = require('./self-heal.js').selfHeal({
-        agent: `prompt-builder:${id}`, reason, output: output,
+        agent: `prompt-builder:${id}`, reason, output: output, failureClass,
         // The rung that produced it — without this the analyst declines and heals nothing.
         model: process.env.EPAM_MODEL || '', provider: process.env.AI_PROVIDER || '',
         projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
@@ -820,7 +820,7 @@ async function buildProjectPrompts({
       _keptRejected = true;
       refusal = `the copy this run was using was rejected by the reviewer: ${_v.reason}`;
       log(`[prompt-builder] ! ${id}: the kept copy was REJECTED by the current reviewer (${_v.reason}) — regenerating`);
-      _heal(id, readJson(_tplPath(id)), _v.reason, _kept.body);
+      _heal(id, readJson(_tplPath(id)), _v.reason, _kept.body, 'rejected');
     }
     const template = readJson(_tplPath(id));
     // Per-template, only when it could matter: a template whose seam name differs from its id is
@@ -859,7 +859,7 @@ async function buildProjectPrompts({
       } else {
         log(`[prompt-builder] ${id}: cached copy failed review (${(_late && _late.reason) || 'no reason'}) — regenerating`);
         refusal = `the cached copy was rejected by the reviewer: ${(_late && _late.reason) || 'no reason'}`;
-        _heal(id, template, (_late && _late.reason) || 'rejected by the reviewer', _hit.doc && _hit.doc.body);
+        _heal(id, template, (_late && _late.reason) || 'rejected by the reviewer', _hit.doc && _hit.doc.body, 'rejected');
       }
     }
     if (_useCached) {
@@ -970,7 +970,7 @@ async function buildProjectPrompts({
             log(`[prompt-builder] ! ${id} attempt ${attempt}/${attempts} REVIEW REJECTED: ${review.reason}`);
             // EVERY REJECTION REACHES THE ANALYST, with the prompt that was rejected — a review
             // rejection is an agent failure like a contract refusal, and only reached the retry.
-            _heal(id, template, review.reason, doc.body);
+            _heal(id, template, review.reason, doc.body, 'rejected');
             continue;
           }
         }

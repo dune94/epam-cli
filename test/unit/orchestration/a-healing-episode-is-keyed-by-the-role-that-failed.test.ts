@@ -98,6 +98,8 @@ describe("Step 10's batch loop asks the attempt analyst on a failed attempt, as 
     const script = [
       'set -u', 'log() { :; }; warning() { :; }; error() { :; }; success() { :; }; info() { :; }; step_emit() { :; }',
       `SCRIPT_DIR="${scripts}"`, `LOG_DIR="${join(d, 'logs')}"`, `PRD_FILE="${prd}"`, `PROJECT_ROOT="${d}"`, 'PHASE=p', 'OUTPUT_DIR=""',
+      // The real shell edge to the analyst, as run-agent-orchestration.sh has it (via lib/tc-writer-gate.sh).
+      `. "${join(ROOT, 'orchestrations/scripts/lib/attempt-analyst.sh')}"`,
       loop,
     ].join('\n');
     const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, STORY_ROLE: '' }, timeout: 60000 });

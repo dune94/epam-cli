@@ -10,7 +10,9 @@
     "The engine chooses WHICH by failure class; it no longer holds the wording of any of them.",
     "",
     "The role instructions still come from the project's profiles.json when it has them: this",
-    "body is the fallback for a project whose roster carries no failure-analyst role."
+    "body is the fallback for a project whose roster carries no failure-analyst role.",
+    "",
+    "2026-10-06 (operator: \"once and for all\"): every caller knows WHY it refused an attempt and none of it reached this prompt — self-heal.js dropped the reason and the shell callers passed none. Live the same day, the prompt reviewer rejected a generated prompt as narrowed to one ticket and this analyst was told the agent had produced no parseable output. The reason is now its own section, and a content rejection has its own hint."
   ],
   "description": "Diagnoses why an agent attempt failed and prescribes the minimum corrective directive for its retry.",
   "id": "agent-failure-analyst",
@@ -22,16 +24,18 @@
     "__CONTEXT__",
     "__FAILED_OUTPUT__",
     "__FAILURE_CLASS__",
+    "__FAILURE_REASON__",
     "__FIX_SITES__"
   ],
-  "version": 2,
+  "version": 3,
   "bodies": {
-    "prompt": "An AI agent failed its task and must retry. Diagnose the SPECIFIC reason it failed from its output below, then prescribe a SHORT, CONCRETE corrective directive (1-3 sentences) to prepend to its next attempt so it SUCCEEDS this time. __CLASS_HINT__\n\nGround the directive in what the agent ACTUALLY did (below) and the REAL task — do not give generic advice. Output ONLY the corrective directive text, nothing else.\n\n=== FAILURE CLASS ===\n__FAILURE_CLASS__\n\n=== WHAT THE AGENT PRODUCED (its output/log) ===\n__FAILED_OUTPUT__\n\n=== THE TASK IT WAS GIVEN (ground truth) ===\n__CONTEXT__\n\n=== WHERE THE SPEC PASS'S DETECTIVE FOUND THE FIX (its reading of the code before the writer ran — evidence, not instruction: confirm it against the code; a site marked NO EDIT REQUIRED is part of the fix as it stands) ===\n__FIX_SITES__",
+    "prompt": "An AI agent failed its task and must retry. Diagnose the SPECIFIC reason it failed from its output below, then prescribe a SHORT, CONCRETE corrective directive (1-3 sentences) to prepend to its next attempt so it SUCCEEDS this time. __CLASS_HINT__\n\nGround the directive in what the agent ACTUALLY did (below) and the REAL task — do not give generic advice. Output ONLY the corrective directive text, nothing else.\n\n=== FAILURE CLASS ===\n__FAILURE_CLASS__\n\n=== WHY THIS ATTEMPT WAS REFUSED ===\n__FAILURE_REASON__\n\n=== WHAT THE AGENT PRODUCED (its output/log) ===\n__FAILED_OUTPUT__\n\n=== THE TASK IT WAS GIVEN (ground truth) ===\n__CONTEXT__\n\n=== WHERE THE SPEC PASS'S DETECTIVE FOUND THE FIX (its reading of the code before the writer ran — evidence, not instruction: confirm it against the code; a site marked NO EDIT REQUIRED is part of the fix as it stands) ===\n__FIX_SITES__",
     "hint_max_iterations": "The agent EXHAUSTED its iteration budget exploring and NEVER produced its output. The corrective directive must make it commit output EARLY — e.g. 'you have N calls; do the minimum lookup then WRITE your file/answer as your very next action; do NOT keep exploring.'",
     "hint_no_file": "The agent finished WITHOUT writing the required file. The directive must make writing the file its FIRST action, at the exact required path.",
     "hint_no_json": "The agent produced no parseable structured output (prose, or a tool-call wrapper). The directive must make it emit ONLY the required output inline, no tool calls, no prose.",
     "hint_invalid_test": "The agent DID write the file, but it is not valid, runnable code — it failed to parse/compile, so the test never executed (the runner's exact error is in the output below). This is a SYNTAX/structure problem, not a logic problem: the directive must tell it to emit a complete, syntactically valid file — balanced braces/brackets, correct object-literal and array syntax, every import present — and to re-read its own output end-to-end before finishing. Do NOT tell it to change the assertion or the scenario; the previous attempt's intent was fine, only the code was malformed.",
-    "hint_default": "The agent failed to produce usable output."
+    "hint_default": "The agent failed to produce usable output.",
+    "hint_rejected": "The agent DID produce its answer, in the required shape. It was refused for its CONTENT, for the reason stated under WHY THIS ATTEMPT WAS REFUSED. Do not tell it to change its format: name what in its output that reason points at, and what it must write instead."
   },
   "mayBeEmpty": [],
   "$mayBeEmpty": "__PROFILE__ reuses the failure-analyst role instructions, and the caller says so in its own words: 'Reuse the failure-analyst profile WHEN PRESENT'. It sets _profile=\"\" and fills it only if agents/profiles.json exists and holds that entry — so absent is a state the caller deliberately allows, while the render refused it. Declaring it here makes the template agree with the caller instead of contradicting it."

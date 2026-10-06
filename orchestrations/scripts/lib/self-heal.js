@@ -62,18 +62,23 @@ function classify(reason, output) {
  *   rc 2              : the analyst itself failed; the next attempt has no guidance
  */
 function selfHeal({ agent, storyId, reason, output, context, logDir, model, provider, runner,
-  projectConfigDir } = {}) {
+  projectConfigDir, failureClass } = {}) {
   const script = path.join(__dirname, '..', 'agent-attempt-analyst.sh');
   if (!fs.existsSync(script)) return { ran: false, rc: 0, corrective: '' };
 
   let outFile = '';
   let ctxFile = '';
+  let reasonFile = '';
   try {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'self-heal-'));
     outFile = path.join(dir, 'failed-output.txt');
     // WHAT THE AGENT ACTUALLY RETURNED, in full. A reason string says which rule was broken; only
     // the output says why the agent broke it.
     fs.writeFileSync(outFile, _asText(output));
+    // A FILE, like the output: a reviewer's reason can be long, and an oversized environment value
+    // fails the spawn — silently, inside the catch below.
+    reasonFile = path.join(dir, 'reason.txt');
+    fs.writeFileSync(reasonFile, _asText(reason));
     if (context) {
       ctxFile = path.join(dir, 'context.txt');
       fs.writeFileSync(ctxFile, _asText(context));
@@ -82,7 +87,9 @@ function selfHeal({ agent, storyId, reason, output, context, logDir, model, prov
 
   // Unique per call, so a marker left in a log by an earlier run cannot be read as this one's.
   const marker = `__SELF_HEAL_ANALYSED_${process.pid}_${Date.now()}__`;
-  const args = [script, classify(reason, output), outFile];
+  // THE CALLER'S CLASS WHEN IT STATES ONE. A reviewer's rejection is a refusal of CONTENT, which no
+  // reason-string pattern can tell from a malformed answer — only the caller knows which it was.
+  const args = [script, failureClass || classify(reason, output), outFile];
   if (ctxFile) args.push(ctxFile);
   try {
     const r = spawnSync('bash', args, {
@@ -107,6 +114,9 @@ function selfHeal({ agent, storyId, reason, output, context, logDir, model, prov
         NODE_BIN: process.env.NODE_BIN || process.execPath,
         PATH: `${require('path').dirname(process.execPath)}:${process.env.PATH || ''}`,
         AGENT_ANALYST_STORY_ID: storyId || process.env.EPAM_STORY_ID || '',
+        // WHY THE CALLER REFUSED THE ATTEMPT. This chose a class from it and dropped the rest, so the
+        // analyst diagnosed every failure blind to the one fact its caller had (2026-10-06).
+        AGENT_ANALYST_REASON_FILE: reasonFile,
         STORY_ROLE: agent || process.env.EPAM_AGENT_NAME || '',
         // THE RUNG THAT PRODUCED THE FAILURE, WITHOUT WHICH THE ANALYST DOES NOTHING.
         //

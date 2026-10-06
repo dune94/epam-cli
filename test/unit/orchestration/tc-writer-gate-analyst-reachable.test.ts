@@ -25,10 +25,14 @@ const REPO_ROOT = join(__dirname, '../../../');
 const CALLER_SCRIPT_DIR = join(REPO_ROOT, 'orchestrations/scripts');
 const GATE_LIB = join(CALLER_SCRIPT_DIR, 'lib/tc-writer-gate.sh');
 const gate = engineSource(GATE_LIB);
+// The gate reaches the analyst through the shell helper (2026-10-06: the reason is in its signature); the
+// path is resolved on the helper's line, with the CALLER's SCRIPT_DIR — the property this file protects.
+const helper = engineSource(join(CALLER_SCRIPT_DIR, 'lib/attempt-analyst.sh'));
 
 /** Extract the first analyst bash invocation path expression (non-comment lines only). */
 function analystPathExpr(): string {
-  for (const line of gate.split('\n')) {
+  if (!gate.split('\n').some((l) => !/^\s*#/.test(l) && /\brun_attempt_analyst\s/.test(l))) throw new Error('the gate no longer calls the analyst helper');
+  for (const line of helper.split('\n')) {
     if (/^\s*#/.test(line)) continue;
     const m = line.match(/bash\s+"(\$SCRIPT_DIR[^"]*agent-attempt-analyst\.sh)"/);
     if (m) return m[1];

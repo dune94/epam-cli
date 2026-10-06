@@ -41,9 +41,13 @@ function makeScriptDir(): { dir: string; scriptDir: string; calledMarker: string
 
 /** Extract the first non-comment line containing agent-attempt-analyst.sh from a file.
  * Skips bash (#) and JSDoc (* or //) comment lines; strips trailing )" from command substitutions. */
+// THE SHELL CALLERS REACH THE ANALYST THROUGH lib/attempt-analyst.sh (2026-10-06: the reason is in its
+// signature). A caller's line is its run_attempt_analyst call; the path it resolves is the helper's line,
+// run with the caller's SCRIPT_DIR — the property these tests protect.
+const HELPER = join(ROOT, 'orchestrations/scripts/lib/attempt-analyst.sh');
 function extractAnalystLine(filePath: string): string {
   const line = readFileSync(filePath, 'utf8').split('\n')
-    .find(l => /agent-attempt-analyst\.sh/.test(l) && !/^\s*[#*]/.test(l) && !/^\s*\/\//.test(l));
+    .find(l => /agent-attempt-analyst\.sh|\brun_attempt_analyst\s/.test(l) && !/^\s*[#*]/.test(l) && !/^\s*\/\//.test(l));
   if (!line) throw new Error(`No non-comment analyst call found in ${filePath}`);
   // Strip trailing )" from command substitutions (e.g. _tc_corrective="$(...bash ...)")
   return line.trim().replace(/\)"$/, '');
@@ -66,6 +70,7 @@ describe('analyst entry points: gate resolves analyst from caller\'s SCRIPT_DIR'
 
     const result = spawnSync('bash', ['-c', `
       SCRIPT_DIR=${JSON.stringify(scriptDir)}
+      . ${JSON.stringify(HELPER)}
       _tc_fclass=no_json
       _tc_writer_log=${JSON.stringify(tmpLog)}
       story_id=test-story
@@ -93,7 +98,9 @@ describe('analyst entry points: other call sites use $SCRIPT_DIR/ (no /..)', () 
     expect(line,
       `run-agent-orchestration.sh uses the broken $SCRIPT_DIR/../ path: ${line}`)
       .not.toMatch(/\$SCRIPT_DIR\s*\/\s*\.\./);
-    expect(line).toMatch(/\$SCRIPT_DIR\/agent-attempt-analyst\.sh/);
+    expect(line).toMatch(/\brun_attempt_analyst\s/);
+    expect(extractAnalystLine(HELPER)).toMatch(/\$SCRIPT_DIR\/agent-attempt-analyst\.sh/);
+    expect(extractAnalystLine(HELPER)).not.toMatch(/\$SCRIPT_DIR\s*\/\s*\.\./);
   });
 
   it('brownfield-repro-test-writer.sh: analyst call uses $SCRIPT_DIR/ not $SCRIPT_DIR/../', () => {
@@ -102,7 +109,9 @@ describe('analyst entry points: other call sites use $SCRIPT_DIR/ (no /..)', () 
     expect(line,
       `brownfield-repro-test-writer.sh uses the broken $SCRIPT_DIR/../ path: ${line}`)
       .not.toMatch(/\$SCRIPT_DIR\s*\/\s*\.\./);
-    expect(line).toMatch(/\$SCRIPT_DIR\/agent-attempt-analyst\.sh/);
+    expect(line).toMatch(/\brun_attempt_analyst\s/);
+    expect(extractAnalystLine(HELPER)).toMatch(/\$SCRIPT_DIR\/agent-attempt-analyst\.sh/);
+    expect(extractAnalystLine(HELPER)).not.toMatch(/\$SCRIPT_DIR\s*\/\s*\.\./);
   });
 
   it('lib/self-heal.js: analyst path resolves via __dirname/../ to scripts/', () => {
@@ -135,6 +144,7 @@ describe('analyst receives failure class and produces output (I/O contract)', ()
 
     spawnSync('bash', ['-c', `
       SCRIPT_DIR=${JSON.stringify(scriptDir)}
+      . ${JSON.stringify(HELPER)}
       _tc_fclass=max_iterations
       _tc_writer_log=${JSON.stringify(tmpLog)}
       story_id=test-story

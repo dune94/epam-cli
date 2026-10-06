@@ -40,6 +40,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/jq-vals.sh"
 # shellcheck source=lib/pipeline-commit.sh
 . "$SCRIPT_DIR/lib/pipeline-commit.sh"
+# The one shell edge to the self-heal analyst; the reason is in its signature.
+. "$SCRIPT_DIR/lib/attempt-analyst.sh"
 
 # THE PROMPT RENDERER THIS SCRIPT CALLS EIGHT TIMES.
 #
@@ -867,9 +869,16 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     # The analyst returns NOTHING now: it records an episode and synthesises a
     # constraint. Its exit code still matters (B30) — rc=2 means self-heal itself
     # failed and the retry proceeds with no enforcement.
+    # WHY this attempt was refused, from what this loop decided above — the analyst's first fact.
+    case "$_fclass" in
+        invalid_test)    _freason="the test it wrote at ${_target_rel} does not parse or run, so it was discarded; the test runner's error is in its output" ;;
+        commit_rejected) _freason="its test at ${_target_rel} parsed and ran, but the repository refused to commit it; the refusal is in its output" ;;
+        max_iterations)  _freason="it reached its iteration limit before writing a valid test at ${_target_rel}" ;;
+        *)               _freason="this attempt wrote no test at the required path ${_target_rel}" ;;
+    esac
     AGENT_ANALYST_STORY_ID="$STORY_ID" STORY_ROLE="${STORY_ROLE:-repro-test-writer}" \
         AI_RUNNER_CMD="$AI_RUNNER_CMD" \
-        bash "$SCRIPT_DIR/agent-attempt-analyst.sh" "$_fclass" "$_writer_log" "$_ctx_file" 2>>"$_writer_log"
+        run_attempt_analyst "$_fclass" "$_freason" "$_writer_log" "$_ctx_file" 2>>"$_writer_log"
     _analyst_rc=$?
     if [ "$_analyst_rc" -eq 2 ]; then
         warning "  self-heal analyst FAILED (class=${_fclass}) — attempt $((_attempt + 1)) retries WITHOUT corrective guidance"

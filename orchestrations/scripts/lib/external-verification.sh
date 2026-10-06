@@ -707,114 +707,6 @@ run_relative_import_check() {
     return 1
 }
 
-# run_named_import_check <project_root> <output_file> [story_id]
-# Deterministic detection (same shape as run_relative_import_check above) of a
-# named import whose identifier doesn't actually exist among the target
-# file's exports — even though the FILE PATH itself resolves correctly.
-#
-# Root cause this targets: a live run burned a story's ENTIRE ladder
-# escalation (8 attempts, ending on the strongest configured model, $0.25)
-# on `import { SkyScannerClient } from './client'` when the real export is
-# `SkyscannerClient` (one-character casing difference) — and never converged
-# because the failure-analyst MISDIAGNOSED it as a default-vs-named export
-# mismatch (it wasn't; the class is correctly a named export, just spelled
-# differently). Every retry, including the strongest model, "fixed" the
-# wrong thing because the diagnosis guiding it was wrong. A deterministic
-# check that names the exact real export (case-insensitive match) removes
-# the misdiagnosis risk entirely — no model judgment involved.
-#
-# Fully generic — no hardcoded class/identifier names, no project-specific
-# knowledge. Parses exports via regex (export class/function/const/let/var/
-# interface/type/enum Name, and export { A, B as C } lists) and named imports
-# via the same import-statement regex as run_relative_import_check, then
-# checks each imported identifier is actually in the target's export set.
-# Suggests the closest case-insensitive match when one exists (the exact bug
-# shape found live), consistent with relative-import-check's "Did you mean
-# X?" pattern.
-#
-# Auto-apply (opt-in via EPAM_AUTO_FIX_NAMED_IMPORTS=true, default OFF, same
-# conservative design as relative-import-check's auto-fix): only fires when
-# there is EXACTLY ONE case-insensitive match among the target's real
-# exports (unambiguous), and only rewrites files the current story owns.
-#
-# Returns 0 if all named imports resolve to a real export (or none found).
-# Returns 1 and sets VERIFICATION_FAILURE with a suggestion otherwise.
-run_named_import_check() {
-    local project_root="$1"
-    local output_file="${2:-/dev/null}"
-    local story_id="${3:-}"
-    local auto_fix="${EPAM_AUTO_FIX_NAMED_IMPORTS:-false}"
-
-    # owned_files is now always resolved when a story_id is given (previously
-    # gated behind auto_fix=true, so it was only ever computed for auto-fix
-    # ELIGIBILITY, never for scoping which findings BLOCK the current story).
-    # Root cause this fixes (found live, 2026-07-09/10, tier3-travel-app run):
-    # this check walks the ENTIRE project tree, so a pre-existing broken
-    # import in a file the CURRENT story doesn't own (e.g. SKY-003-impl's
-    # cli.ts importing a type SKY-002-impl's client.ts never exported)
-    # permanently blocked an unrelated story (SKY-002-test, which owns only
-    # client.test.ts and is scope-guarded from ever touching cli.ts) —
-    # exhausting all 8 retries on a bug it was structurally incapable of
-    # fixing. has_story_context distinguishes "we know what this story owns,
-    # scope blocking to that" from "no story_id given, preserve old global
-    # behavior" (e.g. a caller with no per-story context at all).
-    local owned_files_json="[]"
-    local has_story_context="false"
-    if [ -n "$story_id" ]; then
-        has_story_context="true"
-        owned_files_json=$(jq -c --arg id "$story_id" \
-            '.stories[] | select(.id == $id) | .technicalNotes.files // []' \
-            "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")
-        # jq exits 0 with EMPTY output (not "[]") when story_id matches no
-        # story in the PRD — the `||` above only fires on a non-zero exit, so
-        # that case fell straight through as an empty string, which crashes
-        # Python's json.loads() downstream. Found live 2026-08-02 testing the
-        # relative-import-check port of this same pattern.
-        owned_files_json="${owned_files_json:-[]}"
-    fi
-
-    local result
-    result=$(python3 "$SCRIPT_DIR/lib/handlers/named-import-check.py" "$project_root" "$auto_fix" "$owned_files_json" "$has_story_context"
-)
-
-    local autofixed_lines
-    autofixed_lines=$(echo "$result" | grep "^AUTOFIXED:" || true)
-    if [ -n "$autofixed_lines" ]; then
-        while IFS= read -r _fix_line; do
-            [ -z "$_fix_line" ] && continue
-            log "  [named-import-check] Auto-corrected ${_fix_line#AUTOFIXED:}"
-        done <<< "$autofixed_lines"
-    fi
-    result=$(echo "$result" | grep -v "^AUTOFIXED:" || true)
-
-    # Findings in files this story doesn't own are surfaced (visibility) but
-    # never block this story's own turn — see the Python block's own comment
-    # for the live defect this fixes (an unrelated story permanently blocked
-    # by a bug it was structurally incapable of fixing).
-    local out_of_scope_lines
-    out_of_scope_lines=$(echo "$result" | grep "^OUT_OF_SCOPE:" || true)
-    if [ -n "$out_of_scope_lines" ]; then
-        while IFS= read -r _oos_line; do
-            [ -z "$_oos_line" ] && continue
-            warning "  [named-import-check] Broken import outside this story's scope (not blocking): ${_oos_line#OUT_OF_SCOPE:}"
-        done <<< "$out_of_scope_lines"
-    fi
-    result=$(echo "$result" | grep -v "^OUT_OF_SCOPE:" || true)
-
-    if [ "$(echo "$result" | head -1)" = "OK" ]; then
-        return 0
-    fi
-
-    local details
-    details=$(echo "$result" | tail -n +2)
-    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nA named import does not exist as an export in its target file — this will fail immediately when the test suite runs (the model likely misspelled/mis-cased an identifier, not a default-vs-named export issue). Fix the identifier name before anything else:\n\n%s\n' "$details")
-    {
-        echo ""
-        echo "=== Named import check failed ==="
-        echo "$details"
-    } >> "$output_file"
-    return 1
-}
 
 run_external_verification() {
     local story_id="$1"
@@ -1082,12 +974,6 @@ run_external_verification() {
     # NAME is wrong/mis-cased). Root cause: a live run burned a story's
     # entire ladder escalation on this exact bug because the failure-analyst
     # misdiagnosed it as a default-vs-named export mismatch.
-    if ! run_named_import_check "$PROJECT_ROOT" "$output_file" "$story_id"; then
-        warning "  [named-import-check] Non-existent named import detected — skipping test run"
-        DETERMINISTIC_CHECK_FAILURE=1
-        export DETERMINISTIC_CHECK_FAILURE
-        return 1
-    fi
 
     # Fail fast on a project-configured anti-pattern (e.g. a documented-wrong
     # value a prior review already caught) — see run_anti_pattern_check's own

@@ -96,7 +96,7 @@ const COMPILE_MAP = {
   'syntax-error':          { kind: 'gate',  via: 'tsc --noEmit / parse validation (already runs)' },
   'missing-dependency':    { kind: 'gate',  via: 'dependency-check.json preflight (already runs)' },
   'type-error':            { kind: 'gate',  via: 'tsc --noEmit baseline-diff gate (already runs)' },
-  'missing-export':        { kind: 'gate',  via: 'named-import-check in claude.sh (EXPORT_DECL_RE)' },
+  'missing-export':        { kind: 'gate',  via: 'the project type check, baseline-diffed (already runs)' },
   'api-misuse':            { kind: 'gate',  via: 'CodeGraph dependency contracts (already injected)' },
   'vitest-autoexec-guard': { kind: 'gate',  via: 'a known tier3 invariant — cli.ts VITEST guard' },
   // 17 episodes, and one of them reads "...despite skill addendum instructions" —

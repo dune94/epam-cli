@@ -105,7 +105,6 @@
   "run_external_verification",
   "run_dependency_check",
   "run_relative_import_check",
-  "run_named_import_check",
   "run_lockfile_sync_check",
   "run_vendor_integrity_check",
   "_bounded_test_command",

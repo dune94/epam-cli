@@ -48,7 +48,7 @@ VERIFICATION_FAILURE=""; DETERMINISTIC_CHECK_FAILURE=0
 # Every collaborator succeeds by default; the one under test fails.
 for _f in run_vendor_integrity_check _vendor_unlock run_dynamic_tools_in_unlocked_window \\
           run_dependency_check run_lockfile_sync_check run_relative_import_check \\
-          run_named_import_check run_anti_pattern_check run_mock_completeness_check \\
+          run_anti_pattern_check run_mock_completeness_check \\
           record_story_outputs verify_client_env_boundary; do
   eval "\${_f}() { return 0; }"
 done
@@ -76,7 +76,6 @@ describe('run_external_verification propagates the checks it calls', () => {
   // These already propagate — they prove the harness can tell pass from fail.
   it.each([
     'run_relative_import_check',
-    'run_named_import_check',
     'run_anti_pattern_check',
     'run_mock_completeness_check',
   ])('fails when %s fails', (fn) => {

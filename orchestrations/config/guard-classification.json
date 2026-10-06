@@ -605,18 +605,6 @@
    "verified": false
   },
   {
-   "id": "GD-046",
-   "tier": "A",
-   "file": "claude.sh",
-   "line": 4666,
-   "symbol": "run_named_import_check",
-   "evidence": [],
-   "proposed": "CONTRACT",
-   "disposition": null,
-   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
-   "verified": false
-  },
-  {
    "id": "GD-047",
    "tier": "A",
    "file": "claude.sh",

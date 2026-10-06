@@ -195,7 +195,7 @@ _run_agent_mint() {
       # used to fall through to the rebuild below on a resume too — a completed step run twice after
       # every release (found 2026-09-25 by the £0 mocking agent). The drift is said, not hidden;
       # the next NEW launch rebuilds from the new inputs.
-      log "[mint] deferred decision settled: resuming ${EPAM_RESUME_RUN} — ${_detected_cl}'s prompts were built by this run; their inputs changed since (an engine release) — kept for this run, rebuilt on the next new launch"
+      log "[mint] deferred decision settled: resuming ${EPAM_RESUME_RUN} — ${_detected_cl}'s prompts were built by this run; their inputs changed since (an engine release) — kept for this run, each judged again by the current reviewer (only a rejected one is regenerated); rebuilt on the next new launch"
       EPAM_SKIP_AGENT_MINT=1
     elif [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
        && [ -n "$_detected_cl" ] \

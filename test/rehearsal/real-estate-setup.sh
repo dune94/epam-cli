@@ -35,5 +35,5 @@ cp -a "$REAL_INSTALL" "$R/install"
 # Rewrite absolute paths in the COPY's text state (never binaries, never node_modules).
 grep -rlIZ --exclude-dir=node_modules --exclude-dir=.git -e "$REAL_INSTALL" -e "$REAL_CL" "$R/install" 2>/dev/null \
     | xargs -0 -r sed -i -e "s#${REAL_INSTALL}#${R}/install#g" -e "s#${REAL_CL}/#${R}/codelines/#g"
-left=$(grep -rlI --exclude-dir=node_modules --exclude-dir=.git -e "$REAL_INSTALL" -e "$REAL_CL/" "$R/install" 2>/dev/null | wc -l)
+left=$( { grep -rlI --exclude-dir=node_modules --exclude-dir=.git -e "$REAL_INSTALL" -e "$REAL_CL/" "$R/install" 2>/dev/null || true; } | wc -l)
 echo "install copied; files still naming the real install or codelines: $left"

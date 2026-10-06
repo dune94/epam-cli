@@ -1412,6 +1412,12 @@ if (require.main !== module) return;
           // THE GENERATOR'S RUNG, not this seam's. No fallback: if the generator never resolved a
           // model there is nothing to review against, and quietly using the reviewer's own is how
           // a code reviewer judged kimi-k3's work from glm-5.2 for three cycles.
+          // A KEPT PROMPT IS JUDGED BEFORE ANYTHING IS GENERATED (a resume re-reviews what it keeps,
+          // 2026-10-06), so no generation has resolved a model yet. The rung that made it is the
+          // generator seam's first, resolved the way runText resolves attempt 1 — still the generator's.
+          if (!_promptGeneratorModel) {
+            _promptGeneratorModel = seamInvocationEnv('prompt-builder', path.join(engineRoot, 'orchestrations', 'agents'), { rung: 0 }).EPAM_MODEL || '';
+          }
           if (!_promptGeneratorModel) {
             throw new Error(
               '[prompt-review] the generator resolved no model, so there is no rung to review on. '

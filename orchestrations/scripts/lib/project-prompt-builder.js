@@ -780,8 +780,48 @@ async function buildProjectPrompts({
     generated = [...generated].sort((a, b) => (a === _reviewerTemplate ? -1
       : b === _reviewerTemplate ? 1 : 0));
   }
+  // ONE ROUTE TO THE ANALYST for every refusal of a generated prompt — the contract's and the
+  // reviewer's, of a fresh generation, a cached copy or a kept one — with the text that was refused.
+  const _heal = (id, template, reason, output) => {
+    try {
+      // eslint-disable-next-line global-require
+      const _sh = require('./self-heal.js').selfHeal({
+        agent: `prompt-builder:${id}`, reason, output: output,
+        // The rung that produced it — without this the analyst declines and heals nothing.
+        model: process.env.EPAM_MODEL || '', provider: process.env.AI_PROVIDER || '',
+        projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
+        context: `template ${id} requires: ${((template && template.placeholders) || []).join(', ')}`,
+      });
+      if (_sh && _sh.rc === 2) log(`[prompt-builder] self-heal analyst FAILED for ${id} — the next attempt has no corrective`);
+    } catch { /* a diagnostic must never fail the run it is diagnosing */ }
+  };
   for (const id of generated) {
-    if (_alreadyInstalled(id, 'generated')) { built.push(id); log(`[prompt-builder] kept ${id} (installed for this run)`); continue; }
+    // WHY THE PREVIOUS ANSWER WAS REFUSED — seeded when a kept or cached copy is rejected, so the
+    // regeneration that follows is told what was wrong rather than asked the same question again.
+    let refusal = '';
+    // A KEPT COPY IS JUDGED AGAIN BY THE CURRENT REVIEWER (operator, 2026-10-06). A resume keeps the
+    // prompts its run built, and the contract cannot see what the reviewer can: metrolinx's
+    // repro-test-writer was narrowed to one ticket with its slots displaced, every slot still present.
+    // Keeping it unexamined meant no correction to the generator or the reviewer could reach the run.
+    // Approved, or no verdict (a reviewer's own failure is not evidence against the prompt): kept.
+    // Rejected: regenerated, told why, and the rejection goes to the analyst.
+    let _keptRejected = false;
+    if (_alreadyInstalled(id, 'generated')) {
+      if (typeof reviewPrompt !== 'function') { built.push(id); log(`[prompt-builder] kept ${id} (installed for this run)`); continue; }
+      const _kept = readJson(path.join(outDir, `${id}.json`));
+      const _v = await reviewPrompt({ id, template: readJson(_tplPath(id)), generated: _kept });
+      if (!_v || _v.ok !== false) {
+        built.push(id);
+        log(`[prompt-builder] kept ${id} (installed for this run) — ${_v && _v.reviewed === false
+          ? `unreviewed: the reviewer gave no verdict (${_v.reason || 'no reason'})`
+          : 'judged again by the current reviewer and approved'}`);
+        continue;
+      }
+      _keptRejected = true;
+      refusal = `the copy this run was using was rejected by the reviewer: ${_v.reason}`;
+      log(`[prompt-builder] ! ${id}: the kept copy was REJECTED by the current reviewer (${_v.reason}) — regenerating`);
+      _heal(id, readJson(_tplPath(id)), _v.reason, _kept.body);
+    }
     const template = readJson(_tplPath(id));
     // Per-template, only when it could matter: a template whose seam name differs from its id is
     // the one case where losing `seams` is visible at all. 36 of 37 hide the same rewrite.
@@ -802,7 +842,8 @@ async function buildProjectPrompts({
     // without review is a MISS while review is on; one made WITH review stays a hit, so the cache
     // keeps paying for itself.
     const _reviewNow = typeof reviewPrompt === 'function';
-    const _inputsSame = !!(_hit && _hit.base === _base && (!_hit.usesRoles || _hit.roles === rolesDigest));
+    // A kept copy the reviewer just rejected is not served back from the cache, which may hold it.
+    const _inputsSame = !_keptRejected && !!(_hit && _hit.base === _base && (!_hit.usesRoles || _hit.roles === rolesDigest));
     // WHAT A CACHED, UNREVIEWED PROMPT LACKS IS A REVIEW — NOT A NEW PROMPT. It used to be
     // regenerated "so it is reviewed": a paid generation repeated (on a resume, a step run twice)
     // when only the reviewer had not answered. It is reviewed as it stands; regenerated only if
@@ -817,6 +858,8 @@ async function buildProjectPrompts({
         _useCached = true;
       } else {
         log(`[prompt-builder] ${id}: cached copy failed review (${(_late && _late.reason) || 'no reason'}) — regenerating`);
+        refusal = `the cached copy was rejected by the reviewer: ${(_late && _late.reason) || 'no reason'}`;
+        _heal(id, template, (_late && _late.reason) || 'rejected by the reviewer', _hit.doc && _hit.doc.body);
       }
     }
     if (_useCached) {
@@ -826,7 +869,6 @@ async function buildProjectPrompts({
       continue;
     }
 
-    let refusal = '';
     let callFailure = '';
     let installed = false;
 
@@ -926,6 +968,9 @@ async function buildProjectPrompts({
           if (review && review.ok === false) {
             refusal = `a review of this prompt found claims about the project that are false: ${review.reason}`;
             log(`[prompt-builder] ! ${id} attempt ${attempt}/${attempts} REVIEW REJECTED: ${review.reason}`);
+            // EVERY REJECTION REACHES THE ANALYST, with the prompt that was rejected — a review
+            // rejection is an agent failure like a contract refusal, and only reached the retry.
+            _heal(id, template, review.reason, doc.body);
             continue;
           }
         }
@@ -972,17 +1017,7 @@ async function buildProjectPrompts({
       }
       // THE ANALYST SEES THE REFUSED PROMPT ITSELF, not just which placeholder went missing.
       // Seven generations were refused across runs 13 and 14 and none reached self-heal.
-      try {
-        // eslint-disable-next-line global-require
-        const _sh = require('./self-heal.js').selfHeal({
-          agent: `prompt-builder:${id}`, reason: verdict.reason, output: body,
-    // The rung that produced it — without this the analyst declines and heals nothing.
-    model: process.env.EPAM_MODEL || '', provider: process.env.AI_PROVIDER || '',
-    projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
-          context: `template ${id} requires: ${(template.placeholders || []).join(', ')}`,
-        });
-        if (_sh.rc === 2) log(`[prompt-builder] self-heal analyst FAILED for ${id} — attempt ${attempt + 1} has no corrective`);
-      } catch { /* a diagnostic must never fail the run it is diagnosing */ }
+      _heal(id, template, verdict.reason, body);
       log(`[prompt-builder] ! ${id} attempt ${attempt}/${attempts} refused: ${verdict.reason}`);
     }
 

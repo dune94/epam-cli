@@ -14,6 +14,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { codeTerms, quotedLiterals } from './discovery';
+import { overallPlan } from './overall-plan';
 
 type Site = Record<string, unknown>;
 
@@ -46,5 +47,6 @@ export function fixPlan(prompt: string): string {
     });
     if (old) break;
   }
-  return JSON.stringify(sites);
+  // The story's plan first, when the request asks for one (detective-overall-plan); then the fix sites.
+  return overallPlan(prompt) + JSON.stringify(sites);
 }

@@ -6599,7 +6599,8 @@ function parseOverallPlan(out) {
     .map((p) => ({
       package: p.package, providedBy: str(p.providedBy),
       releaseLines: (Array.isArray(p.releaseLines) ? p.releaseLines : []).filter((l) => l && typeof l === 'object')
-        .map((l) => ({ line: str(l.line), base: str(l.base), version: str(l.version) })),
+        .map((l) => ({ line: str(l.line), base: str(l.base), version: str(l.version),
+          onCodelineBase: typeof l.onCodelineBase === 'boolean' ? l.onCodelineBase : null })),
       consumers: (Array.isArray(p.consumers) ? p.consumers : []).filter((c) => c && typeof c.codeline === 'string')
         .map((c) => ({ codeline: c.codeline, declaredRange: str(c.declaredRange), receivesVia: str(c.receivesVia),
           usage: (Array.isArray(c.usage) ? c.usage : []).filter((u) => typeof u === 'string'), change: str(c.change) })),

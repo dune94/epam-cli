@@ -54,7 +54,7 @@ describe('the detective\'s answer is read as two things: the plan and the fix si
   it('the plan is read whole', () => {
     const plan = runner.parseOverallPlan(REPLY);
     expect(plan.codelines.map((c: { codeline: string }) => c.codeline)).toEqual(STATED.codelines.map((c: { codeline: string }) => c.codeline));
-    expect(plan.packages[0].releaseLines).toEqual(LINES);
+    expect(plan.packages[0].releaseLines).toEqual(LINES.map((l) => ({ ...l, onCodelineBase: typeof (l as { onCodelineBase?: unknown }).onCodelineBase === "boolean" ? (l as { onCodelineBase: boolean }).onCodelineBase : null })));
     expect(plan.packages[0].consumers[0].usage.length).toBeGreaterThan(0);
   });
   it('an answer with no plan has none, and its fix sites are read as before', () => {
@@ -169,7 +169,7 @@ describe('the real detective run stores the plan on the story, once', () => {
     const s = storyWith(lanes[0], undefined);
     await detect(s);
     expect((s as { overallPlan?: { packages: unknown[] } }).overallPlan, 'the plan the detective wrote was not stored').toBeTruthy();
-    expect((s as { overallPlan: { packages: Array<{ releaseLines: unknown }> } }).overallPlan.packages[0].releaseLines).toEqual(LINES);
+    expect((s as { overallPlan: { packages: Array<{ releaseLines: unknown }> } }).overallPlan.packages[0].releaseLines).toEqual(LINES.map((l) => ({ ...l, onCodelineBase: typeof (l as { onCodelineBase?: unknown }).onCodelineBase === "boolean" ? (l as { onCodelineBase: boolean }).onCodelineBase : null })));
   }, 170000);
 
   it('a story that already has its plan keeps it — a later detective does not replace it', async () => {

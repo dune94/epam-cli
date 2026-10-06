@@ -384,7 +384,9 @@ ensure_story_branch() {
     # naming convention (e.g. commitlint/husky requiring a leading
     # feature|bugfix|tech|release|hotfix/ segment); most projects have no such
     # constraint, so the default preserves today's plain "AI-<story_id>" shape.
-    local _branch="${EPAM_BRANCH_PREFIX:-}AI-${story_id}"
+    # ONE STORY BRANCH PER RELEASE LINE (lib/release-lines.sh): a line other than the codeline's own carries a
+    # suffix, so the codeline's own story branch is never reset by another line's work.
+    local _branch="${EPAM_BRANCH_PREFIX:-}AI-${story_id}${EPAM_BRANCH_SUFFIX:-}"
 
     # THE START POINT IS WHAT VARIES, NOT THE PROCEDURE.
     #
@@ -398,7 +400,15 @@ ensure_story_branch() {
     # With a remote, everything below is unchanged: fetch, then base off origin/<baseline>.
     # Without one, the LOCAL baseline branch is the start point. With neither, this still fails.
     local _base_ref=""
-    if git -C "$codeline_root" remote get-url origin >/dev/null 2>&1; then
+    # A RELEASE LINE'S BASE IS A RELEASE: a tag, fetched from origin when the checkout lacks it. Tags are not
+    # branches, so there is no origin/<tag> to reset to — the tag itself is the start point.
+    if ! git -C "$codeline_root" rev-parse -q --verify "refs/tags/${baseline_branch}^{commit}" >/dev/null 2>&1 \
+       && git -C "$codeline_root" remote get-url origin >/dev/null 2>&1; then
+        git -C "$codeline_root" fetch origin "refs/tags/${baseline_branch}:refs/tags/${baseline_branch}" --quiet 2>/dev/null || true
+    fi
+    if git -C "$codeline_root" rev-parse -q --verify "refs/tags/${baseline_branch}^{commit}" >/dev/null 2>&1; then
+        _base_ref="refs/tags/${baseline_branch}"
+    elif git -C "$codeline_root" remote get-url origin >/dev/null 2>&1; then
         if ! git -C "$codeline_root" fetch origin "$baseline_branch" --quiet 2>/dev/null; then
             warning "  [story-branch] $story_id: could not fetch origin/${baseline_branch} — proceeding on current branch state"
             return 1
@@ -725,6 +735,10 @@ codeline_baseline_ref() {
         fi
         if git -C "$_root" rev-parse -q --verify "refs/heads/${_declared}" >/dev/null 2>&1; then
             printf '%s\n' "$_declared"; return 0
+        fi
+        # A release line's base is a release tag (lib/release-lines.sh).
+        if git -C "$_root" rev-parse -q --verify "refs/tags/${_declared}^{commit}" >/dev/null 2>&1; then
+            printf 'refs/tags/%s\n' "$_declared"; return 0
         fi
     fi
     local _head

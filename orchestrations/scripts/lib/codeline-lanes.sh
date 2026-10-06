@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# One more pass per release line a shared codeline's story plan names (_run_release_lines, called by the lane loops below).
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/release-lines.sh"
 # lane_declared_passed <codeline> — the operator declared this lane already passed in this run
 # (EPAM_PASSED_LANES, space/comma separated). AMSD-2974, 2026-10-04: cx-shared reached GO before
 # lanes recorded it; a resume re-ran it (--reset) and was OOM-killed. Operator-chosen.
@@ -1077,6 +1079,12 @@ _run_codeline_loop() {
       log "[orch] Phase '${_phase}' — '${_cl}' done."
     done
 
+    # A SHARED CODELINE SHIPS ON EVERY RELEASE LINE ITS STORY'S PLAN NAMES (lib/release-lines.sh): its stories,
+    # done on its own base, are worked once more per line off it — 0, 1 or N, as the plan says.
+    if [ "$_cl_failed" = "0" ]; then
+      _run_release_lines "$_cl" "$_cl_prd" "$_wt" "$_lane_log_dir" "$_log_file" "$_phase_filter" "$0" || { _cl_failed=1; _overall=1; }
+    fi
+
     [ "$_cl_failed" = "0" ] && \
       _completed_list="${_completed_list:+${_completed_list}:}${_cl_prd}"
         echo "$_cl_failed" > "$_lane_status"
@@ -1296,6 +1304,12 @@ _run_codeline_loop() {
       fi
       log "[orch] Phase '${_phase}' — '${_cl}' done."
     done
+
+    # A SHARED CODELINE SHIPS ON EVERY RELEASE LINE ITS STORY'S PLAN NAMES (lib/release-lines.sh): its stories,
+    # done on its own base, are worked once more per line off it — 0, 1 or N, as the plan says.
+    if [ "$_cl_failed" = "0" ]; then
+      _run_release_lines "$_cl" "$_cl_prd" "$_wt" "$_lane_log_dir" "$_log_file" "$_phase_filter" "$0" || { _cl_failed=1; _overall=1; }
+    fi
 
     # The append-only ledgers back into the parent, as the parallel loop folds them.
     for _ledger in phase-cost.jsonl agent-activity.jsonl healing-events.jsonl; do

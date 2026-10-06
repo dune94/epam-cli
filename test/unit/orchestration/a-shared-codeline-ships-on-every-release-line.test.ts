@@ -1,0 +1,196 @@
+/**
+ * A SHARED CODELINE SHIPS ON EVERY RELEASE LINE ITS STORY'S PLAN NAMES — ONE STORY BRANCH PER LINE, N FROM THE PLAN.
+ *
+ * Operator, 2026-10-06 (AMSD-2974): "Why are there not two branches created on cx-shared? that is the right
+ * approach", "Why one? That does not work for brownfield for a shared repo", "You cannot hard code 1:1 just because",
+ * "The pipeline never encountered a shared codeline until now". The pipeline gave a codeline one base and one story
+ * branch; the library had to ship its fix on 8.x AND as a 7.x back-port from v7.14.0 for two consumers locked to ^7,
+ * and the only remedy the agents could name was moving those consumers' ranges.
+ *
+ * The plan (detective-overall-plan) names each release line, its base and whether the codeline's own base is
+ * already on it (onCodelineBase). The lane works the story on its own base as before; then once more per line the
+ * plan marks onCodelineBase:false — that line's base, its own story branch, its own logs, its own PRD copy where the
+ * story is pending again. The count is the plan's: 0, 1 or N. A line whose onCodelineBase is not stated is not
+ * guessed at.
+ *
+ * EXECUTED: lib/release-lines.sh with the real handlers and a stand-in for the lane's phase run that records each
+ * call; ensure_story_branch and codeline_baseline_ref on a real repository with an origin and release tags.
+ */
+import { describe, it, expect, afterAll } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const ROOT = join(__dirname, '../../..');
+const SCRIPTS = join(ROOT, 'orchestrations/scripts');
+const LINES = join(SCRIPTS, 'lib/release-lines.sh');
+const GITOPS = join(SCRIPTS, 'lib/git-ops.sh');
+const PERIM = join(SCRIPTS, 'lib/codeline-write-perimeter.sh');
+const dirs: string[] = [];
+afterAll(() => { for (const d of dirs) { spawnSync('bash', ['-c', `. "${PERIM}"; perimeter_unlock "${d}"`]); rmSync(d, { recursive: true, force: true }); } });
+const tmp = (p: string) => { const d = mkdtempSync(join(tmpdir(), p)); dirs.push(d); return d; };
+const LOGS = 'warning() { echo "WARN: $*"; }; error() { echo "ERROR: $*"; }; success() { echo "OK: $*"; }; info() { echo "INFO: $*"; }; log() { echo "LOG: $*"; }';
+
+type Line = { line: string; base: string; version: string; onCodelineBase?: boolean };
+const plan = (provider: string, lines: Line[]) => ({
+  codelines: [{ codeline: provider, part: 'ship the change on every line', order: 1 }, { codeline: 'site', part: 'none', order: 2 }],
+  packages: [{ package: '@scope/lib', providedBy: provider, releaseLines: lines, consumers: [] }],
+});
+const lanePrd = (p: object | null) => ({
+  project: { outputDir: '/w/lib', outputDirs: [{ codeline: 'lib', path: '/w/lib' }, { codeline: 'site', path: '/w/site' }] },
+  implementationOrder: { core: ['S-1'] },
+  stories: [{ id: 'S-1', phase: 'core', codeline: 'lib', codelines: ['lib', 'site'], status: 'completed', completed: true, passes: true, ...(p ? { overallPlan: p } : {}) }],
+});
+
+/** Run the lane's release-line passes for codeline `cl`, with a phase runner that records each call. */
+function runLines(cl: string, prd: object, runnerExit = 0) {
+  const d = tmp('release-lines-');
+  const prdFile = join(d, 'lane-prd.json'); writeFileSync(prdFile, JSON.stringify(prd));
+  const calls = join(d, 'calls.jsonl');
+  const runner = join(d, 'phase-runner.sh');
+  writeFileSync(runner, `#!/bin/bash
+${JSON.stringify(process.execPath)} -e 'const p=require(process.env.PRD_FILE);process.stdout.write(JSON.stringify({args:process.argv.slice(1),phase:process.env.PHASE,base:process.env.JIRA_BASELINE_BRANCH,suffix:process.env.EPAM_BRANCH_SUFFIX||"",line:process.env.EPAM_RELEASE_LINE||"",logDir:process.env.LOG_DIR,codeline:process.env.EPAM_CODELINE,root:process.env.PROJECT_ROOT,stories:p.stories.map(s=>({id:s.id,status:s.status,completed:s.completed}))})+"\\n")' -- "$@" >> ${JSON.stringify(calls)}
+exit ${runnerExit}
+`);
+  chmodSync(runner, 0o755);
+  const laneLog = join(d, 'lanes', cl); mkdirSync(laneLog, { recursive: true });
+  const r = spawnSync('bash', ['-c', `${LOGS}\nSCRIPT_DIR=${JSON.stringify(SCRIPTS)}\nNODE_BIN=${JSON.stringify(process.execPath)}\n. ${JSON.stringify(LINES)}\n _run_release_lines ${cl} ${JSON.stringify(prdFile)} /w/${cl} ${JSON.stringify(laneLog)} ${JSON.stringify(join(d, 'orch.log'))} "" ${JSON.stringify(runner)}`], { encoding: 'utf8', env: { ...process.env, LOG_DIR: d } });
+  const recorded = existsSync(calls) ? readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
+  return { r, recorded, laneLog };
+}
+
+describe('the lane works the story once more per release line the plan names off its own base', () => {
+  it('0 lines: the plan names none — nothing more runs', () => {
+    const { r, recorded } = runLines('lib', lanePrd(plan('lib', [])));
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(recorded).toEqual([]);
+  });
+
+  it('no plan at all: nothing more runs', () => {
+    const { r, recorded } = runLines('lib', lanePrd(null));
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(recorded).toEqual([]);
+  });
+
+  it('1 line off the codeline\'s base: one more pass — that line\'s base, its own branch suffix, its own logs, the story pending again', () => {
+    const { r, recorded, laneLog } = runLines('lib', lanePrd(plan('lib', [
+      { line: '2.x', base: 'v2.4.0', version: '2.5.0', onCodelineBase: true },
+      { line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false },
+    ])));
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(recorded.length, `the 1.x line never ran:\n${r.stdout}${r.stderr}`).toBeGreaterThan(0);
+    for (const c of recorded) {
+      expect(c.base).toBe('v1.9.0');
+      expect(c.line).toBe('1.x');
+      expect(c.suffix).toMatch(/1\.x/);
+      expect(c.codeline).toBe('lib');
+      expect(c.root).toBe('/w/lib');
+      expect(c.logDir.startsWith(laneLog) && c.logDir !== laneLog, 'the line shares the lane\'s logs').toBe(true);
+      expect(c.args).toContain('--reset');
+      expect(c.stories).toEqual([{ id: 'S-1', status: 'pending', completed: false }]);
+    }
+    expect(new Set(recorded.map((c) => c.phase))).toEqual(new Set(['core']));
+  });
+
+  it('3 lines, one on the codeline\'s base: exactly two more passes, each with its own base, branch and logs', () => {
+    const { r, recorded } = runLines('lib', lanePrd(plan('lib', [
+      { line: '3.x', base: 'v3.0.0', version: '3.0.1', onCodelineBase: true },
+      { line: '2.x', base: 'v2.4.0', version: '2.4.1', onCodelineBase: false },
+      { line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false },
+    ])));
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(recorded.map((c) => c.base).sort()).toEqual(['v1.9.0', 'v2.4.0']);
+    expect(new Set(recorded.map((c) => c.suffix)).size).toBe(2);
+    expect(new Set(recorded.map((c) => c.logDir)).size).toBe(2);
+  });
+
+  it('a line whose onCodelineBase the plan did not state is not guessed at', () => {
+    const { r, recorded } = runLines('lib', lanePrd(plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1' }])));
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(recorded).toEqual([]);
+  });
+
+  it('another codeline\'s release lines are not this codeline\'s to run', () => {
+    const { r, recorded } = runLines('site', { ...lanePrd(plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false }])), stories: [{ ...lanePrd(null).stories[0], codeline: 'site', overallPlan: plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false }]) }] });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(recorded).toEqual([]);
+    expect(r.stdout, 'a release-line pass was started for a codeline that does not provide the package').not.toMatch(/release line/);
+  });
+
+  it('a line that fails fails the lane, and no later line runs after it', () => {
+    const { r, recorded } = runLines('lib', lanePrd(plan('lib', [
+      { line: '2.x', base: 'v2.4.0', version: '2.4.1', onCodelineBase: false },
+      { line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false },
+    ])), 1);
+    expect(r.status).not.toBe(0);
+    expect(new Set(recorded.map((c) => c.base)).size, 'a later line ran after one failed').toBe(1);
+  });
+});
+
+describe('a story branch per release line, from a base that may be a tag', () => {
+  const git = (dir: string, ...args: string[]) => spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+  const commit = (dir: string, msg: string) => { writeFileSync(join(dir, 'f.txt'), `${msg}\n`); git(dir, 'add', '-A'); git(dir, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', msg); return git(dir, 'rev-parse', 'HEAD').stdout.trim(); };
+  function repoWithReleases() {
+    const d = tmp('release-branches-');
+    const origin = join(d, 'origin.git'); const work = join(d, 'work');
+    mkdirSync(work); git(work, 'init', '-q', '-b', 'master');
+    const v1 = commit(work, 'one'); git(work, 'tag', 'v1.0.0');
+    const v2 = commit(work, 'two'); git(work, 'tag', 'v2.0.0');
+    const head = commit(work, 'three');
+    spawnSync('git', ['clone', '-q', '--bare', work, origin]);
+    const repo = join(d, 'repo'); spawnSync('git', ['clone', '-q', origin, repo]);
+    return { repo, v1, v2, head };
+  }
+  const sh = (script: string, env: Record<string, string> = {}) => spawnSync('bash', ['-c', `${LOGS}\n. "${PERIM}"\n. "${GITOPS}"\n${script}`], { encoding: 'utf8', env: { ...process.env, EPAM_BROWNFIELD: '1', ...env } });
+
+  it('the codeline\'s own line: AI-<story> from its branch, as today', () => {
+    const { repo, head } = repoWithReleases();
+    const r = sh(`ensure_story_branch "${repo}" S-1 master`);
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(git(repo, 'rev-parse', 'AI-S-1').stdout.trim()).toBe(head);
+  });
+
+  it('another line: its own story branch from the line\'s tag — and the codeline\'s own story branch is untouched', () => {
+    const { repo, head, v1 } = repoWithReleases();
+    expect(sh(`ensure_story_branch "${repo}" S-1 master`).status).toBe(0);
+    const r = sh(`ensure_story_branch "${repo}" S-1 v1.0.0`, { EPAM_BRANCH_SUFFIX: '-1.x' });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(git(repo, 'rev-parse', 'AI-S-1-1.x').stdout.trim(), 'the line\'s branch is not on its tag').toBe(v1);
+    expect(git(repo, 'rev-parse', 'AI-S-1').stdout.trim(), 'the codeline\'s own story branch moved').toBe(head);
+    expect(git(repo, 'rev-parse', '--abbrev-ref', 'HEAD').stdout.trim()).toBe('AI-S-1-1.x');
+  });
+
+  it('the baseline a line\'s gates diff against is its tag', () => {
+    const { repo, v2 } = repoWithReleases();
+    const r = sh(`codeline_baseline_ref "${repo}" v2.0.0`);
+    expect(r.stdout.trim(), r.stderr).not.toBe('');
+    expect(git(repo, 'rev-parse', `${r.stdout.trim()}^{commit}`).stdout.trim()).toBe(v2);
+  });
+});
+
+describe('the plan says which line the codeline is already on, and the agents of a line pass are told their line', () => {
+  process.env.SPEC_MODE_NO_MAIN = '1';
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const runner = require(join(SCRIPTS, 'spec-mode-runner.js'));
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const fixPlan = require(join(SCRIPTS, 'lib/producers/fix-plan.js'));
+  it('the plan template asks for onCodelineBase on each release line, and the parse keeps it', () => {
+    const tpl = JSON.parse(readFileSync(join(ROOT, 'orchestrations/prompts/templates/detective-overall-plan.json'), 'utf8')).body;
+    expect(tpl).toContain('onCodelineBase');
+    const p = runner.parseOverallPlan(`<OVERALL_PLAN>${JSON.stringify(plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false }]))}</OVERALL_PLAN>`);
+    expect(p.packages[0].releaseLines[0].onCodelineBase).toBe(false);
+  });
+  it('a line pass is told which line is its own; the codeline\'s own pass is not told a line', () => {
+    const p = plan('lib', [{ line: '2.x', base: 'v2.4.0', version: '2.5.0', onCodelineBase: true }, { line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false }]);
+    const prev = process.env.EPAM_RELEASE_LINE;
+    try {
+      process.env.EPAM_RELEASE_LINE = '1.x';
+      const t = fixPlan.overallPlanText(p, 'lib');
+      expect(t).toMatch(/release line 1\.x[^\n]*THIS RELEASE LINE/);
+      expect(t).not.toMatch(/release line 2\.x[^\n]*THIS RELEASE LINE/);
+      delete process.env.EPAM_RELEASE_LINE;
+      expect(fixPlan.overallPlanText(p, 'lib')).not.toContain('THIS RELEASE LINE');
+    } finally { if (prev === undefined) delete process.env.EPAM_RELEASE_LINE; else process.env.EPAM_RELEASE_LINE = prev; }
+  });
+});

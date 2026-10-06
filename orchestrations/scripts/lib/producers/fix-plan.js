@@ -130,7 +130,9 @@ function overallPlanText(plan, here) {
   }
   for (const p of (Array.isArray(plan.packages) ? plan.packages : [])) {
     lines.push(`Package \`${p.package}\`${p.providedBy ? `, provided by ${p.providedBy}` : ''}.`);
-    for (const l of p.releaseLines || []) lines.push(`  release line ${l.line}: cut from ${l.base}, ships as ${l.version}`);
+    // THE LINE THIS PASS WORKS ON (lib/release-lines.sh sets it), so a line's agents know which branch they are on.
+    const _thisLine = process.env.EPAM_RELEASE_LINE || '';
+    for (const l of p.releaseLines || []) lines.push(`  release line ${l.line}: cut from ${l.base}, ships as ${l.version}${_thisLine && l.line === _thisLine ? ' (THIS RELEASE LINE — the one this pass works on)' : ''}`);
     for (const c of p.consumers || []) {
       lines.push(`  consumer ${c.codeline}${c.codeline === here ? ' (THIS CODELINE)' : ''}: declares ${c.declaredRange}, receives ${c.receivesVia}; its own change: ${c.change || 'none'}`);
       for (const u of c.usage || []) lines.push(`    uses: ${u}`);

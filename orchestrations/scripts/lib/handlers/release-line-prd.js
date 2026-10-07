@@ -9,8 +9,14 @@
 'use strict';
 const fs = require('fs');
 
-const [src, out, codeline, line] = process.argv.slice(2);
+const [src, out, codeline, line, canonicalFile] = process.argv.slice(2);
 const prd = JSON.parse(fs.readFileSync(src, 'utf8'));
+// A resumed lane works from its checkpoint PRD, which may predate the plan: the canonical PRD holds it then.
+const canonical = canonicalFile && fs.existsSync(canonicalFile) ? JSON.parse(fs.readFileSync(canonicalFile, 'utf8')) : null;
+for (const s of prd.stories || []) {
+  const c = s && !s.overallPlan && ((canonical && canonical.stories) || []).find((x) => x && x.id === s.id);
+  if (c && c.overallPlan) s.overallPlan = c.overallPlan;
+}
 const onLine = (s) => !!(s && s.overallPlan && (s.overallPlan.packages || []).some((p) => p && p.providedBy === codeline
   && (p.releaseLines || []).some((l) => l && l.line === line)));
 const stories = (prd.stories || []).filter(onLine).map((s) => ({

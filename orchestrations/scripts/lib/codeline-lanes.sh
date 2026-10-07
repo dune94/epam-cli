@@ -956,6 +956,9 @@ _run_codeline_loop() {
   #     skipped with a warning rather than silently writing a contract nobody
   #     consumed. Lanes that genuinely integrate must set
   #     EPAM_PARALLEL_CODELINES=0.
+  # A STORY SPECIFIED BEFORE IT HAD A PLAN GETS ONE (lib/handlers/write-missing-plans.js) — the detective's plan
+  # only, once, before any lane, so every lane and every release line is worked from it.
+  "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/write-missing-plans.js" "$_prd_path" || true
   _EPAM_PARALLEL_LANES="${EPAM_PARALLEL_CODELINES:-1}"
   if [ "$_EPAM_PARALLEL_LANES" = "1" ] && [ "${#_cl_entries[@]}" -gt 1 ]; then
     local _p_cls=() _p_wts=() _p_prds=() _p_pids=() _p_spec=() _lane_spec_mode=""
@@ -976,7 +979,9 @@ _run_codeline_loop() {
         continue
       fi
       if lane_declared_passed "$_cl"; then
-        log "[orch] Codeline '${_cl}': declared passed in this run (EPAM_PASSED_LANES) — not run again"
+        log "[orch] Codeline '${_cl}': declared passed in this run (EPAM_PASSED_LANES) — its own line is not run again"
+        # ITS OTHER RELEASE LINES STILL SHIP (lib/release-lines.sh): passed is the operator's word for the codeline's own line.
+        _run_release_lines "$_cl" "$_cl_prd" "$_wt" "${LOG_DIR:-/tmp}/lanes/${_cl}" "$_log_file" "$_phase_filter" "$0" "$_prd_path" || _overall=1
         continue
       fi
       _p_cls+=("$_cl"); _p_wts+=("$_wt"); _p_prds+=("$_cl_prd"); _p_spec+=("${_lane_spec_mode}")
@@ -1082,7 +1087,7 @@ _run_codeline_loop() {
     # A SHARED CODELINE SHIPS ON EVERY RELEASE LINE ITS STORY'S PLAN NAMES (lib/release-lines.sh): its stories,
     # done on its own base, are worked once more per line off it — 0, 1 or N, as the plan says.
     if [ "$_cl_failed" = "0" ]; then
-      _run_release_lines "$_cl" "$_cl_prd" "$_wt" "$_lane_log_dir" "$_log_file" "$_phase_filter" "$0" || { _cl_failed=1; _overall=1; }
+      _run_release_lines "$_cl" "$_cl_prd" "$_wt" "$_lane_log_dir" "$_log_file" "$_phase_filter" "$0" "$_prd_path" || { _cl_failed=1; _overall=1; }
     fi
 
     [ "$_cl_failed" = "0" ] && \
@@ -1227,7 +1232,9 @@ _run_codeline_loop() {
       continue
     fi
     if lane_declared_passed "$_cl"; then
-      log "[orch] Codeline '${_cl}': declared passed in this run (EPAM_PASSED_LANES) — not run again"
+      log "[orch] Codeline '${_cl}': declared passed in this run (EPAM_PASSED_LANES) — its own line is not run again"
+      # ITS OTHER RELEASE LINES STILL SHIP (lib/release-lines.sh): passed is the operator's word for the codeline's own line.
+      _run_release_lines "$_cl" "$_cl_prd" "$_wt" "${LOG_DIR:-/tmp}/lanes/${_cl}" "$_log_file" "$_phase_filter" "$0" "$_prd_path" || _overall=1
       continue
     fi
 
@@ -1308,7 +1315,7 @@ _run_codeline_loop() {
     # A SHARED CODELINE SHIPS ON EVERY RELEASE LINE ITS STORY'S PLAN NAMES (lib/release-lines.sh): its stories,
     # done on its own base, are worked once more per line off it — 0, 1 or N, as the plan says.
     if [ "$_cl_failed" = "0" ]; then
-      _run_release_lines "$_cl" "$_cl_prd" "$_wt" "$_lane_log_dir" "$_log_file" "$_phase_filter" "$0" || { _cl_failed=1; _overall=1; }
+      _run_release_lines "$_cl" "$_cl_prd" "$_wt" "$_lane_log_dir" "$_log_file" "$_phase_filter" "$0" "$_prd_path" || { _cl_failed=1; _overall=1; }
     fi
 
     # The append-only ledgers back into the parent, as the parallel loop folds them.

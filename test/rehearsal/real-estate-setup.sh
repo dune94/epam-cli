@@ -32,6 +32,9 @@ for d in "$@"; do
 done
 
 cp -a "$REAL_INSTALL" "$R/install"
+# THE COPY OWNS NO PROCESS OF THE REAL INSTALL. Its pid files name the real install's daemons (the dashboard runner
+# host); an installer run on the copy restarted one of them — killing the real install's runner host (2026-10-06).
+find "$R/install" -name "*.pid" -not -path "*/node_modules/*" -delete
 # Rewrite absolute paths in the COPY's text state (never binaries, never node_modules).
 grep -rlIZ --exclude-dir=node_modules --exclude-dir=.git -e "$REAL_INSTALL" -e "$REAL_CL" "$R/install" 2>/dev/null \
     | xargs -0 -r sed -i -e "s#${REAL_INSTALL}#${R}/install#g" -e "s#${REAL_CL}/#${R}/codelines/#g"

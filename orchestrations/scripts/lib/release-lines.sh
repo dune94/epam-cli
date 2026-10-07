@@ -12,9 +12,9 @@
 # The phase runner is the lane's own (the orchestrator, "$0"), run exactly as the lane runs it. A line that fails
 # fails the lane; no later line runs after it. Returns non-zero then.
 _run_release_lines() {
-    local _cl="$1" _cl_prd="$2" _wt="$3" _lane_log="$4" _log_file="${5:-/dev/null}" _phase_filter="${6:-}" _runner="$7"
+    local _cl="$1" _cl_prd="$2" _wt="$3" _lane_log="$4" _log_file="${5:-/dev/null}" _phase_filter="${6:-}" _runner="$7" _canonical="${8:-}"
     local _lines=()
-    mapfile -t _lines < <("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/release-lines.js" "$_cl_prd" "$_cl")
+    mapfile -t _lines < <("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/release-lines.js" "$_cl_prd" "$_cl" "$_canonical")
     [ "${#_lines[@]}" -gt 0 ] || return 0
     local _entry _line _base _slug _line_log _line_prd _phase _pex _ledger
     for _entry in "${_lines[@]}"; do
@@ -24,7 +24,7 @@ _run_release_lines() {
         _line_log="${_lane_log}/lines/${_slug}"
         mkdir -p "$_line_log" 2>/dev/null || true
         _line_prd="${_line_log}/prd.json"
-        "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/release-line-prd.js" "$_cl_prd" "$_line_prd" "$_cl" "$_line" || {
+        "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/release-line-prd.js" "$_cl_prd" "$_line_prd" "$_cl" "$_line" "$_canonical" || {
             error "[orch] Codeline '${_cl}': could not prepare release line ${_line}"; return 1; }
         log "[orch] Codeline '${_cl}' — release line ${_line}, from ${_base} (the story's plan)"
         local _phases=()

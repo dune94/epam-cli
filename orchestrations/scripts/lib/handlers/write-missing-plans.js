@@ -19,6 +19,32 @@ const path = require('path');
 const prdFile = process.argv[2];
 const prd = JSON.parse(fs.readFileSync(prdFile, 'utf8'));
 const dirs = (prd.project && Array.isArray(prd.project.outputDirs)) ? prd.project.outputDirs : [];
+
+// A STORY IS PLANNED ONCE PER RUN. A resume restores the canonical PRD from the run's checkpoint, which never held the
+// plan; asked again, the detective answered differently (AMSD-2974, 2026-10-07). The plan a run wrote is kept under the
+// run and is the plan on every later launch of it.
+const cfg = process.env.EPAM_PROJECT_CONFIG_DIR || process.env.PROJECT_CONFIG_DIR || '';
+const run = process.env.EPAM_RESUME_RUN || process.env.ORCH_RUN_ID || '';
+const keptDir = cfg && run ? path.join(cfg, 'runs', run, 'plans') : '';
+const keptFile = (id) => (keptDir ? path.join(keptDir, `${String(id).replace(/[^A-Za-z0-9._-]/g, '_')}.json`) : '');
+const keep = (s) => {
+  const f = keptFile(s.id);
+  if (!f || fs.existsSync(f)) return;
+  fs.mkdirSync(keptDir, { recursive: true });
+  fs.writeFileSync(f, JSON.stringify(s.overallPlan, null, 2));
+};
+let restored = false;
+for (const s of prd.stories || []) {
+  if (!s) continue;
+  if (s.overallPlan) { keep(s); continue; }
+  const f = keptFile(s.id);
+  if (f && fs.existsSync(f)) {
+    s.overallPlan = JSON.parse(fs.readFileSync(f, 'utf8'));
+    restored = true;
+    process.stderr.write(`[plan] ${s.id}: the plan this run wrote is kept — ${f}\n`);
+  }
+}
+if (restored) fs.writeFileSync(prdFile, JSON.stringify(prd, null, 2));
 const wanting = (prd.stories || []).filter((s) => s && !s.overallPlan);
 if (!wanting.length) process.exit(0);
 
@@ -44,6 +70,7 @@ const runner = require(path.join(__dirname, '..', '..', 'spec-mode-runner.js'));
     }
     if (probe.overallPlan) {
       s.overallPlan = probe.overallPlan;
+      keep(s);
       changed = true;
       process.stderr.write(`[plan] ${s.id}: plan written (${probe.overallPlan.codelines.length} codeline(s), `
         + `${(probe.overallPlan.packages || []).reduce((n, p) => n + (p.releaseLines || []).length, 0)} release line(s))\n`);

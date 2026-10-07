@@ -27,6 +27,17 @@ try {
   for (const name of Object.keys((me && me.declares) || {})) {
     const provider = facts.find((f) => f.codeline !== mine.codeline && f.provides && f.provides.name === name);
     const root = provider && (dirs.find((d) => d.codeline === provider.codeline) || {}).path;
-    if (root) process.stdout.write(`${name}\t${root}\n`);
+    // THE LINE THIS CONSUMER RECEIVES (the story's plan): a version shipped on a release line off the provider's own
+    // base is built from that line's story branch — suffix and story id, for the caller to name it.
+    let suffix = ''; let story = '';
+    for (const s of prd.stories || []) {
+      for (const p of ((s && s.overallPlan && s.overallPlan.packages) || [])) {
+        if (p.package !== name) continue;
+        const c = (p.consumers || []).find((x) => x && x.codeline === mine.codeline);
+        const l = c && (p.releaseLines || []).find((x) => x && x.version === c.receivesVia);
+        if (l && l.onCodelineBase === false && !suffix) { suffix = `-${String(l.line).replace(/[^A-Za-z0-9._-]/g, '-')}`; story = s.id; }
+      }
+    }
+    if (root) process.stdout.write(`${name}\t${root}\t${suffix}\t${story}\n`);
   }
 } catch { process.exit(0); }

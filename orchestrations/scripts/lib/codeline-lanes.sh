@@ -273,7 +273,7 @@ _place_sibling_package() {
 }
 
 link_sibling_builds() {
-    local _root="$1" _wt="$2" _vd="$3" _pairs _name _prov _bc _scope _base _e _stamp
+    local _root="$1" _wt="$2" _vd="$3" _pairs _name _prov _bc _scope _base _e _stamp _suffix _story _lb _ld
     [ -n "${PRD_FILE:-}" ] && [ -f "$PRD_FILE" ] && [ -d "$_root/$_vd" ] || return 0
     _pairs=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/sibling-providers.js" "$PRD_FILE" "$_root" 2>/dev/null) || return 0
     [ -n "$_pairs" ] || return 0
@@ -284,8 +284,22 @@ link_sibling_builds() {
         [ -e "$_e" ] || [ -L "$_e" ] || continue
         [ -e "$_wt/$_vd/$(basename "$_e")" ] || ln -s "$_e" "$_wt/$_vd/$(basename "$_e")"
     done
-    while IFS=$'\t' read -r _name _prov; do
+    while IFS=$'\t' read -r _name _prov _suffix _story; do
         [ -n "$_name" ] && [ -d "$_prov" ] || continue
+        # THE PROVIDER'S RELEASE LINE THIS CONSUMER RECEIVES (the story's plan): built from that line's story branch, in a
+        # worktree of its own, so the consumer is proved against the back-port it will actually get.
+        if [ -n "${_suffix:-}" ] && [ -n "${_story:-}" ]; then
+            _lb="${EPAM_BRANCH_PREFIX:-}AI-${_story}${_suffix}"
+            _ld="${_prov}-line${_suffix}"
+            if git -C "$_prov" rev-parse -q --verify "refs/heads/${_lb}" >/dev/null 2>&1; then
+                if [ -d "$_ld" ]; then git -C "$_ld" checkout -q --detach "$_lb" 2>/dev/null || true
+                else git -C "$_prov" worktree add -q --detach "$_ld" "$_lb" 2>/dev/null || true; fi
+                [ -e "$_ld/$_vd" ] || [ ! -d "$_prov/$_vd" ] || ln -s "$_prov/$_vd" "$_ld/$_vd"
+                [ -d "$_ld" ] && _prov="$_ld"
+            else
+                warning "  [sibling] ${_name}: release line branch ${_lb} does not exist yet — testing against ${_prov} as it stands"
+            fi
+        fi
         # The sibling's own build, once per checkout state: the only command it runs is the one the
         # sibling declares; a failure is reported and the lane tests against what it has.
         _bc=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$_prov" 2>/dev/null | jq -r '.buildCommand // empty' 2>/dev/null)
@@ -974,6 +988,8 @@ _run_codeline_loop() {
       else
         _n_stories=$(_filtered_prd "$_cl" "$_cl_prd" "$_prd_path")
       fi
+      # The lane's work copy carries the story's plan (a checkpoint may predate it; the checkpoint is not edited).
+      "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/carry-plan.js" "$_cl_prd" "$_prd_path" || true
       if [ "${_n_stories:-0}" -eq 0 ]; then
         log "[orch] Codeline '${_cl}': no stories — skipping"
         continue
@@ -1226,6 +1242,8 @@ _run_codeline_loop() {
     else
       _n_stories=$(_filtered_prd "$_cl" "$_cl_prd" "$_prd_path")
     fi
+    # The lane's work copy carries the story's plan (a checkpoint may predate it; the checkpoint is not edited).
+    "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/carry-plan.js" "$_cl_prd" "$_prd_path" || true
 
     if [ "${_n_stories:-0}" -eq 0 ]; then
       log "[orch] Codeline '${_cl}': no stories — skipping"

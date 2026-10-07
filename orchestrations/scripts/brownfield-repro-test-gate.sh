@@ -90,6 +90,13 @@ while IFS=$'\t' read -r _verdict _cf; do
     if [ "$_verdict" = "TEST" ]; then TEST_FILES+=("$_cf"); else FIX_FILES+=("$_cf"); fi
 done <<< "$_ccf_out"
 
+# A CODELINE THE STORY'S PLAN GIVES NO CHANGE (it receives the change through a release of the provider) and that
+# changed nothing has nothing to reproduce here: the reproducing test ships with the change, in the provider's line.
+if [ "${#_CANDIDATES[@]}" -eq 0 ] && [ -n "${EPAM_CODELINE:-}" ] \
+   && "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/plan-gives-no-change.js" "${PRD_FILE:-}" "$STORY_ID" "$EPAM_CODELINE"; then
+    log "${STORY_ID}: the story's plan gives ${EPAM_CODELINE} no change and it changed nothing — the reproducing test ships with the provider's change; passing"
+    exit 0
+fi
 if [ "${#TEST_FILES[@]}" -eq 0 ]; then
     block "no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior."
 fi

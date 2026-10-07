@@ -17,17 +17,42 @@
 _run_release_lines() {
     # THE CODELINE IS LEFT ON THE BRANCH IT WAS ON. A line pass checks out the line's story branch; left there, the next
     # launch's detective read cx-shared at 7.14.0 and planned its own line as 7.x (AMSD-2974, 2026-10-07).
-    local _home _rc=0
+    # The branch is recorded in the codeline's git dir first: a run killed mid-line runs nothing after the pass, and
+    # the next launch returns the codeline from the record (_return_codelines_from_release_lines).
+    local _home _rc=0 _gd
     _home=$(git -C "$3" symbolic-ref -q --short HEAD 2>/dev/null || true)
+    _gd=$(git -C "$3" rev-parse --absolute-git-dir 2>/dev/null || true)
+    [ -n "$_home" ] && [ -n "$_gd" ] && printf '%s\n' "$_home" > "$_gd/epam-release-home"
     _run_release_lines_each "$@" || _rc=$?
-    if [ -n "$_home" ] && [ "$(git -C "$3" symbolic-ref -q --short HEAD 2>/dev/null)" != "$_home" ]; then
-        if git -C "$3" checkout -q "$_home" 2>/dev/null; then
-            log "[orch] Codeline '$1': release lines done — back on ${_home}"
+    _return_from_release_lines "$3" "$1"
+    return "$_rc"
+}
+
+# _return_from_release_lines <codeline-root> [name] — back on the branch the record names; the record is removed.
+_return_from_release_lines() {
+    local _gd _home
+    _gd=$(git -C "$1" rev-parse --absolute-git-dir 2>/dev/null) || return 0
+    [ -f "$_gd/epam-release-home" ] || return 0
+    _home=$(cat "$_gd/epam-release-home")
+    if [ -n "$_home" ] && [ "$(git -C "$1" symbolic-ref -q --short HEAD 2>/dev/null)" != "$_home" ]; then
+        if git -C "$1" checkout -q "$_home" 2>/dev/null; then
+            log "[orch] Codeline '${2:-$1}': release lines done — back on ${_home}"
         else
-            warning "[orch] Codeline '$1': could not return to ${_home} after its release lines"
+            warning "[orch] Codeline '${2:-$1}': could not return to ${_home} after its release lines"
+            return 0
         fi
     fi
-    return "$_rc"
+    rm -f "$_gd/epam-release-home"
+}
+
+# _return_codelines_from_release_lines <prd> — every codeline of the PRD a line pass left is put back before the
+# launch plans the story (AMSD-2974 run 2, 2026-10-07: the detective read cx-shared on its 7.x line branch).
+_return_codelines_from_release_lines() {
+    local _p
+    while IFS=$'\t' read -r _n _p; do
+        [ -n "$_p" ] && [ -d "$_p" ] && _return_from_release_lines "$_p" "$_n"
+    done < <(jq -r '.project.outputDirs[]? | [.codeline, .path] | @tsv' "$1" 2>/dev/null)
+    return 0
 }
 
 _run_release_lines_each() {

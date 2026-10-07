@@ -13,7 +13,7 @@
  * story is pending again. The count is the plan's: 0, 1 or N. A line whose onCodelineBase is not stated is not
  * guessed at.
  *
- * EXECUTED: lib/release-lines.sh with the real handlers and a stand-in for the lane's phase run that records each
+ * EXECUTED: lib/release-lines.sh — _run_release_lines and the per-line passes it wraps, _run_release_lines_each — with the real handlers and a stand-in for the lane's phase run that records each
  * call; ensure_story_branch and codeline_baseline_ref on a real repository with an origin and release tags.
  */
 import { describe, it, expect, afterAll } from 'vitest';
@@ -197,6 +197,43 @@ describe('after its release lines the codeline is back on the branch it was on',
     expect(recorded.length).toBe(1);
     expect(run.status).not.toBe(0);
     expect(r.branch()).toBe('bugfix/AI-S-1');
+  });
+});
+
+// A run killed during a line pass (SIGKILL: no trap runs) leaves the codeline on the line's branch. The next launch
+// returns every codeline of the PRD to the branch its release lines left, before the story is planned.
+describe('a launch returns a codeline a killed line pass left on the line\'s branch', () => {
+  function killedMidLine(record: boolean) {
+    const d = tmp('release-killed-');
+    const cl = join(d, 'lib'); mkdirSync(cl);
+    const git = (...a: string[]) => spawnSync('git', ['-C', cl, ...a], { encoding: 'utf8' });
+    git('init', '-q', '-b', 'master'); writeFileSync(join(cl, 'a.txt'), 'a\n'); git('add', '-A');
+    git('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'base'); git('checkout', '-q', '-b', 'bugfix/AI-S-1');
+    const runner = join(d, 'killed.sh');
+    // The line pass is killed outright: the codeline is on the line's branch and nothing after the pass runs.
+    writeFileSync(runner, '#!/bin/bash\ngit -C "$PROJECT_ROOT" checkout -q -B "AI-S-1$EPAM_BRANCH_SUFFIX"\nkill -9 $PPID\n');
+    chmodSync(runner, 0o755);
+    const prdFile = join(d, 'lane-prd.json');
+    writeFileSync(prdFile, JSON.stringify({ ...lanePrd(plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false }])), project: { outputDir: cl, outputDirs: [{ codeline: 'lib', path: cl }] } }));
+    const laneLog = join(d, 'lanes', 'lib'); mkdirSync(laneLog, { recursive: true });
+    const env = { ...process.env, LOG_DIR: d, EPAM_RESUME_RUN: '' };
+    if (record) spawnSync('bash', ['-c', `${LOGS}\nSCRIPT_DIR=${JSON.stringify(SCRIPTS)}\nNODE_BIN=${JSON.stringify(process.execPath)}\n. ${JSON.stringify(LINES)}\n _run_release_lines lib ${JSON.stringify(prdFile)} ${JSON.stringify(cl)} ${JSON.stringify(laneLog)} /dev/null "" ${JSON.stringify(runner)}`], { encoding: 'utf8', env });
+    else git('checkout', '-q', '-b', 'AI-S-1-1.x');
+    const left = git('branch', '--show-current').stdout.trim();
+    const next = spawnSync('bash', ['-c', `${LOGS}\nSCRIPT_DIR=${JSON.stringify(SCRIPTS)}\nNODE_BIN=${JSON.stringify(process.execPath)}\n. ${JSON.stringify(LINES)}\n _return_codelines_from_release_lines ${JSON.stringify(prdFile)}`], { encoding: 'utf8', env });
+    return { left, next, now: git('branch', '--show-current').stdout.trim() };
+  }
+  it('killed mid-line: left on the line\'s branch; the next launch puts it back, and says so', () => {
+    const { left, next, now } = killedMidLine(true);
+    expect(left, 'the kill did not leave the codeline on the line branch — the test proves nothing').toBe('AI-S-1-1.x');
+    expect(next.status, next.stdout + next.stderr).toBe(0);
+    expect(now).toBe('bugfix/AI-S-1');
+    expect(next.stdout).toMatch(/back on bugfix\/AI-S-1/);
+  });
+  it('a codeline no line pass left: its branch is its own business — not moved', () => {
+    const { left, now } = killedMidLine(false);
+    expect(left).toBe('AI-S-1-1.x');
+    expect(now).toBe('AI-S-1-1.x');
   });
 });
 

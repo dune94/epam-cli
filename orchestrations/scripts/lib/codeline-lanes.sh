@@ -972,6 +972,8 @@ _run_codeline_loop() {
   #     EPAM_PARALLEL_CODELINES=0.
   # A STORY SPECIFIED BEFORE IT HAD A PLAN GETS ONE (lib/handlers/write-missing-plans.js) — the detective's plan
   # only, once, before any lane, so every lane and every release line is worked from it.
+  # A codeline a killed line pass left on the line's branch is put back first — the detective reads the codeline.
+  _return_codelines_from_release_lines "$_prd_path"
   "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/write-missing-plans.js" "$_prd_path" || true
   _EPAM_PARALLEL_LANES="${EPAM_PARALLEL_CODELINES:-1}"
   if [ "$_EPAM_PARALLEL_LANES" = "1" ] && [ "${#_cl_entries[@]}" -gt 1 ]; then

@@ -89,7 +89,12 @@ export class Declarations {
     // A SEAM'S OWN TEMPLATE (the registry names it as the seam's template) beats a FRAGMENT several
     // prompts include — a shared evidence block may open a gate's prompt and would otherwise start first.
     const owns = (t: Template) => Object.values(this.registry).some((p) => p && p.template === t.id) ? 1 : 0;
-    found.sort((a, b) => (Math.round(b.coverage * 20) - Math.round(a.coverage * 20)) || (owns(b.template) - owns(a.template)) || (a.lo - b.lo) || (b.span - a.span) || (b.score - a.score));
+    // THE SEAM MOST OF THE PROMPT SPEAKS FOR, among fragments fully present: a prompt composed of several fragments (the
+    // detective's prescription, its plan block, its shared block) also carries a small fragment another seam declares
+    // (the story-kind hint), which starts earlier — and the detective was answered as the story writer (2026-10-06).
+    const full = found.filter((f) => Math.round(f.coverage * 20) === 20);
+    const votes = (t: Template) => full.filter((f) => f.template.seams.some((s) => t.seams.includes(s))).length;
+    found.sort((a, b) => (Math.round(b.coverage * 20) - Math.round(a.coverage * 20)) || (owns(b.template) - owns(a.template)) || (votes(b.template) - votes(a.template)) || (a.lo - b.lo) || (b.span - a.span) || (b.score - a.score));
     // A FRAGMENT embedded in another seam's prompt can span as widely as its host; a template whose
     // seam does not apply to this project's modes cannot be the caller, so the next candidate is.
     const pick = found.find((f) => this.applies(this.seamOf(f.template, modes), modes)) || found[0];

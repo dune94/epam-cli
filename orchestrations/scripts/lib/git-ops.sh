@@ -374,6 +374,9 @@ ensure_story_branch() {
     local codeline_root="$1"
     local story_id="$2"
     local baseline_branch="${3:-${JIRA_BASELINE_BRANCH:-main}}"
+    # A base named as a ref (refs/tags/<tag>, refs/heads/<branch>) is the same base: the name below is resolved as a tag,
+    # then as origin's branch (live 2026-10-07: refs/tags/v7.14.0 became origin/refs/tags/v7.14.0 and no branch was made).
+    baseline_branch="${baseline_branch#refs/tags/}"; baseline_branch="${baseline_branch#refs/heads/}"
 
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
     [ -e "$codeline_root/.git" ] || return 0
@@ -738,7 +741,7 @@ codeline_baseline_ref() {
         fi
         # A release line's base is a release tag (lib/release-lines.sh).
         if git -C "$_root" rev-parse -q --verify "refs/tags/${_declared}^{commit}" >/dev/null 2>&1; then
-            printf 'refs/tags/%s\n' "$_declared"; return 0
+            printf '%s\n' "$_declared"; return 0
         fi
     fi
     local _head

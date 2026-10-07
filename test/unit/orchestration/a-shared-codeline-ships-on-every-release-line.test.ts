@@ -175,6 +175,24 @@ describe('a story branch per release line, from a base that may be a tag', () =>
     expect(git(repo, 'rev-parse', '--abbrev-ref', 'HEAD').stdout.trim()).toBe('AI-S-1-1.x');
   });
 
+  // THE LANE'S HAND-OFF, as run-agent-orchestration.sh does it (live 2026-10-07): JIRA_BASELINE_BRANCH is set from
+  // codeline_baseline_ref with only origin/ removed, then the story branch is made from it. It came out as
+  // 'origin/refs/tags/v7.14.0' and the line's branch was never created.
+  it('the lane\'s hand-off: the baseline the lane sets from a tag still makes the line\'s branch on that tag', () => {
+    const { repo, v1 } = repoWithReleases();
+    const r = sh(`_ref=$(codeline_baseline_ref "${repo}" v1.0.0); export JIRA_BASELINE_BRANCH="\${_ref#origin/}"; echo "BASE=$JIRA_BASELINE_BRANCH"; ensure_story_branch "${repo}" S-1 "$JIRA_BASELINE_BRANCH"`, { EPAM_BRANCH_SUFFIX: '-1.x' });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(r.stdout).not.toMatch(/BASE=refs\//);
+    expect(git(repo, 'rev-parse', 'AI-S-1-1.x').stdout.trim()).toBe(v1);
+  });
+
+  it('a story branch made from a base given as refs/tags/<tag> lands on that tag', () => {
+    const { repo, v1 } = repoWithReleases();
+    const r = sh(`ensure_story_branch "${repo}" S-1 refs/tags/v1.0.0`, { EPAM_BRANCH_SUFFIX: '-1.x' });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(git(repo, 'rev-parse', 'AI-S-1-1.x').stdout.trim()).toBe(v1);
+  });
+
   it('the baseline a line\'s gates diff against is its tag', () => {
     const { repo, v2 } = repoWithReleases();
     const r = sh(`codeline_baseline_ref "${repo}" v2.0.0`);

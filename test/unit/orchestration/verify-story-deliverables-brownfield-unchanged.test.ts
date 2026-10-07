@@ -79,13 +79,14 @@ function run(opts: {
   declaredFiles: string[]; // relative to projectRoot
   brownfield?: boolean;
   baselineBranch?: string;
+  planChange?: string; // the story's plan gives codeline "site" this change
 }): { rc: number; output: string } {
   const { projectRoot } = opts;
   const prdPath = join(projectRoot, '..', 'prd.json');
   writeFileSync(
     prdPath,
     JSON.stringify({
-      stories: [{ id: 'SKY-TEST', technicalNotes: { files: opts.declaredFiles } }],
+      stories: [{ id: 'SKY-TEST', technicalNotes: { files: opts.declaredFiles }, ...(opts.planChange !== undefined ? { overallPlan: { codelines: [{ codeline: 'site', part: 'p', order: 1 }], packages: [{ package: '@s/l', providedBy: 'lib', releaseLines: [], consumers: [{ codeline: 'site', declaredRange: '^1', receivesVia: '1.0.1', usage: [], change: opts.planChange }] }] } } : {}) }],
     }),
   );
   const fnBody = [
@@ -115,6 +116,10 @@ function run(opts: {
       `MAIN_PRD_FILE=${JSON.stringify(prdPath)}`,
       `EPAM_BROWNFIELD=${opts.brownfield === false ? '0' : '1'}`,
       `JIRA_BASELINE_BRANCH=${JSON.stringify(opts.baselineBranch ?? 'develop')}`,
+      `SCRIPT_DIR=${JSON.stringify(join(__dirname, '../../../orchestrations/scripts'))}`,
+      `NODE_BIN=${JSON.stringify(process.execPath)}`,
+      ...(opts.planChange !== undefined ? ['EPAM_CODELINE=site'] : []),
+      'log() { echo "LOG: $*" >&2; }',
       'error() { echo "ERROR: $*" >&2; }',
       'success() { echo "SUCCESS: $*" >&2; }',
       'warning() { echo "WARNING: $*" >&2; }',
@@ -140,6 +145,20 @@ describe('verify_story_deliverables — brownfield: pre-existing file must show 
     const { rc, output } = run({ projectRoot: clone, declaredFiles: ['src/existing.ts'] });
     expect(rc).not.toBe(0);
     expect(output).toMatch(/all 1 declared deliverable\(s\) exist but are UNCHANGED/);
+  });
+
+  // THE STORY'S PLAN GIVES THIS CODELINE NO CHANGE (2026-10-06, AMSD-2974 rehearsal): unchanged is the plan carried out.
+  it('a codeline the story\'s plan gives exactly no change passes with its declared files unchanged, and says why', () => {
+    const { clone } = makeBrownfieldFixture();
+    const { rc, output } = run({ projectRoot: clone, declaredFiles: ['src/existing.ts'], planChange: 'none' });
+    expect(rc, output).toBe(0);
+    expect(output).toMatch(/plan gives site no change/);
+  });
+  it('a codeline the plan gives a change still fails with its declared files unchanged', () => {
+    const { clone } = makeBrownfieldFixture();
+    const { rc, output } = run({ projectRoot: clone, declaredFiles: ['src/existing.ts'], planChange: 'rename the prop' });
+    expect(rc).not.toBe(0);
+    expect(output).toMatch(/UNCHANGED/);
   });
 
   it('passes verification when the pre-existing file was genuinely modified', () => {

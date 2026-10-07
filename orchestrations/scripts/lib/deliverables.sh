@@ -523,6 +523,16 @@ verify_story_deliverables() {
                 _unchanged_note=" [attempt $((retry_count + 1))/$((MAX_RETRIES + 1)) — no retries remain]"
             fi
         fi
+        # THE STORY'S PLAN GIVES THIS CODELINE NO CHANGE (it receives the change through the provider's release): its
+        # declared files unchanged is the plan carried out, not missing work. Its declared set may predate the plan.
+        local _plan_prd
+        for _plan_prd in "${PRD_FILE:-}" "${MAIN_PRD_FILE:-}"; do
+            [ -n "$_plan_prd" ] && [ -n "${EPAM_CODELINE:-}" ] && [ -f "$_plan_prd" ] || continue
+            if "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/plan-gives-no-change.js" "$_plan_prd" "$story_id" "$EPAM_CODELINE"; then
+                log "Story $story_id: the story's plan gives ${EPAM_CODELINE} no change — its $declared declared file(s) are unchanged, as planned"
+                return 0
+            fi
+        done
         STORY_REJECTION_KEY="unchanged-all:$(printf '%s,' "${unchanged[@]}")"
         warning "Story $story_id: all $declared declared deliverable(s) exist but are UNCHANGED since baseline — no real work done anywhere in the declared set${_unchanged_note}:"
         for file in "${unchanged[@]}"; do

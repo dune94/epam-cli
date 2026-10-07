@@ -7,8 +7,9 @@
  * the plan would name can ever run (the £0 rehearsal of AMSD-2974, 2026-10-06). Operator, 2026-10-06: such a story
  * gets its plan — the detective's plan only: its fix sites, criteria and every other field are left as they are.
  *
- * Which stories: those with spec output (fix sites) and no plan. A story never specified is the spec pass's to plan;
- * a story with a plan keeps it. The detective runs as the spec pass runs it, for the story's first codeline, able to
+ * Which stories: every story with no plan — the plan comes first, before any lane, so every codeline and every release
+ * line is worked from it (a resume's canonical PRD may carry no spec output at all: it lives in the lanes' checkpoints).
+ * A story with a plan keeps it. The detective runs as the spec pass runs it, for the story's first codeline, able to
  * read every codeline of the story. A detective that cannot answer leaves no plan and says so — the run goes on.
  */
 'use strict';
@@ -18,9 +19,7 @@ const path = require('path');
 const prdFile = process.argv[2];
 const prd = JSON.parse(fs.readFileSync(prdFile, 'utf8'));
 const dirs = (prd.project && Array.isArray(prd.project.outputDirs)) ? prd.project.outputDirs : [];
-const hasSpecOutput = (s) => (Array.isArray(s.fixSiteAnalysis) && s.fixSiteAnalysis.length > 0)
-  || Object.values(s.fixSiteAnalysisPerCodeline || {}).some((v) => Array.isArray(v) && v.length > 0);
-const wanting = (prd.stories || []).filter((s) => s && !s.overallPlan && hasSpecOutput(s));
+const wanting = (prd.stories || []).filter((s) => s && !s.overallPlan);
 if (!wanting.length) process.exit(0);
 
 process.env.SPEC_MODE_NO_MAIN = '1';

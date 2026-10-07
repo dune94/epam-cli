@@ -59,11 +59,14 @@ describe('(a) a story with spec output and no plan gets its plan — and nothing
     expect(s.fixSiteAnalysisPerCodeline).toEqual({ lib: sites, site: [] });
   }, 180000);
 
-  it('a story never specified is left to the spec pass — no detective is asked', () => {
-    const { r, after, askedN } = project([{ id: 'S-2', codeline: 'lib', codelines: ['lib', 'site'], title: 't' }]);
+  // The rehearsal of the AMSD-2974 resume: the canonical PRD carried no spec output (it lives in the lanes'
+  // checkpoints), so the story was skipped and the passed library lane never saw a plan. Every story without a plan
+  // gets one before any lane — the plan comes first, then every codeline is worked from it.
+  it('a story with no spec output in the canonical PRD gets its plan too — before any lane', () => {
+    const { r, after, askedN } = project([{ id: 'S-2', codeline: 'lib', codelines: ['lib', 'site'], title: 'make the notice accessible', description: 'the notice is not announced to screen readers' }]);
     expect(r.status, r.stdout + r.stderr).toBe(0);
-    expect(askedN).toBe(0);
-    expect(after.stories[0].overallPlan).toBeUndefined();
+    expect(askedN).toBeGreaterThan(0);
+    expect(after.stories[0].overallPlan).toBeTruthy();
   }, 180000);
 
   it('a story that has its plan keeps it — no detective is asked', () => {

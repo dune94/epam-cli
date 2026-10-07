@@ -44,7 +44,7 @@ const lanePrd = (p: object | null) => ({
 });
 
 /** Run the lane's release-line passes for codeline `cl`, with a phase runner that records each call. */
-function runLines(cl: string, prd: object, runnerExit = 0) {
+function runLines(cl: string, prd: object, runnerExit = 0, opts: { env?: Record<string, string>; seed?: Record<string, object> } = {}) {
   const d = tmp('release-lines-');
   const prdFile = join(d, 'lane-prd.json'); writeFileSync(prdFile, JSON.stringify(prd));
   const calls = join(d, 'calls.jsonl');
@@ -55,7 +55,9 @@ exit ${runnerExit}
 `);
   chmodSync(runner, 0o755);
   const laneLog = join(d, 'lanes', cl); mkdirSync(laneLog, { recursive: true });
-  const r = spawnSync('bash', ['-c', `${LOGS}\nSCRIPT_DIR=${JSON.stringify(SCRIPTS)}\nNODE_BIN=${JSON.stringify(process.execPath)}\n. ${JSON.stringify(LINES)}\n _run_release_lines ${cl} ${JSON.stringify(prdFile)} /w/${cl} ${JSON.stringify(laneLog)} ${JSON.stringify(join(d, 'orch.log'))} "" ${JSON.stringify(runner)}`], { encoding: 'utf8', env: { ...process.env, LOG_DIR: d } });
+  // A line an earlier invocation of this run already worked: its PRD where the line pass left it.
+  for (const [slug, linePrd] of Object.entries(opts.seed || {})) { mkdirSync(join(laneLog, 'lines', slug), { recursive: true }); writeFileSync(join(laneLog, 'lines', slug, 'prd.json'), JSON.stringify(linePrd)); }
+  const r = spawnSync('bash', ['-c', `${LOGS}\nSCRIPT_DIR=${JSON.stringify(SCRIPTS)}\nNODE_BIN=${JSON.stringify(process.execPath)}\n. ${JSON.stringify(LINES)}\n _run_release_lines ${cl} ${JSON.stringify(prdFile)} /w/${cl} ${JSON.stringify(laneLog)} ${JSON.stringify(join(d, 'orch.log'))} "" ${JSON.stringify(runner)}`], { encoding: 'utf8', env: { ...process.env, EPAM_RESUME_RUN: '', LOG_DIR: d, ...(opts.env || {}) } });
   const recorded = existsSync(calls) ? readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
   return { r, recorded, laneLog };
 }
@@ -139,6 +141,32 @@ describe('the lane works the story once more per release line the plan names off
     ])), 1);
     expect(r.status).not.toBe(0);
     expect(new Set(recorded.map((c) => c.base)).size, 'a later line ran after one failed').toBe(1);
+  });
+});
+
+// A STEP NEVER RUNS TWICE. AMSD-2974, 2026-10-07: cx-shared's 7.x line completed; the line's PRD was rebuilt with the
+// story pending on every launch, so a resume would have worked the 7.x line again from v7.14.0. A resume keeps a
+// completed story completed (config/resume-preserves.json, completed-stories) — a line's stories too.
+describe('a resume does not work again a release line whose stories this run already completed', () => {
+  const two = () => lanePrd(plan('lib', [
+    { line: '2.x', base: 'v2.4.0', version: '2.4.1', onCodelineBase: false },
+    { line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false },
+  ]));
+  const lineDone = { implementationOrder: { core: ['S-1'] }, stories: [{ id: 'S-1', phase: 'core', status: 'completed', completed: true }] };
+  const lineFailed = { implementationOrder: { core: ['S-1'] }, stories: [{ id: 'S-1', phase: 'core', status: 'failed', completed: false }] };
+  it('resume: the completed line is not run again, and says so; the other line still runs', () => {
+    const { r, recorded } = runLines('lib', two(), 0, { env: { EPAM_RESUME_RUN: '20261001T181327Z' }, seed: { '2.x': lineDone } });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(recorded.map((c) => c.line)).toEqual(['1.x']);
+    expect(r.stdout).toMatch(/release line 2\.x .*already completed in this run/);
+  });
+  it('resume: a line whose story did not complete is worked again', () => {
+    const { recorded } = runLines('lib', two(), 0, { env: { EPAM_RESUME_RUN: '20261001T181327Z' }, seed: { '2.x': lineFailed } });
+    expect(recorded.map((c) => c.line)).toEqual(['2.x', '1.x']);
+  });
+  it('a fresh run never trusts a line PRD left by another run', () => {
+    const { recorded } = runLines('lib', two(), 0, { seed: { '2.x': lineDone } });
+    expect(recorded.map((c) => c.line)).toEqual(['2.x', '1.x']);
   });
 });
 

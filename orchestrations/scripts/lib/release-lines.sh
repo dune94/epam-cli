@@ -11,6 +11,9 @@
 #
 # The phase runner is the lane's own (the orchestrator, "$0"), run exactly as the lane runs it. A line that fails
 # fails the lane; no later line runs after it. Returns non-zero then.
+# shellcheck source=resume-semantics.sh
+. "$(dirname "${BASH_SOURCE[0]}")/resume-semantics.sh"
+
 _run_release_lines() {
     local _cl="$1" _cl_prd="$2" _wt="$3" _lane_log="$4" _log_file="${5:-/dev/null}" _phase_filter="${6:-}" _runner="$7" _canonical="${8:-}"
     local _lines=()
@@ -24,6 +27,13 @@ _run_release_lines() {
         _line_log="${_lane_log}/lines/${_slug}"
         mkdir -p "$_line_log" 2>/dev/null || true
         _line_prd="${_line_log}/prd.json"
+        # A STEP NEVER RUNS TWICE: a resume keeps what this run completed (config/resume-preserves.json,
+        # completed-stories) — a line whose every story this run completed is not worked again (AMSD-2974, 2026-10-07).
+        if resume_preserves completed-stories && [ -f "$_line_prd" ] \
+            && jq -e '(.stories | length) > 0 and all(.stories[]; .status == "completed")' "$_line_prd" >/dev/null 2>&1; then
+            log "[orch] Codeline '${_cl}' — release line ${_line} already completed in this run; not worked again"
+            continue
+        fi
         "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/release-line-prd.js" "$_cl_prd" "$_line_prd" "$_cl" "$_line" "$_canonical" || {
             error "[orch] Codeline '${_cl}': could not prepare release line ${_line}"; return 1; }
         log "[orch] Codeline '${_cl}' — release line ${_line}, from ${_base} (the story's plan)"

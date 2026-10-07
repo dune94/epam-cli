@@ -15,6 +15,22 @@
 . "$(dirname "${BASH_SOURCE[0]}")/resume-semantics.sh"
 
 _run_release_lines() {
+    # THE CODELINE IS LEFT ON THE BRANCH IT WAS ON. A line pass checks out the line's story branch; left there, the next
+    # launch's detective read cx-shared at 7.14.0 and planned its own line as 7.x (AMSD-2974, 2026-10-07).
+    local _home _rc=0
+    _home=$(git -C "$3" symbolic-ref -q --short HEAD 2>/dev/null || true)
+    _run_release_lines_each "$@" || _rc=$?
+    if [ -n "$_home" ] && [ "$(git -C "$3" symbolic-ref -q --short HEAD 2>/dev/null)" != "$_home" ]; then
+        if git -C "$3" checkout -q "$_home" 2>/dev/null; then
+            log "[orch] Codeline '$1': release lines done — back on ${_home}"
+        else
+            warning "[orch] Codeline '$1': could not return to ${_home} after its release lines"
+        fi
+    fi
+    return "$_rc"
+}
+
+_run_release_lines_each() {
     local _cl="$1" _cl_prd="$2" _wt="$3" _lane_log="$4" _log_file="${5:-/dev/null}" _phase_filter="${6:-}" _runner="$7" _canonical="${8:-}"
     local _lines=()
     mapfile -t _lines < <("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/release-lines.js" "$_cl_prd" "$_cl" "$_canonical")

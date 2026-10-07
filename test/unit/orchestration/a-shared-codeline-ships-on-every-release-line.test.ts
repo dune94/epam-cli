@@ -44,20 +44,22 @@ const lanePrd = (p: object | null) => ({
 });
 
 /** Run the lane's release-line passes for codeline `cl`, with a phase runner that records each call. */
-function runLines(cl: string, prd: object, runnerExit = 0, opts: { env?: Record<string, string>; seed?: Record<string, object> } = {}) {
+function runLines(cl: string, prd: object, runnerExit = 0, opts: { env?: Record<string, string>; seed?: Record<string, object>; wt?: string } = {}) {
   const d = tmp('release-lines-');
   const prdFile = join(d, 'lane-prd.json'); writeFileSync(prdFile, JSON.stringify(prd));
   const calls = join(d, 'calls.jsonl');
   const runner = join(d, 'phase-runner.sh');
   writeFileSync(runner, `#!/bin/bash
 ${JSON.stringify(process.execPath)} -e 'const p=require(process.env.PRD_FILE);process.stdout.write(JSON.stringify({args:process.argv.slice(1),phase:process.env.PHASE,base:process.env.JIRA_BASELINE_BRANCH,suffix:process.env.EPAM_BRANCH_SUFFIX||"",line:process.env.EPAM_RELEASE_LINE||"",spec:process.env.EPAM_SPEC_MODE||"",logDir:process.env.LOG_DIR,codeline:process.env.EPAM_CODELINE,root:process.env.PROJECT_ROOT,stories:p.stories.map(s=>({id:s.id,status:s.status,completed:s.completed}))})+"\\n")' -- "$@" >> ${JSON.stringify(calls)}
+# A line pass leaves the codeline on the line's story branch, as ensure_story_branch does.
+[ -d "$PROJECT_ROOT/.git" ] && git -C "$PROJECT_ROOT" checkout -q -B "AI-S-1$EPAM_BRANCH_SUFFIX"
 exit ${runnerExit}
 `);
   chmodSync(runner, 0o755);
   const laneLog = join(d, 'lanes', cl); mkdirSync(laneLog, { recursive: true });
   // A line an earlier invocation of this run already worked: its PRD where the line pass left it.
   for (const [slug, linePrd] of Object.entries(opts.seed || {})) { mkdirSync(join(laneLog, 'lines', slug), { recursive: true }); writeFileSync(join(laneLog, 'lines', slug, 'prd.json'), JSON.stringify(linePrd)); }
-  const r = spawnSync('bash', ['-c', `${LOGS}\nSCRIPT_DIR=${JSON.stringify(SCRIPTS)}\nNODE_BIN=${JSON.stringify(process.execPath)}\n. ${JSON.stringify(LINES)}\n _run_release_lines ${cl} ${JSON.stringify(prdFile)} /w/${cl} ${JSON.stringify(laneLog)} ${JSON.stringify(join(d, 'orch.log'))} "" ${JSON.stringify(runner)}`], { encoding: 'utf8', env: { ...process.env, EPAM_RESUME_RUN: '', LOG_DIR: d, ...(opts.env || {}) } });
+  const r = spawnSync('bash', ['-c', `${LOGS}\nSCRIPT_DIR=${JSON.stringify(SCRIPTS)}\nNODE_BIN=${JSON.stringify(process.execPath)}\n. ${JSON.stringify(LINES)}\n _run_release_lines ${cl} ${JSON.stringify(prdFile)} ${JSON.stringify(opts.wt || `/w/${cl}`)} ${JSON.stringify(laneLog)} ${JSON.stringify(join(d, 'orch.log'))} "" ${JSON.stringify(runner)}`], { encoding: 'utf8', env: { ...process.env, EPAM_RESUME_RUN: '', LOG_DIR: d, ...(opts.env || {}) } });
   const recorded = existsSync(calls) ? readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
   return { r, recorded, laneLog };
 }
@@ -167,6 +169,34 @@ describe('a resume does not work again a release line whose stories this run alr
   it('a fresh run never trusts a line PRD left by another run', () => {
     const { recorded } = runLines('lib', two(), 0, { seed: { '2.x': lineDone } });
     expect(recorded.map((c) => c.line)).toEqual(['2.x', '1.x']);
+  });
+});
+
+// AMSD-2974, 2026-10-07: after the 7.x line pass cx-shared stayed checked out on bugfix/AI-AMSD-2974-7.x (7.14.0);
+// the next launch's detective read that checkout and planned the codeline's own line as 7.x — and 8.x as a back-port.
+describe('after its release lines the codeline is back on the branch it was on', () => {
+  const repo = () => {
+    const d = tmp('release-home-');
+    const git = (...a: string[]) => spawnSync('git', ['-C', d, ...a], { encoding: 'utf8' });
+    git('init', '-q', '-b', 'master'); writeFileSync(join(d, 'a.txt'), 'a\n'); git('add', '-A');
+    git('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'base'); git('checkout', '-q', '-b', 'bugfix/AI-S-1');
+    return { d, branch: () => git('branch', '--show-current').stdout.trim() };
+  };
+  const lines = () => lanePrd(plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false }]));
+  it('the lines pass: back on its own story branch, and says so', () => {
+    const r = repo();
+    const { r: run, recorded } = runLines('lib', lines(), 0, { wt: r.d });
+    expect(recorded.length, 'no line ran — the test proves nothing').toBe(1);
+    expect(run.status, run.stdout + run.stderr).toBe(0);
+    expect(r.branch()).toBe('bugfix/AI-S-1');
+    expect(run.stdout).toMatch(/back on bugfix\/AI-S-1/);
+  });
+  it('a line fails: back on its own story branch all the same, and the lane still fails', () => {
+    const r = repo();
+    const { r: run, recorded } = runLines('lib', lines(), 1, { wt: r.d });
+    expect(recorded.length).toBe(1);
+    expect(run.status).not.toBe(0);
+    expect(r.branch()).toBe('bugfix/AI-S-1');
   });
 });
 

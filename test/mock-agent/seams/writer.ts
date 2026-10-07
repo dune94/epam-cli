@@ -82,6 +82,9 @@ export function writerDelivers(world: World, install: string): Behaviour {
     const called = (t?: ToolDef) => !!t && call.req.messages.some((m) => (m.toolCalls || []).some((c) => c.name === t.name));
     if (!isFirstTurn(call) && (!tool || called(tool) || called(editTool(call.req.tools)))) return { kind: 'text', text: `Implemented ${call.story}: wrote the declared files and their tests.` };
     if (!story || !tool) return { kind: 'text', text: `Nothing to write for ${call.story || 'this request'}.` };
+    // THE STORY'S PLAN GIVES THIS CODELINE NO CHANGE (it receives the change through the provider's release): a writer
+    // that follows its plan changes nothing here (detective-overall-plan; the plan reaches it through the fix plan).
+    if (/consumer [^\n]*\(THIS CODELINE\)[^\n]*its own change: none\s*$/m.test(call.req.messages.find((m) => m.role === 'user')?.text || '')) return { kind: 'text', text: `No change in this codeline for ${call.story}: the story's plan gives it none.` };
     const cwd = workingDirectory(call, world);
     // THE FILES THE PROMPT HANDS IT, as a model reads them: the "Files to Create/Modify" list. The
     // project's PRD is not what the writer is given — on a resume the lane's own PRD carries the spec

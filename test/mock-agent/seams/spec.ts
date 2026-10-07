@@ -46,8 +46,13 @@ export function storySpecification(world: World, prompt: string, _fields: Field[
  */
 export function guardVocabulary(prompt: string): Filler {
   const code = [...prompt.matchAll(/```[^\n]*\n([\s\S]*?)```/g)].map((m) => m[1]).join('\n');
-  const identifiers = [...new Set((code || prompt).match(/\b[a-z]+[A-Z][A-Za-z0-9]*\b|\b[A-Z][a-z]+[A-Z][A-Za-z0-9]*\b/g) || [])].slice(0, 12);
-  const literals = [...new Set([...prompt.matchAll(/'([^'\n]{3,60})'/g)].map((m) => m[1]))].slice(0, 8);
+  // From the code the prompt shows; with none, from the prompt itself — a model names terms from what it is given,
+  // and a ticket with no code block and no single-quoted text still has its own words (AMSD-2974, 2026-10-06).
+  const idRe = /\b[a-z]+[A-Z][A-Za-z0-9]*\b|\b[A-Z][a-z]+[A-Z][A-Za-z0-9]*\b/g;
+  const fromCode = code ? (code.match(idRe) || []) : [];
+  const identifiers = [...new Set(fromCode.length ? fromCode : (prompt.match(idRe) || []))].slice(0, 12);
+  const quoted = [...prompt.matchAll(/'([^'\n]{3,60})'/g), ...prompt.matchAll(/"([^"\n{}:]{3,60})"/g)].map((m) => m[1]).filter((t) => /\s/.test(t) && !t.startsWith('<'));
+  const literals = [...new Set(quoted)].slice(0, 8);
   return (f) => {
     if (f.name === 'blacklist') {
       return identifiers.map((t) => ({ term: t.toLowerCase(), reason: 'names the implementation, not what is observed', kind: 'implementation_noun' }));

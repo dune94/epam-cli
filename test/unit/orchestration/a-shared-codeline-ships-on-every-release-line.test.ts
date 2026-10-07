@@ -50,7 +50,7 @@ function runLines(cl: string, prd: object, runnerExit = 0) {
   const calls = join(d, 'calls.jsonl');
   const runner = join(d, 'phase-runner.sh');
   writeFileSync(runner, `#!/bin/bash
-${JSON.stringify(process.execPath)} -e 'const p=require(process.env.PRD_FILE);process.stdout.write(JSON.stringify({args:process.argv.slice(1),phase:process.env.PHASE,base:process.env.JIRA_BASELINE_BRANCH,suffix:process.env.EPAM_BRANCH_SUFFIX||"",line:process.env.EPAM_RELEASE_LINE||"",logDir:process.env.LOG_DIR,codeline:process.env.EPAM_CODELINE,root:process.env.PROJECT_ROOT,stories:p.stories.map(s=>({id:s.id,status:s.status,completed:s.completed}))})+"\\n")' -- "$@" >> ${JSON.stringify(calls)}
+${JSON.stringify(process.execPath)} -e 'const p=require(process.env.PRD_FILE);process.stdout.write(JSON.stringify({args:process.argv.slice(1),phase:process.env.PHASE,base:process.env.JIRA_BASELINE_BRANCH,suffix:process.env.EPAM_BRANCH_SUFFIX||"",line:process.env.EPAM_RELEASE_LINE||"",spec:process.env.EPAM_SPEC_MODE||"",logDir:process.env.LOG_DIR,codeline:process.env.EPAM_CODELINE,root:process.env.PROJECT_ROOT,stories:p.stories.map(s=>({id:s.id,status:s.status,completed:s.completed}))})+"\\n")' -- "$@" >> ${JSON.stringify(calls)}
 exit ${runnerExit}
 `);
   chmodSync(runner, 0o755);
@@ -103,6 +103,20 @@ describe('the lane works the story once more per release line the plan names off
     expect(recorded.map((c) => c.base).sort()).toEqual(['v1.9.0', 'v2.4.0']);
     expect(new Set(recorded.map((c) => c.suffix)).size).toBe(2);
     expect(new Set(recorded.map((c) => c.logDir)).size).toBe(2);
+  });
+
+  // A STEP NEVER RUNS TWICE: a story already specified for this codeline is not specified again on another line (the
+  // rehearsal's 7.x pass re-ran the spec pass because the resume had switched it on for the canonical PRD).
+  it('a story already specified is not specified again on the line; one never specified is', () => {
+    const specified = { ...lanePrd(plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false }])) };
+    specified.stories = specified.stories.map((x) => ({ ...x, specification: { runId: 'R', appliedAgents: ['openspec'] }, fixSiteAnalysisPerCodeline: { lib: [{ file: 'src/a.ts' }] } }));
+    const a = runLines('lib', specified);
+    expect(a.r.status, a.r.stdout + a.r.stderr).toBe(0);
+    expect(a.recorded.length).toBeGreaterThan(0);
+    expect(a.recorded.every((c) => c.spec === '0'), 'an already-specified story was specified again').toBe(true);
+    const b = runLines('lib', lanePrd(plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false }])));
+    expect(b.recorded.length).toBeGreaterThan(0);
+    expect(b.recorded.every((c) => c.spec !== '0'), 'a story never specified skipped its spec').toBe(true);
   });
 
   it('a line whose onCodelineBase the plan did not state is not guessed at', () => {

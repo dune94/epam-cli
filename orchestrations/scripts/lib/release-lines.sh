@@ -27,6 +27,10 @@ _run_release_lines() {
         "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/release-line-prd.js" "$_cl_prd" "$_line_prd" "$_cl" "$_line" "$_canonical" || {
             error "[orch] Codeline '${_cl}': could not prepare release line ${_line}"; return 1; }
         log "[orch] Codeline '${_cl}' — release line ${_line}, from ${_base} (the story's plan)"
+        # A STEP NEVER RUNS TWICE: a story already specified for this codeline is not specified again on another line.
+        # The spec pass runs on the line only for a story that still lacks its spec (lib/handlers/stories-lacking-spec.js).
+        local _line_spec="${EPAM_SPEC_MODE:-}"
+        [ -z "$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/stories-lacking-spec.js" "$_line_prd" 2>/dev/null)" ] && _line_spec=0
         local _phases=()
         mapfile -t _phases < <("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/prd-phases.js" "$_line_prd")
         for _phase in "${_phases[@]}"; do
@@ -35,6 +39,7 @@ _run_release_lines() {
             JIRA_CODELINE_RUN=1 \
             EPAM_CODELINE="$_cl" \
             EPAM_RELEASE_LINE="$_line" \
+            EPAM_SPEC_MODE="$_line_spec" \
             EPAM_BRANCH_SUFFIX="-${_slug}" \
             JIRA_BASELINE_BRANCH="$_base" \
             LOG_DIR="$_line_log" \

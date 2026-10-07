@@ -147,6 +147,8 @@ export function storyIds(text: string, known: string[]): string[] {
  * Returns the reasons it does not fit (empty = fits).
  */
 export function reconcile(text: string, contract: Contract | undefined, prompt: string, templateText = ''): string[] {
+  // THE STORY'S PLAN IS READ ON ITS OWN, as the engine reads it (parseOverallPlan); the answer is what follows it.
+  text = String(text || '').replace(/<OVERALL_PLAN>[\s\S]*?<\/OVERALL_PLAN>/g, '');
   // THE FORMAT THE PROMPT STATES is what the current code asks of the model on this call.
   const rendered = renderedFor(prompt, contract);
   if (rendered && !rendered.tag) {
@@ -169,6 +171,8 @@ export function reconcile(text: string, contract: Contract | undefined, prompt: 
     const vals = jsonValues(text);
     const isObj = (x: unknown) => !!x && typeof x === 'object' && !Array.isArray(x);
     const v = (vals.find(isObj) ?? vals.filter(Array.isArray).flat().find(isObj)) as Record<string, unknown> | undefined;
+    // An empty list IS an answer — the one the detective's prompt names for an investigation that located nothing.
+    if (!v && vals.some((x) => Array.isArray(x) && x.length === 0)) return [];
     if (!v) return ['no JSON answer, but the prompt shows one'];
     // A key the prompt says may be left out ("(optional", "omit …") is not wanted of every answer.
     // Judged on the PROMPT'S OWN TEXT for the key, not the parsed value — shape notation like

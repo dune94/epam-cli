@@ -859,6 +859,20 @@ implement_story() {
             return 1
         fi
     fi
+    # A STORY THE PLAN GIVES THIS CODELINE NO CHANGE IS PROVED, NOT WRITTEN (operator, 2026-10-07).
+    # Live AMSD-2974: the plan gave upexpress no change (it receives the library's 7.x back-port), yet the writer ran
+    # from the pre-plan spec and edited files against the plan. No writer runs; the lane's own gates prove the codeline
+    # against the release it receives.
+    if [ -n "${EPAM_CODELINE:-}" ]; then
+        local _np
+        for _np in "${PRD_FILE:-}" "${MAIN_PRD_FILE:-}"; do
+            [ -n "$_np" ] && [ -f "$_np" ] || continue
+            if "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/plan-gives-no-change.js" "$_np" "$story_id" "$EPAM_CODELINE" 2>/dev/null; then
+                log "Story $story_id: the story's plan gives ${EPAM_CODELINE} no change — no writer is run; the lane's gates prove it against the release it receives"
+                return 0
+            fi
+        done
+    fi
     # Seeded from persisted state, NOT hardcoded 0 — a Step 3.6 review
     # rejection re-invokes this whole script as a brand-new process, and
     # without this the ladder silently restarted at rung 0 every review

@@ -11,7 +11,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, copyFileSync, appendFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, copyFileSync, appendFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -71,6 +71,48 @@ describe('what makes an approval stop standing', () => {
       appendFileSync(join(d, 'code-reviews.jsonl'), JSON.stringify({ phase_id: 'core', timestamp: '2026-09-26T21:00:00-04:00', story: 'REGI-008', verdict: 'approved', reviewIncomplete: true, issues: [] }) + '\n');
       expect(stands(['REGI-008'], d)['REGI-008']).toBe(false);
     } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
+  // Live AMSD-2974 run 8 (2026-10-08): the 7.x back-port, approved on 10-07 before the story had a plan saying the
+  // line carries the whole 8.x change, was "approved at its current commit and unchanged since — not re-reviewed".
+  // An approval stands while what the reviewer judged — the code AND the story's plan — is unchanged.
+  describe('the story\'s plan is part of what the reviewer judged', () => {
+    const PLAN = { codelines: [{ codeline: 'lib', part: 'p', order: 1 }], packages: [{ package: '@s/l', providedBy: 'lib', releaseLines: [{ line: '1.x', base: 'v1', version: '1.0.1', onCodelineBase: false, carries: 'the whole change' }], consumers: [] }] };
+    const withPrd = (plan: object | null, recordHash: string | null) => {
+      const d = mkdtempSync(join(tmpdir(), 'review-stands-plan-'));
+      copyFileSync(join(LOGS, 'story-changes.jsonl'), join(d, 'story-changes.jsonl'));
+      copyFileSync(join(LOGS, 'code-reviews.jsonl'), join(d, 'code-reviews.jsonl'));
+      appendFileSync(join(d, 'code-reviews.jsonl'), JSON.stringify({ phase_id: 'core', timestamp: '2026-09-26T21:00:00-04:00', story: 'REGI-008', verdict: 'approved', issues: [], ...(recordHash === null ? {} : { planHash: recordHash }) }) + '\n');
+      writeFileSync(join(d, 'prd.json'), JSON.stringify({ stories: [{ id: 'REGI-008', ...(plan ? { overallPlan: plan } : {}) }] }));
+      return d;
+    };
+    const hashOf = (d: string) => spawnSync('bash', ['-c', `. ${JSON.stringify(SCOPE)}; story_plan_hash ${JSON.stringify(join(d, 'prd.json'))} REGI-008`], { encoding: 'utf8' }).stdout.trim();
+    const standsWith = (d: string) => {
+      const r = spawnSync('bash', ['-c', `. ${JSON.stringify(SCOPE)}; review_stands REGI-008 core && echo yes || echo no`], { encoding: 'utf8',
+        env: { ...process.env, LOG_DIR: d, REVIEW_LOG: join(d, 'code-reviews.jsonl'), PRD_FILE: join(d, 'prd.json') } });
+      return r.stdout.trim() === 'yes';
+    };
+    it('approved before the story had its plan: the reviewer judges it again', () => {
+      const d = withPrd(PLAN, null);
+      try { expect(standsWith(d)).toBe(false); } finally { rmSync(d, { recursive: true, force: true }); }
+    });
+    it('approved under the plan the story still has: the approval stands', () => {
+      const d = withPrd(PLAN, null);
+      try {
+        const h = hashOf(d); expect(h, 'no hash for a plan — the test proves nothing').toMatch(/^[0-9a-f]{32}$/);
+        rmSync(d, { recursive: true, force: true });
+        const d2 = withPrd(PLAN, h);
+        try { expect(standsWith(d2)).toBe(true); } finally { rmSync(d2, { recursive: true, force: true }); }
+      } finally { rmSync(d, { recursive: true, force: true }); }
+    });
+    it('the plan changed since the approval: the reviewer judges it again', () => {
+      const d = withPrd({ ...PLAN, codelines: [{ codeline: 'lib', part: 'changed', order: 1 }] }, 'f'.repeat(32));
+      try { expect(standsWith(d)).toBe(false); } finally { rmSync(d, { recursive: true, force: true }); }
+    });
+    it('no plan then, no plan now: as before, the approval stands', () => {
+      const d = withPrd(null, null);
+      try { expect(standsWith(d)).toBe(true); } finally { rmSync(d, { recursive: true, force: true }); }
+    });
   });
 
   it('an approval in another phase does not stand for this one', () => {

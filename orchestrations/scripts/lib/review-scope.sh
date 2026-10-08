@@ -79,6 +79,14 @@ story_scope_block() {
 # code produced fresh minor findings on stories approved rounds earlier — the issue count went
 # 26 → 13 → 19. Facts only: the commit time from story-changes.jsonl (record_story_changes), the
 # verdict and its time from the review log. No record of either means "review it".
+# story_plan_hash <prd> <story_id> — the story's plan as the reviewer is given it, hashed; empty when it has none.
+story_plan_hash() {
+    local _p
+    _p=$(jq -cS --arg id "${2:-}" '.stories[]? | select(.id == $id) | .overallPlan // empty' "${1:-}" 2>/dev/null) || return 0
+    [ -n "$_p" ] && printf '%s' "$_p" | md5sum | cut -c1-32
+    return 0
+}
+
 review_stands() {
     local _id="${1:-}" _phase="${2:-}" _changes="${LOG_DIR:-}/story-changes.jsonl" _log="${REVIEW_LOG:-}"
     [ -n "$_id" ] && [ -f "$_changes" ] && [ -f "$_log" ] || return 1
@@ -90,6 +98,11 @@ review_stands() {
     _incomplete=$(printf '%s' "$_review" | jq -r '.reviewIncomplete // false')
     _reviewed=$(printf '%s' "$_review" | jq -r '.timestamp // empty')
     [ "$_verdict" = "approved" ] && [ "$_incomplete" = "false" ] && [ -n "$_reviewed" ] || return 1
+    # WHAT THE REVIEWER JUDGED INCLUDES THE STORY'S PLAN (AMSD-2974 run 8, 2026-10-08): the 7.x back-port, approved
+    # before the plan said the line carries the whole 8.x change, stood "unchanged" and was never judged against it.
+    if [ -n "${PRD_FILE:-}" ] && [ -f "${PRD_FILE:-}" ]; then
+        [ "$(story_plan_hash "$PRD_FILE" "$_id")" = "$(printf '%s' "$_review" | jq -r '.planHash // empty')" ] || return 1
+    fi
     local _c _r
     _c=$(date -d "$_committed" +%s 2>/dev/null) && _r=$(date -d "$_reviewed" +%s 2>/dev/null) || return 1
     [ "$_r" -gt "$_c" ]

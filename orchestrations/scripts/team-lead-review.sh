@@ -943,11 +943,12 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
             --arg ts "$(date -Iseconds)" \
             --arg story "$story_id" \
             --arg verdict "$STORY_VERDICT" \
+            --arg planHash "$(story_plan_hash "$PRD_FILE" "$story_id")" \
             --argjson issues "$(printf '%s' "$REVIEW_JSON" | jq -c '.issues // []' 2>/dev/null || echo '[]')" \
             --argjson incomplete "$(printf '%s' "$REVIEW_JSON" | jq -c 'if (.reviewIncomplete // false) then true else false end' 2>/dev/null || echo 'false')" \
             '{phase_id:$phase, timestamp:$ts, story:$story, verdict:$verdict,
               review_status:$verdict, issues:$issues, issues_found:($issues|length),
-              reviewIncomplete:$incomplete,
+              reviewIncomplete:$incomplete, planHash:$planHash,
               reviewer:"team-lead-agent"}' >> "$REVIEW_LOG"; then
         warning "  could not record this review for $story_id — the NEXT cycle will not see these findings"
     fi

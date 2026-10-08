@@ -83,7 +83,11 @@ checkpoint_dir() {
         return 1
     fi
     local _lane; _lane=$(_checkpoint_lane)
-    if [ -n "$_lane" ]; then
+    if [ -n "$_lane" ] && [ -n "${EPAM_RELEASE_LINE:-}" ]; then
+        # A RELEASE LINE'S PASS KEEPS ITS OWN CHECKPOINT (AMSD-2974 run 9: the 7.x line's overwrote the codeline's).
+        printf '%s/runs/%s/lanes/%s/lines/%s/checkpoint' "$_base" "$_rid" "$_lane" \
+            "$(printf '%s' "$EPAM_RELEASE_LINE" | tr -c 'A-Za-z0-9._-' '-')"
+    elif [ -n "$_lane" ]; then
         printf '%s/runs/%s/lanes/%s/checkpoint' "$_base" "$_rid" "$_lane"
     else
         printf '%s/runs/%s/checkpoint' "$_base" "$_rid"

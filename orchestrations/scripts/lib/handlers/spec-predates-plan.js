@@ -20,7 +20,8 @@ function specPredatesPlan(prd, canonical) {
   return (prd.stories || [])
     .filter((s) => s && s.status !== 'deprecated' && s.specification && s.specification.runId)
     .filter((s) => {
-      const plan = s.overallPlan || (canon.get(s.id) || {}).overallPlan;
+      // The run's plan is the canonical PRD's; a lane copy carries the plan it was specified under.
+      const plan = (canon.get(s.id) || {}).overallPlan || s.overallPlan;
       const now = planHash(plan);
       return now !== '' && now !== (s.specification.planHash || '');
     })

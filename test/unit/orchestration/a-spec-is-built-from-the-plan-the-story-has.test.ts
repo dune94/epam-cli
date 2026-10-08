@@ -47,6 +47,13 @@ describe('which stories\' spec predates the plan they have', () => {
   it('a lane copy without the plan is judged against the canonical PRD\'s plan', () => {
     expect(specPredatesPlan({ stories: [specified()] }, { stories: [{ id: 'S-1', overallPlan: PLAN }] })).toEqual(['S-1']);
   });
+  // Rehearsal 2026-10-08: a lane's checkpoint carries the plan it was specified under, so judged against its own copy
+  // the spec always matched — the lane resumed "current" against a new plan. The run's plan is the canonical PRD's.
+  it('a lane copy carrying an older plan is judged against the canonical PRD\'s current plan', () => {
+    const lane = { stories: [{ ...specified({ planHash: planHash(OTHER) }), overallPlan: OTHER }] };
+    expect(specPredatesPlan(lane, { stories: [{ id: 'S-1', overallPlan: PLAN }] })).toEqual(['S-1']);
+    expect(specPredatesPlan(lane, { stories: [{ id: 'S-1', overallPlan: OTHER }] })).toEqual([]);
+  });
   it('the hash is the plan\'s, not its key order', () => {
     expect(planHash(JSON.parse(JSON.stringify(PLAN)))).toBe(planHash({ packages: PLAN.packages, codelines: PLAN.codelines }));
     expect(planHash(PLAN)).not.toBe(planHash(OTHER));

@@ -30,7 +30,8 @@ export function fixtureInstall(dirs: string[]): string {
 
 /** The edge around the install: container runtime, snapshot watcher, service endpoints. */
 export function edgeFor(install: string, edgeUrl: string, children: ChildProcess[]): { bin: string } {
-  const bin = join(install, '.edge-bin'); mkdirSync(bin);
+  // A rehearsal's second launch resumes on the same copy: the edge is made again over the first one's.
+  const bin = join(install, '.edge-bin'); mkdirSync(bin, { recursive: true });
   writeFileSync(join(bin, 'docker'), '#!/bin/bash\nexit 0\n'); chmodSync(join(bin, 'docker'), 0o755);
   const watcher = spawn('sleep', ['7200'], { stdio: 'ignore' }); children.push(watcher);
   writeFileSync(join(install, 'orchestrations/logs/dashboards-watch.pid'), String(watcher.pid));

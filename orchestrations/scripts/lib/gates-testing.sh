@@ -1223,9 +1223,18 @@ $(qa_gate_excerpt "$PROJECT_ROOT" "$LOG_DIR" "$_tf" mutationTestLines)${_mut_tes
             # a slot that may not be empty, so on a greenfield phase — where the scope IS empty by
             # design — this gate refused to render and reported "no structured output, non-blocking
             # warn": a gate failing open (£0 greenfield harness run 23, 2026-09-14).
+            # A PHASE THAT CHANGED NOTHING GIVES THIS GATE NOTHING TO JUDGE — the diff it would be shown is empty (a codeline
+            # the story's plan gives no change; rehearsal 2026-10-08). Recorded as a pass with its reason.
+            local _rb_diff; _rb_diff=$(qa_gate_diff "$PROJECT_ROOT" "$LOG_DIR")
+            if [ -z "$_rb_diff" ]; then
+                rm -f "$_rb_vals"
+                log "  [runtime-boundary] the phase changed nothing against its baseline — nothing to judge"
+                printf '{"verdict":"pass","summary":"the phase changed nothing against its baseline — nothing to judge"}\n' > "$_rb_log"
+                exit 0
+            fi
             jq_vals --arg story_id "${phase_id}" \
                   --arg gate_scope "$(_brownfield_gate_scope runtime-boundary)" \
-                  --arg story_diff "$(qa_gate_diff "$PROJECT_ROOT" "$LOG_DIR")" \
+                  --arg story_diff "$_rb_diff" \
                   --arg config_surface "$_rb_config" \
                   --arg project_root "$PROJECT_ROOT" \
                   '{"__STORY_ID__":$story_id,"__GATE_SCOPE__":$gate_scope,"__STORY_DIFF__":$story_diff,"__CONFIG_SURFACE__":$config_surface,"__PROJECT_ROOT__":$project_root}' > "$_rb_vals" 2>/dev/null

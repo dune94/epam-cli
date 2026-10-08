@@ -92,8 +92,10 @@ export class Declarations {
     // THE SEAM MOST OF THE PROMPT SPEAKS FOR, among fragments fully present: a prompt composed of several fragments (the
     // detective's prescription, its plan block, its shared block) also carries a small fragment another seam declares
     // (the story-kind hint), which starts earlier — and the detective was answered as the story writer (2026-10-06).
-    const full = found.filter((f) => Math.round(f.coverage * 20) === 20);
-    const votes = (t: Template) => full.filter((f) => f.template.seams.some((s) => t.seams.includes(s))).length;
+    // Every template of the seam the prompt carries votes, not only the fully present ones: the guard-vocabulary prompt
+    // carries its own template in part, a guard-vocabulary fragment and a shared spec-authoring fragment in full — the
+    // shared fragment started first and the call was answered as ac-elaboration (rehearsal 2026-10-08).
+    const votes = (t: Template) => found.filter((f) => f.template.seams.some((s) => t.seams.includes(s))).length;
     found.sort((a, b) => (Math.round(b.coverage * 20) - Math.round(a.coverage * 20)) || (owns(b.template) - owns(a.template)) || (votes(b.template) - votes(a.template)) || (a.lo - b.lo) || (b.span - a.span) || (b.score - a.score));
     // A FRAGMENT embedded in another seam's prompt can span as widely as its host; a template whose
     // seam does not apply to this project's modes cannot be the caller, so the next candidate is.

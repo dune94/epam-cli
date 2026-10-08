@@ -289,12 +289,12 @@ describe('claude.sh — reviewer wired after AC patches', () => {
   });
 
   it('reverts ACs when reviewer returns fail', () => {
-    expect(claudeSrc).toMatch(/AC patch rejected by reviewer — reverting to original ACs/i);
+    expect(claudeSrc).toMatch(/AC patch not approved by the reviewer \(\$\{_review_verdict:-no verdict\}\) — reverting to original ACs/i);
   });
 
   it('resets patch_count to 0 after AC revert', () => {
     // After AC revert the patch_count must be reset so healing recorder sees 0 patches applied
-    const revertMsgIdx = claudeSrc.indexOf('AC patch rejected by reviewer');
+    const revertMsgIdx = claudeSrc.indexOf('AC patch not approved by the reviewer');
     expect(revertMsgIdx).toBeGreaterThan(-1);
     const afterRevert = claudeSrc.slice(revertMsgIdx, revertMsgIdx + 900);
     expect(afterRevert).toMatch(/patch_count=0/);
@@ -315,7 +315,7 @@ describe('claude.sh — reviewer wired after TC patches', () => {
   });
 
   it('reverts TC facts when reviewer returns fail', () => {
-    expect(claudeSrc).toMatch(/TC patch rejected by reviewer — reverting to original facts/i);
+    expect(claudeSrc).toMatch(/TC patch not approved by the reviewer \(\$\{_tc_review_verdict:-no verdict\}\) — reverting to original facts/i);
   });
 });
 

@@ -218,8 +218,8 @@ PYEOF
         _after=$(jq -c --arg id "$_sid" '.stories[] | select(.id == $id) | .testCriteria.facts // []' "$_prd" 2>/dev/null || echo "[]")
         [ "$_before" = "$_after" ] && continue
         _verdict=$(run_prd_change_reviewer "$_sid" "tc_patch" "$_before" "$_after")
-        if [ "$_verdict" = "fail" ]; then
-            warning "  [FailureAnalyst] TC patch on $_sid rejected by the reviewer — reverting"
+        if ! _review_kept "$_verdict"; then
+            warning "  [FailureAnalyst] TC patch on $_sid not approved by the reviewer (${_verdict:-no verdict}) — reverting"
             ( flock -w 10 200 || exit 1
               python3 - "$_prd" "$_sid" "$_before" <<'PYEOF'
 import json, sys, os
@@ -873,6 +873,69 @@ _gate_call_failure_detail() {
     printf '%s' "$_line" | tr -d '\r' | tr '\n' ' ' | cut -c1-400
 }
 
+# _review_kept <verdict> — only an explicit "pass" keeps a reviewed change. "fail", "unreviewed" (no gate provider, or
+# a prompt that cannot render) and an empty answer all mean nobody approved it, so the change reverts.
+# Defined here, not beside the reviewer: run-agent-orchestration.sh sources this file without lib/prd-change-review.sh,
+# and every process that loads the reviewer (claude.sh) loads this file first.
+_review_kept() { [ "${1:-}" = "pass" ]; }
+
+# _write_reviewed_dynamic_tool <story_id> <name> <purpose> <recipe> — the analyst's repair script, through the
+# tool_creation reviewer, into .epam/dynamic-tools with its .reviewed marker. run_dynamic_tools_in_unlocked_window runs
+# it before every verification. ONE path for every target that prescribes a mechanical step (tool, environment).
+# Sets _profile_updated=true when written. Reads LAST_TEST_CMD and PROJECT_ROOT.
+_write_reviewed_dynamic_tool() {
+    local story_id="$1" tool_name="$2" tool_purpose="$3" tool_recipe="$4"
+    if [ -n "$tool_name" ] && [ -n "$tool_recipe" ] && \
+       _tool_recipe_reinvokes_test_cmd "$tool_recipe" "${LAST_TEST_CMD:-}"; then
+        warning "  [FailureAnalyst] Dynamic tool '${tool_name}' recipe re-invokes this project's own test command ('${LAST_TEST_CMD}') — a tool's job is the ONE mechanical step it automates, never a second independent test run; NOT written"
+    elif [ -n "$tool_name" ] && [ -n "$tool_recipe" ]; then
+        local tools_dir="$PROJECT_ROOT/.epam/dynamic-tools"
+        mkdir -p "$tools_dir" 2>/dev/null
+        local tool_path="${tools_dir}/${tool_name}.sh"
+        local _tool_before=""
+        [ -f "$tool_path" ] && _tool_before=$(cat "$tool_path")
+
+        # Build the candidate script: header comment (purpose, used for
+        # prompt injection) + the recipe as the executable body.
+        local _tool_candidate
+        _tool_candidate=$(printf '#!/usr/bin/env bash\n# %s\nset -e\n%s\n' "$tool_purpose" "$tool_recipe")
+
+        # Reviewer gate — validates the script before it's trusted for
+        # future runs. Same snapshot/revert pattern as every other
+        # self-heal write. Rejections get up to 3 summarize-and-resubmit
+        # rounds (same mechanism as kb_entry/skill_note) before being
+        # discarded — a rejected tool used to be a dead end even when the
+        # rejection was a fixable bash bug (e.g. subshell variable scoping).
+        local _tool_review_verdict
+        _tool_review_verdict=$(run_change_with_reviewer_retry "$story_id" "tool_creation" \
+            "$_tool_before" "$_tool_candidate" 3)
+        REVIEWER_RETRY_TEXT=$(cat "${TMPDIR:-/tmp}/.reviewer-retry-text-$$" 2>/dev/null || echo "$_tool_candidate")
+        if [ "$_tool_review_verdict" = "fail" ]; then
+            warning "  [FailureAnalyst] Dynamic tool '${tool_name}' rejected by reviewer after 3 attempts — NOT written"
+        else
+            printf '%s' "$REVIEWER_RETRY_TEXT" > "$tool_path"
+            chmod +x "$tool_path" 2>/dev/null
+            # Explicit, auditable "this exact tool was reviewed and
+            # approved" marker — a sidecar file, not a marker embedded
+            # in the script itself, so it never collides with the
+            # `sed -n '2p'` purpose-line extraction used elsewhere.
+            # Both run_dynamic_tools_in_unlocked_window() (the
+            # orchestrator's own deterministic execution) and the
+            # agent-prompt tool listing check for this marker before
+            # trusting/surfacing a tool — today's only write path
+            # already requires review, but this makes "only reviewed
+            # tools are ever used" an explicit, checkable invariant
+            # rather than an implicit assumption about there being no
+            # other writer.
+            printf 'reviewed_at=%s\nstory_id=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$story_id" > "${tool_path}.reviewed"
+            log "  [FailureAnalyst] Dynamic tool written: .epam/dynamic-tools/${tool_name}.sh — ${tool_purpose}"
+            _profile_updated="true"
+        fi
+    else
+        log "  [FailureAnalyst] tool_spec incomplete (needs name and recipe) — no repair written, diagnosis only"
+    fi
+}
+
 run_failure_analyst() {
     local story_id="$1"
     local output_file="${2:-/dev/null}"
@@ -1394,8 +1457,8 @@ PYEOF
                         # Reviewer gate — revert on fail to prevent corrupt ACs reaching agent
                         local _review_verdict
                         _review_verdict=$(run_prd_change_reviewer "$story_id" "ac_patch" "$_ac_before" "$_ac_after")
-                        if [ "$_review_verdict" = "fail" ]; then
-                            warning "  [FailureAnalyst] AC patch rejected by reviewer — reverting to original ACs"
+                        if ! _review_kept "$_review_verdict"; then
+                            warning "  [FailureAnalyst] AC patch not approved by the reviewer (${_review_verdict:-no verdict}) — reverting to original ACs"
                             ( flock -w 10 200 || { error "  [FailureAnalyst] Could not acquire lock on $prd_target"; return 1; }
                             python3 - "$_ac_before" << PYEOF 2>/dev/null || true
 import json, sys, os
@@ -1473,8 +1536,8 @@ PYEOF
                         # Reviewer gate — revert on fail to prevent bad TCs reaching test agent
                         local _tc_review_verdict
                         _tc_review_verdict=$(run_prd_change_reviewer "$story_id" "tc_patch" "$_tc_before" "$_tc_after")
-                        if [ "$_tc_review_verdict" = "fail" ]; then
-                            warning "  [FailureAnalyst] TC patch rejected by reviewer — reverting to original facts"
+                        if ! _review_kept "$_tc_review_verdict"; then
+                            warning "  [FailureAnalyst] TC patch not approved by the reviewer (${_tc_review_verdict:-no verdict}) — reverting to original facts"
                             ( flock -w 10 200 || { error "  [FailureAnalyst] Could not acquire lock on $prd_target"; return 1; }
                             python3 - "$_tc_before" << PYEOF 2>/dev/null || true
 import json, sys, os
@@ -1711,55 +1774,7 @@ ${_kb_target_role_profile}"
                     fi
                     ;;
                 tool)
-                    if [ -n "$tool_name" ] && [ -n "$tool_recipe" ] && \
-                       _tool_recipe_reinvokes_test_cmd "$tool_recipe" "${LAST_TEST_CMD:-}"; then
-                        warning "  [FailureAnalyst] Dynamic tool '${tool_name}' recipe re-invokes this project's own test command ('${LAST_TEST_CMD}') — a tool's job is the ONE mechanical step it automates, never a second independent test run; NOT written"
-                    elif [ -n "$tool_name" ] && [ -n "$tool_recipe" ]; then
-                        local tools_dir="$PROJECT_ROOT/.epam/dynamic-tools"
-                        mkdir -p "$tools_dir" 2>/dev/null
-                        local tool_path="${tools_dir}/${tool_name}.sh"
-                        local _tool_before=""
-                        [ -f "$tool_path" ] && _tool_before=$(cat "$tool_path")
-
-                        # Build the candidate script: header comment (purpose, used for
-                        # prompt injection) + the recipe as the executable body.
-                        local _tool_candidate
-                        _tool_candidate=$(printf '#!/usr/bin/env bash\n# %s\nset -e\n%s\n' "$tool_purpose" "$tool_recipe")
-
-                        # Reviewer gate — validates the script before it's trusted for
-                        # future runs. Same snapshot/revert pattern as every other
-                        # self-heal write. Rejections get up to 3 summarize-and-resubmit
-                        # rounds (same mechanism as kb_entry/skill_note) before being
-                        # discarded — a rejected tool used to be a dead end even when the
-                        # rejection was a fixable bash bug (e.g. subshell variable scoping).
-                        local _tool_review_verdict
-                        _tool_review_verdict=$(run_change_with_reviewer_retry "$story_id" "tool_creation" \
-                            "$_tool_before" "$_tool_candidate" 3)
-                        REVIEWER_RETRY_TEXT=$(cat "${TMPDIR:-/tmp}/.reviewer-retry-text-$$" 2>/dev/null || echo "$_tool_candidate")
-                        if [ "$_tool_review_verdict" = "fail" ]; then
-                            warning "  [FailureAnalyst] Dynamic tool '${tool_name}' rejected by reviewer after 3 attempts — NOT written"
-                        else
-                            printf '%s' "$REVIEWER_RETRY_TEXT" > "$tool_path"
-                            chmod +x "$tool_path" 2>/dev/null
-                            # Explicit, auditable "this exact tool was reviewed and
-                            # approved" marker — a sidecar file, not a marker embedded
-                            # in the script itself, so it never collides with the
-                            # `sed -n '2p'` purpose-line extraction used elsewhere.
-                            # Both run_dynamic_tools_in_unlocked_window() (the
-                            # orchestrator's own deterministic execution) and the
-                            # agent-prompt tool listing check for this marker before
-                            # trusting/surfacing a tool — today's only write path
-                            # already requires review, but this makes "only reviewed
-                            # tools are ever used" an explicit, checkable invariant
-                            # rather than an implicit assumption about there being no
-                            # other writer.
-                            printf 'reviewed_at=%s\nstory_id=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$story_id" > "${tool_path}.reviewed"
-                            log "  [FailureAnalyst] Dynamic tool written: .epam/dynamic-tools/${tool_name}.sh — ${tool_purpose}"
-                            _profile_updated="true"
-                        fi
-                    else
-                        log "  [FailureAnalyst] target=tool but tool_spec incomplete — falling back to diagnosis only"
-                    fi
+                    _write_reviewed_dynamic_tool "$story_id" "$tool_name" "$tool_purpose" "$tool_recipe"
                     ;;
                 escalate)
                     # THE FIX IS IN ANOTHER STORY'S FILE. Filed as the escalation record the
@@ -1785,12 +1800,20 @@ ${_kb_target_role_profile}"
                     fi
                     ;;
                 environment)
-                    # NOT THE WRITER'S FAULT. No ladder is spent on a stronger model for a broken
-                    # environment; the coordinator's environment class handles the retry.
-                    COORDINATOR_FAILURE_CLASS="environment"
+                    # NOT THE WRITER'S FAULT — and not left as it is. No ladder is spent on a stronger model
+                    # for a broken environment (the coordinator's class is "env"), and the repair the analyst
+                    # names goes through the same reviewed tool path as target=tool, so it runs before the
+                    # next verification. Live 2026-10-08: with no way to repair, the analyst diagnosed a
+                    # missing generation step exactly and prescribed the writer a workaround in correct code.
+                    COORDINATOR_FAILURE_CLASS="env"
                     COORDINATOR_ESCALATE="no"
                     export COORDINATOR_FAILURE_CLASS COORDINATOR_ESCALATE
                     log "  [FailureAnalyst] target=environment — the failure is environmental, not the writer's; no rung is spent on it"
+                    if [ -n "$tool_name" ] || [ -n "$tool_recipe" ]; then
+                        _write_reviewed_dynamic_tool "$story_id" "$tool_name" "$tool_purpose" "$tool_recipe"
+                    else
+                        log "  [FailureAnalyst] target=environment named no repair (tool_spec) — the environment is unchanged for the retry"
+                    fi
                     ;;
                 none)
                     log "  [FailureAnalyst] No structural fix needed — model escalation ladder handles retry"

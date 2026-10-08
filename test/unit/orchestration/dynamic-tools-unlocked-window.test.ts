@@ -73,8 +73,11 @@ describe('run_dynamic_tools_in_unlocked_window — design (static)', () => {
   });
 
   it('the tool-writing code path writes a .reviewed marker only after an approved verdict', () => {
-    const idx = claudeSrc.indexOf('if [ "$_tool_review_verdict" = "fail" ]');
-    const block = claudeSrc.slice(idx, idx + 2000);
+    // lib/failure-healing.sh _write_reviewed_dynamic_tool (added after the split: read from its module).
+    const healingSrc = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/lib/failure-healing.sh'), 'utf8');
+    const idx = healingSrc.indexOf('if [ "$_tool_review_verdict" = "fail" ]');
+    expect(idx).toBeGreaterThan(-1);
+    const block = healingSrc.slice(idx, idx + 2000);
     expect(block).toMatch(/NOT written/);
     expect(block).toMatch(/\$\{tool_path\}\.reviewed/);
   });

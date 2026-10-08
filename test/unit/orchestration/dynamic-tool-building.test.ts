@@ -94,11 +94,21 @@ describe('claude.sh — tool_spec field extraction', () => {
 describe('claude.sh — tool) case in the failure-analyst target switch', () => {
   const caseIdx = claudeSrc.indexOf('                tool)');
   const caseEnd = claudeSrc.indexOf('                none)', caseIdx);
-  const block = claudeSrc.slice(caseIdx, caseEnd);
+  // The write moved into ONE function both tool) and environment) call (2026-10-08) — added after the split, so it is
+  // read from its module, not from the reassembled monolith.
+  const healingSrc = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/lib/failure-healing.sh'), 'utf8');
+  const fnIdx = healingSrc.indexOf('_write_reviewed_dynamic_tool() {');
+  const block = healingSrc.slice(fnIdx, healingSrc.indexOf('\n}\n', fnIdx));
 
   it('tool) case exists and appears before none) in the switch', () => {
     expect(caseIdx).toBeGreaterThan(-1);
     expect(caseEnd).toBeGreaterThan(caseIdx);
+  });
+
+  it('tool) and environment) both write through the one reviewed-tool function', () => {
+    expect(fnIdx).toBeGreaterThan(-1);
+    expect(claudeSrc.slice(caseIdx, caseEnd)).toMatch(/tool\)\n\s+_write_reviewed_dynamic_tool "\$story_id" "\$tool_name" "\$tool_purpose" "\$tool_recipe"/);
+    expect(claudeSrc.slice(caseIdx, caseEnd)).toMatch(/environment\)[\s\S]*_write_reviewed_dynamic_tool "\$story_id"/);
   });
 
   it('writes the script to <PROJECT_ROOT>/.epam/dynamic-tools/<name>.sh', () => {
@@ -137,7 +147,7 @@ describe('claude.sh — tool) case in the failure-analyst target switch', () => 
   });
 
   it('falls back to diagnosis-only when tool_spec is incomplete (missing name or recipe)', () => {
-    expect(block).toMatch(/target=tool but tool_spec incomplete/);
+    expect(block).toMatch(/tool_spec incomplete \(needs name and recipe\) — no repair written/);
   });
 });
 

@@ -59,7 +59,9 @@ run_prd_change_reviewer() {
         # >&2 REQUIRED: this function returns its verdict on STDOUT, so any log written to
         # stdout is read as part of the verdict. There is a test for exactly this.
         error "  [PRD-Reviewer] cannot render its prompt — refusing to review with no instructions" >&2
-        rm -f "$_rv_vals"; return 1
+        # The honest verdict, as with no gate provider: nobody judged it. Returning nothing let every caller that
+        # tested only for "fail" keep the change — a self-heal tool was written with a .reviewed marker this way.
+        rm -f "$_rv_vals"; echo "unreviewed"; return 1
     fi
     rm -f "$_rv_vals"
 
@@ -348,10 +350,17 @@ run_change_with_reviewer_retry() {
     local verdict="" review_issues=""
     while [ "$attempt" -le "$max_retries" ]; do
         verdict=$(run_prd_change_reviewer "$story_id" "$change_type" "$before" "$current")
-        if [ "$verdict" != "fail" ]; then
+        if _review_kept "$verdict"; then
             printf '%s' "$current" > "$_retry_text_file" 2>/dev/null || true
             echo "pass"
             return 0
+        fi
+        # Not judged (no provider, no prompt): no rewrite can earn a review that cannot run.
+        if [ "$verdict" != "fail" ]; then
+            error "  [PRD-Reviewer] ${change_type} for ${story_id} was NOT reviewed (verdict '${verdict:-none}') — not kept" >&2
+            printf '%s' "$current" > "$_retry_text_file" 2>/dev/null || true
+            echo "fail"
+            return 1
         fi
         review_issues=$(cat "$_issues_file" 2>/dev/null || echo "")
         if [ "$attempt" -lt "$max_retries" ]; then

@@ -265,6 +265,41 @@ describe('a launch returns a codeline a killed line pass left on the line\'s bra
   });
 });
 
+// Live AMSD-2974 run 10 (2026-10-08): the 7.x line's QA gates failed, the remediation added the finding to the story
+// and exited 2 ("remediated — retry the phase"); the lane loop retries on 2 (lib/phase-exit.sh), the release-line loop
+// did not, so the line failed and the finding never reached its writer. A line retries as a lane does: once, with
+// SKIP_GATE_REMEDIATION=1.
+describe('a release line whose gates remediated the story retries its phase, as a lane does', () => {
+  const one = () => lanePrd(plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false }]));
+  function run(exits: number[]) {
+    const d = tmp('release-retry-');
+    const prdFile = join(d, 'lane-prd.json'); writeFileSync(prdFile, JSON.stringify(one()));
+    const calls = join(d, 'calls'); const n = join(d, 'n'); writeFileSync(n, '0');
+    const runner = join(d, 'runner.sh');
+    writeFileSync(runner, `#!/bin/bash\ni=$(cat ${JSON.stringify(n)}); echo $((i+1)) > ${JSON.stringify(n)}\necho "$* skip=\${SKIP_GATE_REMEDIATION:-}" >> ${JSON.stringify(calls)}\ncodes=(${exits.join(' ')}); exit \${codes[$i]:-0}\n`);
+    chmodSync(runner, 0o755);
+    const laneLog = join(d, 'lanes', 'lib'); mkdirSync(laneLog, { recursive: true });
+    const r = spawnSync('bash', ['-c', `${LOGS}\nSCRIPT_DIR=${JSON.stringify(SCRIPTS)}\nNODE_BIN=${JSON.stringify(process.execPath)}\n. ${JSON.stringify(LINES)}\n _run_release_lines lib ${JSON.stringify(prdFile)} /w/lib ${JSON.stringify(laneLog)} /dev/null "" ${JSON.stringify(runner)}`], { encoding: 'utf8', env: { ...process.env, LOG_DIR: d, EPAM_RESUME_RUN: '' } });
+    return { r, calls: existsSync(calls) ? readFileSync(calls, 'utf8').trim().split('\n') : [] };
+  }
+  it('exit 2, then the retry passes: the line passes; the retry ran with SKIP_GATE_REMEDIATION=1', () => {
+    const { r, calls } = run([2, 0]);
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatch(/skip=1/);
+  });
+  it('exit 2, then the retry fails: the line fails', () => {
+    const { r, calls } = run([2, 1]);
+    expect(calls).toHaveLength(2);
+    expect(r.status).not.toBe(0);
+  });
+  it('exit 1: no retry — the line fails', () => {
+    const { r, calls } = run([1]);
+    expect(calls).toHaveLength(1);
+    expect(r.status).not.toBe(0);
+  });
+});
+
 describe('a story branch per release line, from a base that may be a tag', () => {
   const git = (dir: string, ...args: string[]) => spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
   const commit = (dir: string, msg: string) => { writeFileSync(join(dir, 'f.txt'), `${msg}\n`); git(dir, 'add', '-A'); git(dir, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', msg); return git(dir, 'rev-parse', 'HEAD').stdout.trim(); };

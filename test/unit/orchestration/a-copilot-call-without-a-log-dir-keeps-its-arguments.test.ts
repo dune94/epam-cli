@@ -55,3 +55,24 @@ describe('the CLI receives the arguments the runner built', () => {
     });
   }
 });
+
+// Live AMSD-2974 runs 8 and 10 (2026-10-08): the gate-finding analyst was told to read the gate's log and the PRD;
+// both live in the run's own folders, outside the codeline, and the CLI refused every read ("Permission denied
+// because no interactive user response was available"). It answered "no grounded finding", the AC remediator added
+// nothing, and a verified QA finding never reached the writer. The run's own files are readable by every call.
+describe('every call may read the run\'s own files it is pointed at', () => {
+  it('the log folder and the PRD folders are read roots, after the caller\'s own', () => {
+    const logs = join(work, 'run-logs'); mkdirSync(logs, { recursive: true });
+    const lane = join(work, 'lane'); mkdirSync(lane, { recursive: true });
+    const canon = join(work, 'project'); mkdirSync(canon, { recursive: true });
+    const a = argsFor({ EPAM_READ_ROOTS: root, LOG_DIR: logs, PRD_FILE: join(lane, 'prd.json'), MAIN_PRD_FILE: join(canon, 'prd.json') });
+    const roots = a.flatMap((x, i) => (x === '--add-dir' ? [a[i + 1]] : []));
+    expect(roots[0], 'the caller\'s own read root comes first').toBe(root);
+    expect(roots).toEqual(expect.arrayContaining([logs, lane, canon]));
+    expect(new Set(roots).size, 'a folder granted twice').toBe(roots.length);
+  });
+  it('none set: no extra grant', () => {
+    const a = argsFor({});
+    expect(a).not.toContain('--add-dir');
+  });
+});

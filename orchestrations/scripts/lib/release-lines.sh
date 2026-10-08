@@ -13,6 +13,8 @@
 # fails the lane; no later line runs after it. Returns non-zero then.
 # shellcheck source=resume-semantics.sh
 . "$(dirname "${BASH_SOURCE[0]}")/resume-semantics.sh"
+# shellcheck source=phase-exit.sh
+declare -F phase_exit_is_retryable >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/phase-exit.sh"
 
 _run_release_lines() {
     # THE CODELINE IS LEFT ON THE BRANCH IT WAS ON. A line pass checks out the line's story branch; left there, the next
@@ -97,20 +99,30 @@ _run_release_lines_each() {
         for _phase in "${_phases[@]}"; do
             [ -n "$_phase" ] || continue
             [ -n "$_phase_filter" ] && [ "$_phase" != "$_phase_filter" ] && continue
-            JIRA_CODELINE_RUN=1 \
-            EPAM_CODELINE="$_cl" \
-            EPAM_RELEASE_LINE="$_line" \
-            EPAM_SPEC_MODE="$_line_spec" \
-            EPAM_BRANCH_SUFFIX="-${_slug}" \
-            JIRA_BASELINE_BRANCH="$_base" \
-            LOG_DIR="$_line_log" \
-            AGENT_IO_DIR="$_line_log/agent-io" \
-            PRD_FILE="$_line_prd" \
-            PROJECT_ROOT="$_wt" \
-            OUTPUT_DIR="$_wt" \
-            PHASE="$_phase" \
-            bash "$_runner" "${_rerun_args[@]}" 2>&1 | tee -a "$_log_file"
-            _pex=${PIPESTATUS[0]}
+            _line_phase() {
+                JIRA_CODELINE_RUN=1 \
+                EPAM_CODELINE="$_cl" \
+                EPAM_RELEASE_LINE="$_line" \
+                EPAM_SPEC_MODE="$_line_spec" \
+                EPAM_BRANCH_SUFFIX="-${_slug}" \
+                JIRA_BASELINE_BRANCH="$_base" \
+                LOG_DIR="$_line_log" \
+                AGENT_IO_DIR="$_line_log/agent-io" \
+                PRD_FILE="$_line_prd" \
+                PROJECT_ROOT="$_wt" \
+                OUTPUT_DIR="$_wt" \
+                PHASE="$_phase" \
+                bash "$_runner" "$@" 2>&1 | tee -a "$_log_file"
+                return "${PIPESTATUS[0]}"
+            }
+            _pex=0; _line_phase "${_rerun_args[@]}" || _pex=$?
+            # A LINE RETRIES AS A LANE DOES (lib/phase-exit.sh): exit 2 is "the gates remediated the story — retry the
+            # phase"; once, with SKIP_GATE_REMEDIATION=1 (AMSD-2974 run 10: the line failed on it, the finding never
+            # reached its writer).
+            if phase_exit_is_retryable "$_pex"; then
+                log "[orch] Gate remediation applied for '${_phase}' ('${_cl}' release line ${_line}) — retrying with SKIP_GATE_REMEDIATION=1"
+                _pex=0; SKIP_GATE_REMEDIATION=1 _line_phase --reset || _pex=$?
+            fi
             if [ "$_pex" -ne 0 ]; then
                 error "[orch] Phase '${_phase}' for '${_cl}' on release line ${_line} failed (exit $_pex)"
                 return 1

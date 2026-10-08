@@ -284,8 +284,10 @@ link_sibling_builds() {
         [ -e "$_e" ] || [ -L "$_e" ] || continue
         [ -e "$_wt/$_vd/$(basename "$_e")" ] || ln -s "$_e" "$_wt/$_vd/$(basename "$_e")"
     done
+    local _fresh_vd
     while IFS=$'\t' read -r _name _prov _suffix _story; do
         [ -n "$_name" ] && [ -d "$_prov" ] || continue
+        _fresh_vd=0
         # THE PROVIDER'S RELEASE LINE THIS CONSUMER RECEIVES (the story's plan): built from that line's story branch, in a
         # worktree of its own, so the consumer is proved against the back-port it will actually get.
         if [ -n "${_suffix:-}" ] && [ -n "${_story:-}" ]; then
@@ -294,7 +296,14 @@ link_sibling_builds() {
             if git -C "$_prov" rev-parse -q --verify "refs/heads/${_lb}" >/dev/null 2>&1; then
                 if [ -d "$_ld" ]; then git -C "$_ld" checkout -q --detach "$_lb" 2>/dev/null || true
                 else git -C "$_prov" worktree add -q --detach "$_ld" "$_lb" 2>/dev/null || true; fi
-                [ -e "$_ld/$_vd" ] || [ ! -d "$_prov/$_vd" ] || ln -s "$_prov/$_vd" "$_ld/$_vd"
+                # ITS DEPENDENCIES INSIDE IT, as the provider's checkout has them: a hard-linked copy, never a link —
+                # a bundler resolves real paths, and through a link it laid the line's build out from the parent
+                # folder (build/cx-shared-line-7.x/src/...), failing every consumer import (AMSD-2974 run 3).
+                if [ -L "$_ld/$_vd" ]; then rm -f -- "$_ld/$_vd"; fi
+                if [ ! -e "$_ld/$_vd" ] && [ -d "$_prov/$_vd" ] && [ -d "$_ld" ]; then
+                    cp -al "$_prov/$_vd" "$_ld/$_vd" 2>/dev/null || cp -a "$_prov/$_vd" "$_ld/$_vd"
+                    _fresh_vd=1
+                fi
                 [ -d "$_ld" ] && _prov="$_ld"
             else
                 warning "  [sibling] ${_name}: release line branch ${_lb} does not exist yet — testing against ${_prov} as it stands"
@@ -304,6 +313,8 @@ link_sibling_builds() {
         # sibling declares; a failure is reported and the lane tests against what it has.
         _bc=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$_prov" 2>/dev/null | jq -r '.buildCommand // empty' 2>/dev/null)
         _stamp="${LOG_DIR:-/tmp}/sibling-build-$(printf '%s' "$_prov" | md5sum | cut -c1-12)-$(git -C "$_prov" rev-parse --short HEAD 2>/dev/null || echo none)"
+        # A build made against another dependency directory is not this checkout's build.
+        [ "${_fresh_vd:-0}" = 1 ] && rm -f -- "$_stamp"
         if [ -n "$_bc" ] && [ ! -f "$_stamp" ]; then
             log "  [sibling] building ${_name} from ${_prov} ($(git -C "$_prov" branch --show-current 2>/dev/null)): $_bc"
             if (cd "$_prov" && bash -c "$_bc") > "${_stamp}.log" 2>&1; then

@@ -24,4 +24,10 @@ describe('the mock recognises the seam that called', () => {
     const text = readFileSync(join(__dirname, '../fixtures/mock-agent/guard-vocabulary-request-20261008.txt'), 'utf8');
     expect(seam(text)).toBe('guard-vocabulary');
   });
+  // The VC guard's own prompt (rehearsal 2026-10-08): its template starts first but renders only half its fixed text
+  // (optional sections left out); a shared spec-authoring fragment embedded after it is fully present.
+  it('the VC guard\'s guard-vocabulary request (real, frozen) is the guard-vocabulary seam', () => {
+    const text = readFileSync(join(__dirname, '../fixtures/mock-agent/guard-vocabulary-vc-request-20261008.txt'), 'utf8');
+    expect(seam(text)).toBe('guard-vocabulary');
+  });
 });

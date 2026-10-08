@@ -97,6 +97,14 @@ export class Declarations {
     // shared fragment started first and the call was answered as ac-elaboration (rehearsal 2026-10-08).
     const votes = (t: Template) => found.filter((f) => f.template.seams.some((s) => t.seams.includes(s))).length;
     found.sort((a, b) => (Math.round(b.coverage * 20) - Math.round(a.coverage * 20)) || (owns(b.template) - owns(a.template)) || (votes(b.template) - votes(a.template)) || (a.lo - b.lo) || (b.span - a.span) || (b.score - a.score));
+    // A SEAM'S OWN TEMPLATE THAT OPENS THE PROMPT IS THE CALLER, rendered in part or in full: optional sections left out
+    // leave it partly present, and a shared fragment embedded after its opening may be fully present — the VC guard's
+    // guard-vocabulary prompt was answered as ac-elaboration for that (rehearsal 2026-10-08).
+    const opener = found.filter((f) => owns(f.template) && f.coverage >= 0.5 && this.applies(this.seamOf(f.template, modes), modes))
+      .sort((a, b) => a.lo - b.lo)[0];
+    if (opener && found.every((f) => f === opener || f.lo >= opener.lo)) {
+      return { template: opener.template, score: opener.score, coverage: opener.coverage };
+    }
     // A FRAGMENT embedded in another seam's prompt can span as widely as its host; a template whose
     // seam does not apply to this project's modes cannot be the caller, so the next candidate is.
     const pick = found.find((f) => this.applies(this.seamOf(f.template, modes), modes)) || found[0];

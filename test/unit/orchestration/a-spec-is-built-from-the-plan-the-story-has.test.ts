@@ -80,11 +80,11 @@ describe('a release line\'s spec pass includes a pending story whose spec predat
 });
 
 describe('a lane resumed from a checkpoint whose spec predates the plan is specified again', () => {
-  function laneCurrent(ckPrd: object, canonicalPrd: object) {
+  function laneCurrent(ckPrd: object, canonicalPrd: object, workPrd: object = ckPrd) {
     const d = tmp();
     const ck = join(d, 'ck'); mkdirSync(ck);
     writeFileSync(join(ck, 'prd.json'), JSON.stringify(ckPrd));
-    const work = join(d, 'work.json'); writeFileSync(work, JSON.stringify(ckPrd));
+    const work = join(d, 'work.json'); writeFileSync(work, JSON.stringify(workPrd));
     const canonical = join(d, 'canonical.json'); writeFileSync(canonical, JSON.stringify(canonicalPrd));
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const digest = spawnSync(process.execPath, [join(SCRIPTS, 'lib/handlers/spec-inputs-digest.js'), join(ROOT, 'orchestrations')], { encoding: 'utf8' }).stdout.trim();
@@ -98,6 +98,14 @@ _prd_path=${JSON.stringify(canonical)} lane_spec_is_current ${JSON.stringify(ck)
     const r = laneCurrent({ stories: [{ ...specified(), status: 'completed', completed: true }] }, { stories: [{ id: 'S-1', overallPlan: PLAN }] });
     expect(r.stdout, r.stderr).toMatch(/AGAIN/);
     expect(r.stdout).toMatch(/its spec was built before the story's plan/);
+  });
+  // Rehearsal 2026-10-08: cx-shared's lane work PRD held the story with NO spec (built from the canonical PRD while the
+  // lane was declared passed); the lane judged that copy, found no spec "predating" anything, resumed it as current and
+  // handed the writer a story with no files.
+  it('the lane\'s working PRD holds a pending story with no spec at all: specified again', () => {
+    const r = laneCurrent({ stories: [{ ...specified({ planHash: planHash(PLAN) }), overallPlan: PLAN }] }, { stories: [{ id: 'S-1', overallPlan: PLAN }] },
+      { implementationOrder: { core: ['S-1'] }, stories: [{ id: 'S-1', phase: 'core', status: 'pending', overallPlan: PLAN }] });
+    expect(r.stdout, r.stderr).toMatch(/AGAIN/);
   });
   it('spec built under the plan the story has: resumed as it is', () => {
     const r = laneCurrent({ stories: [{ ...specified({ planHash: planHash(PLAN) }), overallPlan: PLAN }] }, { stories: [{ id: 'S-1', overallPlan: PLAN }] });

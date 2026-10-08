@@ -493,6 +493,12 @@ lane_spec_is_current() {
         warning "[orch]   its spec was built before the story's plan, or under another — specifying it again; pause 2 holds it for review"
         return 1
     fi
+    # A PENDING STORY WITH NO SPEC IS NOT A SPECIFIED LANE (rehearsal 2026-10-08: a work PRD built while the lane was
+    # declared passed carried the story unspecified; resumed as current, the writer got a story with no files).
+    if [ -f "$_work" ] && [ -n "$("${NODE_BIN:-node}" "$(dirname "${BASH_SOURCE[0]}")/handlers/stories-lacking-spec.js" "$_work" 2>/dev/null)" ]; then
+        warning "[orch]   a pending story in its PRD carries no spec — specifying it again; pause 2 holds it for review"
+        return 1
+    fi
     if [ -f "$_work" ] && [ "$(jq -r '[(.stories // [])[] | (.completed == true)] | (length > 0 and all)' "$_work" 2>/dev/null)" = "true" ]; then
         return 0
     fi

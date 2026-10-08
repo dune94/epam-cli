@@ -182,6 +182,14 @@ _lint_fix_findings_directly() {
 }
 
 # ──────────────────────────────────────────────
+# phase_changed_nothing <root> <diff-ref> — true when the phase changed no file against its baseline: a codeline the
+# story's plan gives no change, its branch clean (rehearsal 2026-10-08: the ranger's evidence refused the empty diff
+# and the gates failed gotransit). The code reviewer holds the same rule (team-lead-review.sh, B26).
+phase_changed_nothing() {
+    [ -e "${1:-}/.git" ] || return 1
+    [ -z "$(git -C "$1" diff --name-only "${2:-HEAD~1}" 2>/dev/null)" ]
+}
+
 # run_testing_gates <phase_id>
 # Steps 4.2–4.4: Testing coordinator gate (three phases).
 # Phase A (Step 4.2): sast-sentinel + spec-validator in parallel.
@@ -857,6 +865,11 @@ $spec_prompt"
                 _diff_files=$(story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null || echo "")
                 [ -z "$_diff_files" ] && \
                     _diff_files=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --name-only "$_diff_ref" 2>/dev/null || echo "")
+                if [ -z "$_diff_files" ] && phase_changed_nothing "$PROJECT_ROOT" "$_diff_ref"; then
+                    set -e
+                    log "  [review-ranger] the phase changed nothing against its baseline — nothing to judge"
+                    exit 0
+                fi
                 local _diff_stat
                 _diff_stat=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --stat "$_diff_ref" 2>/dev/null || echo "(no diff available)")
                 local _diff_patch

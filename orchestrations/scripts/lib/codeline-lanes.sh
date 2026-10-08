@@ -1009,6 +1009,8 @@ _run_codeline_loop() {
       fi
       if lane_declared_passed "$_cl"; then
         log "[orch] Codeline '${_cl}': declared passed in this run (EPAM_PASSED_LANES) — its own line is not run again"
+      # THE DECLARATION IS THE CODELINE'S RESULT (lib/handlers/record-declared-pass.js).
+      "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/record-declared-pass.js" "$_prd_path" "$_cl" || true
         # ITS OTHER RELEASE LINES STILL SHIP (lib/release-lines.sh): passed is the operator's word for the codeline's own line.
         _run_release_lines "$_cl" "$_cl_prd" "$_wt" "${LOG_DIR:-/tmp}/lanes/${_cl}" "$_log_file" "$_phase_filter" "$0" "$_prd_path" || _overall=1
         continue
@@ -1264,6 +1266,8 @@ _run_codeline_loop() {
     fi
     if lane_declared_passed "$_cl"; then
       log "[orch] Codeline '${_cl}': declared passed in this run (EPAM_PASSED_LANES) — its own line is not run again"
+      # THE DECLARATION IS THE CODELINE'S RESULT (lib/handlers/record-declared-pass.js).
+      "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/record-declared-pass.js" "$_prd_path" "$_cl" || true
       # ITS OTHER RELEASE LINES STILL SHIP (lib/release-lines.sh): passed is the operator's word for the codeline's own line.
       _run_release_lines "$_cl" "$_cl_prd" "$_wt" "${LOG_DIR:-/tmp}/lanes/${_cl}" "$_log_file" "$_phase_filter" "$0" "$_prd_path" || _overall=1
       continue

@@ -162,6 +162,10 @@ describe('the first detective is asked for the plan; how a consumer receives it 
     const out = runner.detectivePrescription('novel', storyWith(lanes[0], undefined), prdFor(lanes[0]));
     expect(out).toMatch(/"carries":"<what this line carries/);
     expect(out).toMatch(/the change made on the codeline's own line, ported in full/);
+    // Live run 11's plan (2026-10-08): the detective read the 8.x branch where most of the fix was already made and
+    // planned only "the one remaining gap"; the 7.x back-port then carried that gap alone. A back-port carries the
+    // story's WHOLE change on the codeline's own line — what is already there and what this plan adds.
+    expect(out).toMatch(/the story's whole change on the codeline's own line — what is already there and what this plan adds/);
   });
 });
 

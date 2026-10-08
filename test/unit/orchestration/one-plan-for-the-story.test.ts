@@ -138,6 +138,16 @@ describe('the first detective is asked for the plan; how a consumer receives it 
     expect(out).toMatch(/within (the|its) declared range/i);
     expect(out).toMatch(/never by installing the latest/i);
   });
+  // Live AMSD-2974 runs 3-4 (2026-10-07/08): cx-shared's own branch was cut at v8.10.0; master has since released
+  // v8.11.0. Told a line's base is "the newest existing release on that line", the detective marked 8.x off the
+  // codeline's base, and the pipeline wrote the whole fix a second time. Operator: "cx shared was green prior — why
+  // are we continuing this?" The codeline's own line is the one its base is on, newer releases on it or not.
+  it('a line the codeline\'s own base is on is its own line, even when newer releases were cut on it since', () => {
+    const out = runner.detectivePrescription('novel', storyWith(lanes[0], undefined), prdFor(lanes[0]));
+    expect(out).toMatch(/true if the provider codeline's own base is on this line — even when newer releases were cut on it since; the change merges forward onto it/);
+    expect(out).toMatch(/false only for a different, older line/);
+    expect(out).not.toMatch(/false if this line is cut from an older release>/);
+  });
 });
 
 describe('the real detective run stores the plan on the story, once', () => {

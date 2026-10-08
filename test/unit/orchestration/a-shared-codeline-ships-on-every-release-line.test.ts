@@ -13,7 +13,7 @@
  * story is pending again. The count is the plan's: 0, 1 or N. A line whose onCodelineBase is not stated is not
  * guessed at.
  *
- * EXECUTED: lib/release-lines.sh — _run_release_lines and the per-line passes it wraps, _run_release_lines_each — with the real handlers and a stand-in for the lane's phase run that records each
+ * EXECUTED: lib/release-lines.sh — _run_release_lines and the per-line passes it wraps, _run_release_lines_each, each phase run through _line_phase — with the real handlers and a stand-in for the lane's phase run that records each
  * call; ensure_story_branch and codeline_baseline_ref on a real repository with an origin and release tags.
  */
 import { describe, it, expect, afterAll } from 'vitest';

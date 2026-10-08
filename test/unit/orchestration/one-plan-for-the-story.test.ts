@@ -148,6 +148,11 @@ describe('the first detective is asked for the plan; how a consumer receives it 
     expect(out).toMatch(/false only for a different, older line/);
     expect(out).not.toMatch(/false if this line is cut from an older release>/);
   });
+  it('the planner says what each release line carries — for a line off the codeline\'s base, the codeline\'s own change ported in full', () => {
+    const out = runner.detectivePrescription('novel', storyWith(lanes[0], undefined), prdFor(lanes[0]));
+    expect(out).toMatch(/"carries":"<what this line carries/);
+    expect(out).toMatch(/the change made on the codeline's own line, ported in full/);
+  });
 });
 
 describe('the real detective run stores the plan on the story, once', () => {

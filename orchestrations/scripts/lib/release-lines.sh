@@ -68,15 +68,24 @@ _run_release_lines_each() {
         _line_log="${_lane_log}/lines/${_slug}"
         mkdir -p "$_line_log" 2>/dev/null || true
         _line_prd="${_line_log}/prd.json"
-        # A STEP NEVER RUNS TWICE: a resume keeps what this run completed (config/resume-preserves.json,
-        # completed-stories) — a line whose every story this run completed is not worked again (AMSD-2974, 2026-10-07).
+        # A LINE THIS RUN COMPLETED GOES BACK TO ITS REVIEWER ON RESUME — kept, not redone, not passed over by rule
+        # (operator, 2026-10-08: the 7.x back-port carried a third of the 8.x fix). Its PRD and story branch are kept;
+        # the phase runs without --reset, so Step 1 passes it as completed and the review → rework loop judges it
+        # against the story's plan as it stands.
+        local _rerun_args=(--reset) _line_branch
         if resume_preserves completed-stories && [ -f "$_line_prd" ] \
             && jq -e '(.stories | length) > 0 and all(.stories[]; .status == "completed")' "$_line_prd" >/dev/null 2>&1; then
-            log "[orch] Codeline '${_cl}' — release line ${_line} already completed in this run; not worked again"
-            continue
-        fi
+            _rerun_args=()
+            _line_branch="${EPAM_BRANCH_PREFIX:-}AI-$(jq -r '.stories[0].id' "$_line_prd")-${_slug}"
+            git -C "$_wt" checkout -q "$_line_branch" 2>/dev/null \
+                || warning "[orch] Codeline '${_cl}': could not check out ${_line_branch} for its review"
+            # The story's plan as it stands — the kept line PRD holds the plan of the pass that completed it.
+            "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/carry-plan.js" "$_line_prd" "${_canonical:-$_cl_prd}" || true
+            log "[orch] Codeline '${_cl}' — release line ${_line} completed in this run — its reviewer judges it again against the story's plan"
+        else
         "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/release-line-prd.js" "$_cl_prd" "$_line_prd" "$_cl" "$_line" "$_canonical" || {
             error "[orch] Codeline '${_cl}': could not prepare release line ${_line}"; return 1; }
+        fi
         log "[orch] Codeline '${_cl}' — release line ${_line}, from ${_base} (the story's plan)"
         # A STEP NEVER RUNS TWICE: a story already specified for this codeline is not specified again on another line.
         # The spec pass runs on the line only for a story that still lacks its spec (lib/handlers/stories-lacking-spec.js).
@@ -99,7 +108,7 @@ _run_release_lines_each() {
             PROJECT_ROOT="$_wt" \
             OUTPUT_DIR="$_wt" \
             PHASE="$_phase" \
-            bash "$_runner" --reset 2>&1 | tee -a "$_log_file"
+            bash "$_runner" "${_rerun_args[@]}" 2>&1 | tee -a "$_log_file"
             _pex=${PIPESTATUS[0]}
             if [ "$_pex" -ne 0 ]; then
                 error "[orch] Phase '${_phase}' for '${_cl}' on release line ${_line} failed (exit $_pex)"

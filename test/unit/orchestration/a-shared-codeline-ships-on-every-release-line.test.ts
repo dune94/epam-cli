@@ -32,7 +32,7 @@ afterAll(() => { for (const d of dirs) { spawnSync('bash', ['-c', `. "${PERIM}";
 const tmp = (p: string) => { const d = mkdtempSync(join(tmpdir(), p)); dirs.push(d); return d; };
 const LOGS = 'warning() { echo "WARN: $*"; }; error() { echo "ERROR: $*"; }; success() { echo "OK: $*"; }; info() { echo "INFO: $*"; }; log() { echo "LOG: $*"; }';
 
-type Line = { line: string; base: string; version: string; onCodelineBase?: boolean };
+type Line = { line: string; base: string; version: string; onCodelineBase?: boolean; carries?: string };
 const plan = (provider: string, lines: Line[]) => ({
   codelines: [{ codeline: provider, part: 'ship the change on every line', order: 1 }, { codeline: 'site', part: 'none', order: 2 }],
   packages: [{ package: '@scope/lib', providedBy: provider, releaseLines: lines, consumers: [] }],
@@ -50,7 +50,8 @@ function runLines(cl: string, prd: object, runnerExit = 0, opts: { env?: Record<
   const calls = join(d, 'calls.jsonl');
   const runner = join(d, 'phase-runner.sh');
   writeFileSync(runner, `#!/bin/bash
-${JSON.stringify(process.execPath)} -e 'const p=require(process.env.PRD_FILE);process.stdout.write(JSON.stringify({args:process.argv.slice(1),phase:process.env.PHASE,base:process.env.JIRA_BASELINE_BRANCH,suffix:process.env.EPAM_BRANCH_SUFFIX||"",line:process.env.EPAM_RELEASE_LINE||"",spec:process.env.EPAM_SPEC_MODE||"",logDir:process.env.LOG_DIR,codeline:process.env.EPAM_CODELINE,root:process.env.PROJECT_ROOT,stories:p.stories.map(s=>({id:s.id,status:s.status,completed:s.completed}))})+"\\n")' -- "$@" >> ${JSON.stringify(calls)}
+BR=$(git -C "$PROJECT_ROOT" branch --show-current 2>/dev/null); export BR
+${JSON.stringify(process.execPath)} -e 'const p=require(process.env.PRD_FILE);process.stdout.write(JSON.stringify({branch:process.env.BR||"",args:process.argv.slice(1),phase:process.env.PHASE,base:process.env.JIRA_BASELINE_BRANCH,suffix:process.env.EPAM_BRANCH_SUFFIX||"",line:process.env.EPAM_RELEASE_LINE||"",spec:process.env.EPAM_SPEC_MODE||"",logDir:process.env.LOG_DIR,codeline:process.env.EPAM_CODELINE,root:process.env.PROJECT_ROOT,stories:p.stories.map(s=>({id:s.id,status:s.status,completed:s.completed})),plan:(p.stories[0]||{}).overallPlan})+"\\n")' -- "$@" >> ${JSON.stringify(calls)}
 # A line pass leaves the codeline on the line's story branch, as ensure_story_branch does.
 [ -d "$PROJECT_ROOT/.git" ] && git -C "$PROJECT_ROOT" checkout -q -B "AI-S-1$EPAM_BRANCH_SUFFIX"
 exit ${runnerExit}
@@ -149,28 +150,51 @@ describe('the lane works the story once more per release line the plan names off
 // A STEP NEVER RUNS TWICE. AMSD-2974, 2026-10-07: cx-shared's 7.x line completed; the line's PRD was rebuilt with the
 // story pending on every launch, so a resume would have worked the 7.x line again from v7.14.0. A resume keeps a
 // completed story completed (config/resume-preserves.json, completed-stories) — a line's stories too.
-describe('a resume does not work again a release line whose stories this run already completed', () => {
+// A completed line is not passed over by rule, nor redone: on resume its reviewer judges it again, against the
+// story's plan as it stands (operator, 2026-10-08 — the 7.x back-port carried a third of the 8.x fix and every check
+// let it through). The line's PRD and branch are kept; the phase runs without --reset, so Step 1 passes it as
+// completed and the review → rework loop decides.
+describe('on resume a release line this run completed goes back to its reviewer — kept, not redone', () => {
   const two = () => lanePrd(plan('lib', [
     { line: '2.x', base: 'v2.4.0', version: '2.4.1', onCodelineBase: false },
     { line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false },
   ]));
   const lineDone = { implementationOrder: { core: ['S-1'] }, stories: [{ id: 'S-1', phase: 'core', status: 'completed', completed: true }] };
   const lineFailed = { implementationOrder: { core: ['S-1'] }, stories: [{ id: 'S-1', phase: 'core', status: 'failed', completed: false }] };
-  it('resume: the completed line is not run again, and says so; the other line still runs', () => {
-    const { r, recorded } = runLines('lib', two(), 0, { env: { EPAM_RESUME_RUN: '20261001T181327Z' }, seed: { '2.x': lineDone } });
+  const repo = () => {
+    const d = tmp('release-rejudge-');
+    const git = (...a: string[]) => spawnSync('git', ['-C', d, ...a], { encoding: 'utf8' });
+    git('init', '-q', '-b', 'master'); writeFileSync(join(d, 'a.txt'), 'a\n'); git('add', '-A');
+    git('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'base');
+    git('branch', 'AI-S-1-2.x'); git('checkout', '-q', '-b', 'bugfix/AI-S-1');
+    return d;
+  };
+  it('resume: the completed line runs without --reset, on its own branch, with its PRD as it was; and says so', () => {
+    const d = repo();
+    const { r, recorded } = runLines('lib', two(), 0, { env: { EPAM_RESUME_RUN: '20261001T181327Z' }, seed: { '2.x': lineDone }, wt: d });
     expect(r.status, r.stdout + r.stderr).toBe(0);
-    expect(recorded.map((c) => c.line)).toEqual(['1.x']);
-    expect(r.stdout).toMatch(/release line 2\.x .*already completed in this run/);
+    const l2 = recorded.find((c) => c.line === '2.x');
+    expect(l2, 'the completed line was passed over').toBeTruthy();
+    expect(l2.args).not.toContain('--reset');
+    expect(l2.branch).toBe('AI-S-1-2.x');
+    expect(l2.stories).toEqual([{ id: 'S-1', status: 'completed', completed: true }]);
+    expect(l2.plan, 'the kept line was judged against an older plan').toEqual(two().stories[0].overallPlan);
+    expect(r.stdout).toMatch(/release line 2\.x completed in this run — its reviewer judges it again/);
+    const l1 = recorded.find((c) => c.line === '1.x');
+    expect(l1.args).toContain('--reset');
   });
-  it('resume: a line whose story did not complete is worked again', () => {
+  it('resume: a line whose story did not complete is worked again as before', () => {
     const { recorded } = runLines('lib', two(), 0, { env: { EPAM_RESUME_RUN: '20261001T181327Z' }, seed: { '2.x': lineFailed } });
     expect(recorded.map((c) => c.line)).toEqual(['2.x', '1.x']);
+    expect(recorded.every((c) => c.args.includes('--reset'))).toBe(true);
   });
   it('a fresh run never trusts a line PRD left by another run', () => {
     const { recorded } = runLines('lib', two(), 0, { seed: { '2.x': lineDone } });
     expect(recorded.map((c) => c.line)).toEqual(['2.x', '1.x']);
+    expect(recorded.every((c) => c.args.includes('--reset'))).toBe(true);
   });
 });
+
 
 // AMSD-2974, 2026-10-07: after the 7.x line pass cx-shared stayed checked out on bugfix/AI-AMSD-2974-7.x (7.14.0);
 // the next launch's detective read that checkout and planned the codeline's own line as 7.x — and 8.x as a back-port.
@@ -331,6 +355,14 @@ describe('the plan says which line the codeline is already on, and the agents of
     expect(t).toMatch(/version a release line ships as is set the way this codeline makes its releases — its history shows how/);
     expect(t).toMatch(/this story's change is the fix/);
     expect(t.match(/version a release line ships as/g)?.length).toBe(1);
+  });
+  // Operator, 2026-10-08: the 7.x back-port carried a third of the 8.x fix — its writer worked to a narrower
+  // prescription, its reviewer judged against that. What a line carries is the planner's to say; every agent of the
+  // line reads it in the plan.
+  it('what each release line carries, as the planner wrote it, reaches the agents', () => {
+    const t = fixPlan.overallPlanText(plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false, carries: 'the change made on the codeline\'s own line, ported in full' } as Line]), 'lib');
+    expect(t).toMatch(/release line 1\.x: cut from v1\.9\.0, ships as 1\.9\.1[^\n]*carries: the change made on the codeline's own line, ported in full/);
+    expect(fixPlan.overallPlanText(plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false }]), 'lib')).not.toMatch(/carries:/);
   });
   it('a plan with no release lines says nothing about versions', () => {
     expect(fixPlan.overallPlanText(plan('lib', []), 'lib')).not.toMatch(/version a release line ships as/);

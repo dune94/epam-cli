@@ -149,8 +149,10 @@ story_outputs_files() {
             # scope lets the caller say "nothing to review" truthfully instead.
             return 0
         fi
+        # TO STDERR: this function's stdout IS the scope a caller captures; a warning there was counted as a changed
+        # file and sent an unchanged story to review (rehearsal 2026-10-08).
         command -v warning >/dev/null 2>&1 && \
-            warning "  no writer-output manifest at $manifest — falling back to the baseline diff for scope"
+            warning "  no writer-output manifest at $manifest — falling back to the baseline diff for scope" >&2
         export STORY_OUTPUTS_SOURCE="baseline diff"
         raw=$( { git -C "$project_root" diff --name-only --diff-filter=ACMRT "$baseline" 2>/dev/null
                  git -C "$project_root" ls-files --others --exclude-standard 2>/dev/null; } )

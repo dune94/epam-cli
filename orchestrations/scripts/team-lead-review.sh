@@ -469,6 +469,9 @@ while IFS= read -r story_id; do
         warning "  Story $story_id changed nothing vs baseline — nothing to review"
         continue
     fi
+    # WHAT THE REVIEW IS ABOUT, SAID ONCE: the scope decides whether there is anything to review, and a scope nobody
+    # can see cannot be checked afterwards (rehearsal 2026-10-08: metrolinx, unchanged, was sent to the reviewer).
+    log "  $story_id: $(printf '%s\n' "$_story_changed" | grep -c .) changed file(s), scope from ${STORY_OUTPUTS_SOURCE:-the baseline diff} ($(printf '%s\n' "$_story_changed" | head -3 | tr '\n' ' '))"
     _reviewed_count=$((_reviewed_count + 1))
     # AN APPROVAL STANDS UNTIL THE CODE CHANGES (lib/review-scope.sh review_stands): the story's last
     # review approved it after its last commit, so the reviewer has already judged exactly this code.

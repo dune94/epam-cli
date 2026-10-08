@@ -22,13 +22,23 @@ const SCRIPTS = join(ROOT, 'orchestrations/scripts');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
-function implement(change: string | null) {
+function implement(change: string | null, branch: 'clean' | 'stray' | null = null) {
   const d = mkdtempSync(join(tmpdir(), 'no-writer-')); dirs.push(d);
   const prd = join(d, 'prd.json');
   writeFileSync(prd, JSON.stringify({ stories: [{ id: 'S-1', ...(change === null ? {} : { overallPlan: {
     codelines: [{ codeline: 'site', part: 'p', order: 2 }],
     packages: [{ package: '@s/lib', providedBy: 'lib', releaseLines: [], consumers: [{ codeline: 'site', declaredRange: '^1', receivesVia: '1.0.1', usage: [], change }] }],
   } }) }] }));
+  // The codeline: on its story branch, clean or carrying edits from earlier attempts.
+  let root = '';
+  if (branch) {
+    root = join(d, 'site'); spawnSync('git', ['init', '-q', '-b', 'develop', root]);
+    const git = (...a: string[]) => spawnSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { encoding: 'utf8' });
+    writeFileSync(join(root, 'a.txt'), 'a\n'); git('add', '-A'); git('commit', '-qm', 'base');
+    writeFileSync(join(d, 'phase-baseline-sha.txt'), git('rev-parse', 'HEAD').stdout.trim());
+    git('checkout', '-q', '-b', 'bugfix/AI-S-1');
+    if (branch === 'stray') { writeFileSync(join(root, 'a.txt'), 'stray edit\n'); git('commit', '-qam', 'an earlier attempt'); }
+  }
   const calls = join(d, 'calls');
   const script = [
     // The first helper implement_story reaches is recorded and ends the run: whether it got PAST the plan is the question.
@@ -41,7 +51,7 @@ function implement(change: string | null) {
   const sh = join(d, 'implement.sh'); writeFileSync(sh, script);
   const r = spawnSync('bash', [sh], {
     encoding: 'utf8', timeout: 20000,
-    env: { ...process.env, PRD_FILE: prd, MAIN_PRD_FILE: prd, EPAM_CODELINE: 'site', SCRIPT_DIR: SCRIPTS, NODE_BIN: process.execPath, LOG_DIR: d, MAX_RETRIES: '0' },
+    env: { ...process.env, PRD_FILE: prd, MAIN_PRD_FILE: prd, EPAM_CODELINE: 'site', SCRIPT_DIR: SCRIPTS, NODE_BIN: process.execPath, LOG_DIR: d, MAX_RETRIES: '0', ...(root ? { PROJECT_ROOT: root } : {}) },
   });
   const called = existsSync(calls) ? readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean) : [];
   return { out: (r.stdout || '') + (r.stderr || ''), called, rc: Number((/RC=(\d+)/.exec(r.stdout || '') || [])[1] ?? -1) };
@@ -53,6 +63,20 @@ describe('the writer is not run for a story the plan gives this codeline no chan
     expect(rc, out).toBe(0);
     expect(out).toMatch(/plan gives site no change — no writer is run/);
     expect(called, `implement_story reached: ${called.join(', ')}`).toEqual([]);
+  });
+
+  // Live AMSD-2974 run 10 (2026-10-08): upexpress's branch still carried an earlier attempt's edits (lint script,
+  // import paths); the reviewer asked for them reverted, and the writer — skipped for "no change" — never could.
+  it('plan: none, and the branch carries no change of its own → skipped', () => {
+    const { called, rc } = implement('none', 'clean');
+    expect(rc).toBe(0);
+    expect(called).toEqual([]);
+  });
+  it('plan: none, but the branch carries edits from earlier attempts → the writer runs, to bring it to the plan', () => {
+    const { out, called } = implement('none', 'stray');
+    expect(out).not.toMatch(/no writer is run/);
+    expect(out).toMatch(/carries changes of its own/);
+    expect(called.length, 'the writer was skipped with stray edits on the branch').toBeGreaterThan(0);
   });
 
   it('plan: a change → the story goes on to its attempts as before', () => {

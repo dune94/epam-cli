@@ -868,6 +868,20 @@ implement_story() {
         for _np in "${PRD_FILE:-}" "${MAIN_PRD_FILE:-}"; do
             [ -n "$_np" ] && [ -f "$_np" ] || continue
             if "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/plan-gives-no-change.js" "$_np" "$story_id" "$EPAM_CODELINE" 2>/dev/null; then
+                # ONLY WHILE THE BRANCH MATCHES THE PLAN (AMSD-2974 run 10): a branch still carrying an earlier
+                # attempt's edits is not "no change" — the writer runs, told by the plan there is none, and brings the
+                # branch to it. The baseline is the one every consumer in this file resolves.
+                local _nc_ref=""
+                if [ -e "${PROJECT_ROOT:-}/.git" ]; then
+                    [ -f "${LOG_DIR:-}/phase-baseline-sha.txt" ] && _nc_ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
+                    [ -n "$_nc_ref" ] || _nc_ref="$(_resolved_baseline_ref 2>/dev/null)"
+                fi
+                if [ -n "$_nc_ref" ] \
+                    && git -C "$PROJECT_ROOT" rev-parse -q --verify "$_nc_ref" >/dev/null 2>&1 \
+                    && ! git -C "$PROJECT_ROOT" diff --quiet "$_nc_ref" HEAD -- 2>/dev/null; then
+                    log "Story $story_id: the story's plan gives ${EPAM_CODELINE} no change, but its branch carries changes of its own — the writer brings it to the plan"
+                    break
+                fi
                 log "Story $story_id: the story's plan gives ${EPAM_CODELINE} no change — no writer is run; the lane's gates prove it against the release it receives"
                 return 0
             fi

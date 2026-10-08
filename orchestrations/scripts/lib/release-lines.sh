@@ -74,7 +74,8 @@ _run_release_lines_each() {
         # against the story's plan as it stands.
         local _rerun_args=(--reset) _line_branch
         if resume_preserves completed-stories && [ -f "$_line_prd" ] \
-            && jq -e '(.stories | length) > 0 and all(.stories[]; .status == "completed")' "$_line_prd" >/dev/null 2>&1; then
+            && jq -e '(.stories | length) > 0 and all(.stories[]; .status == "completed")' "$_line_prd" >/dev/null 2>&1 \
+            && [ -z "$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/spec-predates-plan.js" "$_line_prd" "${_canonical:-$_cl_prd}" 2>/dev/null)" ]; then
             _rerun_args=()
             _line_branch="${EPAM_BRANCH_PREFIX:-}AI-$(jq -r '.stories[0].id' "$_line_prd")-${_slug}"
             git -C "$_wt" checkout -q "$_line_branch" 2>/dev/null \

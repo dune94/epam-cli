@@ -114,7 +114,11 @@ describe('the lane works the story once more per release line the plan names off
   // rehearsal's 7.x pass re-ran the spec pass because the resume had switched it on for the canonical PRD).
   it('a story already specified is not specified again on the line; one never specified is', () => {
     const specified = { ...lanePrd(plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false }])) };
-    specified.stories = specified.stories.map((x) => ({ ...x, specification: { runId: 'R', appliedAgents: ['openspec'] }, fixSiteAnalysisPerCodeline: { lib: [{ file: 'src/a.ts' }] } }));
+    // Specified under the plan it has (a-spec-is-built-from-the-plan-the-story-has: a spec from before the plan is
+    // specified again).
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { planHash } = require(join(SCRIPTS, 'lib/plan-hash.js'));
+    specified.stories = specified.stories.map((x) => ({ ...x, specification: { runId: 'R', appliedAgents: ['openspec'], planHash: planHash(x.overallPlan) }, fixSiteAnalysisPerCodeline: { lib: [{ file: 'src/a.ts' }] } }));
     const a = runLines('lib', specified);
     expect(a.r.status, a.r.stdout + a.r.stderr).toBe(0);
     expect(a.recorded.length).toBeGreaterThan(0);

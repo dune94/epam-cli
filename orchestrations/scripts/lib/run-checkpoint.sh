@@ -483,6 +483,12 @@ _spec_inputs_digest() {
 #     writer attempts after a version bump the SI forbids). Operator-approved 2026-10-04.
 lane_spec_is_current() {
     local _ck="$1" _work="$2" _rec _now
+    # A SPEC IS BUILT FROM THE PLAN THE STORY HAS (AMSD-2974, 2026-10-08): a lane whose spec was built before the
+    # story's plan, or under another one, is the spec of another story — completed or not, it is specified again.
+    if [ -f "$_work" ] && [ -n "$("${NODE_BIN:-node}" "$(dirname "${BASH_SOURCE[0]}")/handlers/spec-predates-plan.js" "$_work" "${_prd_path:-}" 2>/dev/null)" ]; then
+        warning "[orch]   its spec was built before the story's plan, or under another — specifying it again; pause 2 holds it for review"
+        return 1
+    fi
     if [ -f "$_work" ] && [ "$(jq -r '[(.stories // [])[] | (.completed == true)] | (length > 0 and all)' "$_work" 2>/dev/null)" = "true" ]; then
         return 0
     fi

@@ -2368,8 +2368,7 @@ async function run() {
     const existingReview = existingSpec.coordinatorReview || {};
     const existingFlags = Array.isArray(existingReview.flags) ? existingReview.flags : [];
     story.specification = {
-      ...existingSpec,
-      runId,
+      ...stampSpecification(story, { ...existingSpec, runId }),
       assignedAgents: assigned.agents,
       coordinatorNotes: assigned.notes,
       status: specStatus,
@@ -6585,6 +6584,16 @@ function firstJsonArrayOfObjects(out) {
  * lists of objects, and read as part of the answer it was taken for the fix-site list — the real reply that
  * proved the plan (2026-10-06) parsed to zero fix sites. Kept only in the shape the template states.
  */
+// THE PLAN A SPEC IS BUILT UNDER (AMSD-2974, 2026-10-08): a story's spec is the elaboration of its plan, so the
+// spec records which plan — lib/handlers/spec-predates-plan.js sends a spec made under another plan back to the pass.
+function stampSpecification(story, fields) {
+  // eslint-disable-next-line global-require
+  const h = require('./lib/plan-hash.js').planHash(story && story.overallPlan);
+  const out = { ...(fields || {}) };
+  delete out.planHash;
+  return h ? { ...out, planHash: h } : out;
+}
+
 function parseOverallPlan(out) {
   const m = String(out || '').match(/<OVERALL_PLAN>([\s\S]*?)<\/OVERALL_PLAN>/);
   if (!m) return null;
@@ -10996,6 +11005,7 @@ function costLabelFor(tag, env) {
 }
 
 module.exports = {
+  stampSpecification,
   rewireDependenciesOnSplit,
   storyAcsBlock,
   specAgentContract,

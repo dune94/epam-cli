@@ -29,7 +29,11 @@ function lacksOwnLane(s) {
   return !(own && Object.prototype.hasOwnProperty.call(own, s.codeline));
 }
 
+// A spec built under another plan, or before the story had one, is not this story's spec (spec-predates-plan.js).
+const { specPredatesPlan } = require('./spec-predates-plan.js');
+
 function storiesLackingSpec(prd, phase) {
+  const predates = new Set(specPredatesPlan(prd));
   const byId = new Map((prd.stories || []).map((s) => [s.id, s]));
   const ids = phase
     ? ((prd.implementationOrder || {})[phase] || [])
@@ -40,7 +44,7 @@ function storiesLackingSpec(prd, phase) {
     // THE PASS'S WRITE IS THE MARK. Every spec-pass write stamps specification.runId — on the
     // story it specified and on each child it split off. Judging by appliedAgents counted the
     // pass's own children as spec-less, and every resume re-split them (run 20260915T101555Z).
-    .filter((s) => !(s.specification && s.specification.runId) || lacksOwnLane(s))
+    .filter((s) => !(s.specification && s.specification.runId) || lacksOwnLane(s) || predates.has(s.id))
     .map((s) => s.id);
 }
 

@@ -148,6 +148,16 @@ describe('the first detective is asked for the plan; how a consumer receives it 
     expect(out).toMatch(/false only for a different, older line/);
     expect(out).not.toMatch(/false if this line is cut from an older release>/);
   });
+  // Live run 7, 2026-10-08: the detective wrote what each line carries; the plan parse kept only the fields it knew
+  // and dropped it, so the 7.x reviewer judged without it. The real reply, frozen.
+  it('the plan parse keeps what each release line carries, as the detective wrote it', () => {
+    const real = require('node:fs').readFileSync(join(ROOT, 'test/fixtures/frozen-detective/amsd-2974-overall-plan-carries-20261008.txt'), 'utf8');
+    const p = runner.parseOverallPlan(real);
+    const lines = p.packages.flatMap((x: { releaseLines: { line: string; carries?: string }[] }) => x.releaseLines);
+    const l7 = lines.find((l: { line: string }) => l.line === '7.x');
+    expect(l7, 'no 7.x line parsed').toBeTruthy();
+    expect(l7.carries).toMatch(/the same AMSD-2974 changes made on the 8\.x line/);
+  });
   it('the planner says what each release line carries — for a line off the codeline\'s base, the codeline\'s own change ported in full', () => {
     const out = runner.detectivePrescription('novel', storyWith(lanes[0], undefined), prdFor(lanes[0]));
     expect(out).toMatch(/"carries":"<what this line carries/);

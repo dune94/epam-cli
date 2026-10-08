@@ -138,6 +138,11 @@ function overallPlanText(plan, here) {
       for (const u of c.usage || []) lines.push(`    uses: ${u}`);
     }
   }
+  // WHO SETS THE VERSION (live run 3, 2026-10-07: told "ships as 8.12.0", the writer bumped package.json, and the lock
+  // file in a later attempt). The codeline's own release practice decides — read from its history, never assumed.
+  if ((Array.isArray(plan.packages) ? plan.packages : []).some((p) => (p.releaseLines || []).length)) {
+    lines.push('The version a release line ships as is set the way this codeline makes its releases — its history shows how; this story\'s change is the fix.');
+  }
   return lines.join('\n');
 }
 

@@ -320,4 +320,19 @@ describe('the plan says which line the codeline is already on, and the agents of
       expect(fixPlan.overallPlanText(p, 'lib')).not.toContain('THIS RELEASE LINE');
     } finally { if (prev === undefined) delete process.env.EPAM_RELEASE_LINE; else process.env.EPAM_RELEASE_LINE = prev; }
   });
+
+  // Live run 3, 2026-10-07: told the 8.x line "ships as 8.12.0", the writer set package.json to 8.12.0 and a later
+  // attempt the lock file — the coupled-pair gate failed the story. cx-shared sets a version in its own release commit
+  // (df9ec0c "7.14.0"); the 7.x writer left the version alone. The agents are told who sets the version: the
+  // codeline's own release practice, which its history shows — not hardcoded either way.
+  it('the agents are told the version a line ships as is set the way the codeline makes its releases', () => {
+    const t = fixPlan.overallPlanText(plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false }]), 'lib');
+    expect(t).toMatch(/release line 1\.x: cut from v1\.9\.0, ships as 1\.9\.1/);
+    expect(t).toMatch(/version a release line ships as is set the way this codeline makes its releases — its history shows how/);
+    expect(t).toMatch(/this story's change is the fix/);
+    expect(t.match(/version a release line ships as/g)?.length).toBe(1);
+  });
+  it('a plan with no release lines says nothing about versions', () => {
+    expect(fixPlan.overallPlanText(plan('lib', []), 'lib')).not.toMatch(/version a release line ships as/);
+  });
 });

@@ -32,7 +32,7 @@ provider_call() {
     while IFS= read -r root; do [ -n "$root" ] && extra+=(--add-dir "$root"); done <<< "${EPAM_READ_ROOTS:-}"
     # THE RUN'S OWN FILES ARE READABLE (AMSD-2974 runs 8, 10): a seam told to read the gate log or the PRD was refused
     # by the CLI — they live outside the codeline — and answered "no grounded finding". Each folder once.
-    local _own _seen=" ${EPAM_READ_ROOTS//$'\n'/ } "
+    local _own _seen=" ${EPAM_READ_ROOTS:+${EPAM_READ_ROOTS//$'\n'/ }} "
     for _own in "${LOG_DIR:-}" "$( [ -n "${PRD_FILE:-}" ] && dirname "$PRD_FILE")" "$( [ -n "${MAIN_PRD_FILE:-}" ] && dirname "$MAIN_PRD_FILE")"; do
         [ -n "$_own" ] && [ -d "$_own" ] || continue
         case "$_seen" in *" $_own "*) continue ;; esac

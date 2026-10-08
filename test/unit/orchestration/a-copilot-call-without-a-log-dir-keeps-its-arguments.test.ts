@@ -36,7 +36,9 @@ function argsFor(extraEnv: Record<string, string>) {
   rmSync(argsOut, { force: true });
   const env: Record<string, string> = { ...process.env as any, COPILOT_CMD: stub, EPAM_COPILOT_HOME: home, NODE_BIN: process.execPath, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'bash', EPAM_PROVIDER_SET: 'copilot', ...extraEnv };
   if (!('LOG_DIR' in extraEnv)) delete env.LOG_DIR;
-  const r = spawnSync('bash', ['-c', `cd ${JSON.stringify(DIR)} && source ./runner.sh && provider_call ${JSON.stringify(prompt)} ${JSON.stringify(join(work, 'r.json'))}`], { encoding: 'utf8', env });
+  for (const k of ['EPAM_READ_ROOTS', 'PRD_FILE', 'MAIN_PRD_FILE']) if (!(k in extraEnv)) delete env[k];
+  // set -u, as every caller runs it: a reference without a default kills the call (run 11, 2026-10-08).
+  const r = spawnSync('bash', ['-c', `set -u; cd ${JSON.stringify(DIR)} && source ./runner.sh && provider_call ${JSON.stringify(prompt)} ${JSON.stringify(join(work, 'r.json'))}`], { encoding: 'utf8', env });
   expect(existsSync(argsOut), `the CLI was never invoked: ${r.stderr.slice(-500)}`).toBe(true);
   return readFileSync(argsOut, 'utf8').trim().split('\n');
 }
@@ -70,6 +72,12 @@ describe('every call may read the run\'s own files it is pointed at', () => {
     expect(roots[0], 'the caller\'s own read root comes first').toBe(root);
     expect(roots).toEqual(expect.arrayContaining([logs, lane, canon]));
     expect(new Set(roots).size, 'a folder granted twice').toBe(roots.length);
+  });
+  it('no read roots from the caller (the common case): the call still runs, and the run\'s folders are granted', () => {
+    const logs = join(work, 'run-logs-2'); mkdirSync(logs, { recursive: true });
+    const env: Record<string, string> = { LOG_DIR: logs };
+    const a = argsFor(env);
+    expect(a.flatMap((x, i) => (x === '--add-dir' ? [a[i + 1]] : []))).toEqual([logs]);
   });
   it('none set: no extra grant', () => {
     const a = argsFor({});

@@ -466,6 +466,15 @@ while IFS= read -r story_id; do
     [ -z "$_story_changed" ] && \
         _story_changed=$(git -C "$PROJECT_ROOT" diff --name-only "$BASELINE_SHA" HEAD 2>/dev/null || true)
     if [ -z "$_story_changed" ]; then
+        # UNCHANGED BECAUSE THE PLAN SAYS SO is the plan, met — the gates prove the codeline; it is not an unreviewed
+        # change (rehearsal 2026-10-08: metrolinx looped on "reviewed NO stories"). Unchanged against a plan that gives
+        # this codeline a change stays unreviewed, and B26 below still refuses it.
+        if [ -n "${EPAM_CODELINE:-}" ] && "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/plan-gives-no-change.js" \
+                "${MAIN_PRD_FILE:-$PRD_FILE}" "$story_id" "$EPAM_CODELINE" 2>/dev/null; then
+            log "  Story $story_id changed nothing — the story's plan gives ${EPAM_CODELINE} no change; nothing to review, as planned"
+            _reviewed_count=$((_reviewed_count + 1))
+            continue
+        fi
         warning "  Story $story_id changed nothing vs baseline — nothing to review"
         continue
     fi

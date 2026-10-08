@@ -865,7 +865,9 @@ $spec_prompt"
                 _diff_files=$(story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null || echo "")
                 [ -z "$_diff_files" ] && \
                     _diff_files=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --name-only "$_diff_ref" 2>/dev/null || echo "")
-                if [ -z "$_diff_files" ] && phase_changed_nothing "$PROJECT_ROOT" "$_diff_ref"; then
+                # The committed diff is what the ranger is shown; a writer-output record may still list an earlier
+                # attempt's files (rehearsal 2026-10-08), so it does not decide this.
+                if phase_changed_nothing "$PROJECT_ROOT" "$_diff_ref"; then
                     set -e
                     log "  [review-ranger] the phase changed nothing against its baseline — nothing to judge"
                     exit 0

@@ -31,7 +31,7 @@ const fs = require('fs');
  * @param {string}   [deps.projectConfigDir]
  * @returns {Function} async ({id, template, generated}) => {ok:boolean, reason?:string}
  */
-function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectConfigDir, attempts = 2 }) {
+function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectConfigDir, attempts = 2, recordVerdict }) {
   const _warn = typeof warn === 'function' ? warn : (m) => process.stderr.write(`${m}\n`);
   return async function reviewPrompt({ id, template, generated }) {
     let prompt;
@@ -118,8 +118,20 @@ function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectC
       _warn(`[prompt-review] ${id}: no verdict after ${attempts} attempt(s) — ${why} — installing UNREVIEWED`);
       return { reviewed: false, reason: why };
     }
+    // EVERY VERDICT IS KEPT. The review log is rewritten per attempt, so a prompt that passed on its
+    // fifth try left no record of why the first four were rejected (AMSD-2974 run 3, 2026-10-09).
+    if (typeof recordVerdict === 'function') {
+      try { recordVerdict({ id, at: new Date().toISOString(), verdict }); } catch { /* a record never fails the review */ }
+    }
+    // THE BUILDER IS TOLD WHAT THE REVIEWER FOUND, not only which claim it struck — without the evidence
+    // it cannot tell a wrong fact from one that does not belong in a reusable prompt, and repeats it.
     const bad = Array.isArray(verdict.falseClaims)
-      ? verdict.falseClaims.map((c) => (typeof c === 'string' ? c : (c && c.claim) || '')).filter(Boolean)
+      ? verdict.falseClaims.map((c) => {
+        if (typeof c === 'string') return c;
+        if (!c || !c.claim) return '';
+        const said = c.found || c.correction || c.evidence || '';
+        return said ? `${c.claim} — the reviewer found: ${said}` : c.claim;
+      }).filter(Boolean)
       : [];
     if (bad.length) return { ok: false, reviewed: true, reason: bad.join('; ') };
     return { ok: true, reviewed: true };

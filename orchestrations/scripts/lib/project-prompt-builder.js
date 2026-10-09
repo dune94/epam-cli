@@ -385,6 +385,21 @@ function provisioningList({ bootstrap = {}, registry = {}, templateExists = () =
   return [...new Set([...seamRun, ...aux])].filter((t) => !copyVerbatim.includes(t));
 }
 
+/**
+ * WHAT THE SELF-HEAL ANALYST IS TOLD THE OUTPUT IS. It was told only the placeholder names, saw them
+ * unfilled in the output, and diagnosed that as the failure (AMSD-2974 run 3, 2026-10-09). A project
+ * prompt is reused for every call; its placeholders are filled per call at run time and must stay.
+ */
+function healContext(id, template) {
+  return `The output is a reusable PROJECT PROMPT generated from template ${id}: the same prompt serves every `
+    + 'story and every call this project makes to that agent. Its placeholders '
+    + `(${((template && template.placeholders) || []).join(', ')}) are filled per call at run time with that `
+    + 'call\'s story, files and criteria, and must appear unfilled — an unfilled placeholder is never the defect, '
+    + 'and the corrective never writes into one. Anything true only for one ticket belongs in those run-time '
+    + 'values, never in the prompt; what the prompt may say about the project is what stays true for every '
+    + 'story. Diagnose the refusal reason given in that light.';
+}
+
 async function buildProjectPrompts({
   templatesDir, bootstrapFile, registryFile, projectConfigDir, runText, reviewPrompt,
   projectContext, codelineContext, mintedRoles, attempts = 3, mode = 'generate', log = () => {},
@@ -790,7 +805,7 @@ async function buildProjectPrompts({
         // The rung that produced it — without this the analyst declines and heals nothing.
         model: process.env.EPAM_MODEL || '', provider: process.env.AI_PROVIDER || '',
         projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
-        context: `template ${id} requires: ${((template && template.placeholders) || []).join(', ')}`,
+        context: healContext(id, template),
       });
       if (_sh && _sh.rc === 2) log(`[prompt-builder] self-heal analyst FAILED for ${id} — the next attempt has no corrective`);
     } catch { /* a diagnostic must never fail the run it is diagnosing */ }
@@ -1256,7 +1271,7 @@ function clearCompletionMarker({ outDir, codeline } = {}) {
   } catch { /* best effort, same reasoning as above */ }
 }
 
-module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList, rolesIdentity, GEN_BODY_SLOT,
+module.exports = { buildProjectPrompts, healContext, renderGeneratorPrompt, provisioningList, rolesIdentity, GEN_BODY_SLOT,
   PROJECT_PROMPT_GENERATOR_ID, answerBudgetChars, promptParts,
   writeCompletionMarker, clearCompletionMarker, promptInputsDigest, codelinePromptsComplete,
   MINTED_FILES, mintedSnapshotDir, recordedPromptsDir, hasMintedSnapshot, restoreMinted, clearMinted,

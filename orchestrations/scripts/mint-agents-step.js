@@ -1450,6 +1450,7 @@ if (require.main !== module) return;
           __TOOL_LINE__: toolGrant || '',
         }),
         logPathFor: (id) => path.join(LOG_DIR, `prompt-review-${id}.log`),
+        recordVerdict: (rec) => fs.appendFileSync(path.join(LOG_DIR, 'prompt-review-verdicts.jsonl'), `${JSON.stringify(rec)}\n`),
         projectConfigDir,
       }) : undefined,
       log: (m) => process.stderr.write(`${m}\n`),

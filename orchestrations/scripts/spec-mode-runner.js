@@ -6591,6 +6591,10 @@ function stampSpecification(story, fields) {
   const h = require('./lib/plan-hash.js').planHash(story && story.overallPlan);
   const out = { ...(fields || {}) };
   delete out.planHash;
+  // A LANE'S SPEC IS MARKED WITH ITS LANE. A spanning story's lane PRD carries only the earlier lanes'
+  // per-codeline entries (story-merge.js writes this lane's at the lane's end), so on a resume from the
+  // pause-2 checkpoint every lane read as unspecified and was specified again (AMSD-2974 run 2, 2026-10-09).
+  if (story && story.codeline) out.codeline = story.codeline;
   return h ? { ...out, planHash: h } : out;
 }
 

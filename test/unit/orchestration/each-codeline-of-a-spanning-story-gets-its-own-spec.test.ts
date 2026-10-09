@@ -64,6 +64,24 @@ describe('each codeline of a spanning story gets its own spec', () => {
     expect(storiesLackingSpec(lanePrd('a'), 'core')).toEqual([]);
   });
 
+  it('a lane\'s own spec pass marks it specified on a resume — the stamp carries the lane (AMSD-2974 run 2)', () => {
+    // The pause-2 checkpoint of lane b holds lane b's spec but only lane a's per-codeline entry (story-merge
+    // writes b's at b's end). Before the fix every lane was specified again on resume.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const runner = require(join(LIB, '..', 'spec-mode-runner.js'));
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { storiesLackingSpec } = require(join(LIB, 'handlers/stories-lacking-spec.js'));
+    const b = lanePrd('b');
+    expect(b.stories[0].fixSiteAnalysisPerCodeline).not.toHaveProperty('b');
+    b.stories[0].specification = runner.stampSpecification(b.stories[0], { ...b.stories[0].specification, runId: 'R2' });
+    expect(b.stories[0].specification.codeline).toBe('b');
+    expect(storiesLackingSpec(b, 'core')).toEqual([]);
+    // Lane a's stamp, carried into lane b's PRD, is still not lane b's spec.
+    const carried = lanePrd('b');
+    carried.stories[0].specification = { runId: 'R2', codeline: 'a' };
+    expect(storiesLackingSpec(carried, 'core')).toEqual(['S-1']);
+  });
+
   it('a story confined to one codeline keeps today\'s rule: its spec mark is enough', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { storiesLackingSpec } = require(join(LIB, 'handlers/stories-lacking-spec.js'));

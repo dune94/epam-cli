@@ -25,6 +25,8 @@ const fs = require('fs');
  */
 function lacksOwnLane(s) {
   if (!Array.isArray(s.codelines) || s.codelines.length < 2 || !s.codeline) return false;
+  // This lane's own spec pass stamped its codeline on the spec (spec-mode-runner.js stampSpecification).
+  if (s.specification && s.specification.runId && s.specification.codeline === s.codeline) return false;
   const own = s.fixSiteAnalysisPerCodeline;
   return !(own && Object.prototype.hasOwnProperty.call(own, s.codeline));
 }

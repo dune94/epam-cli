@@ -20,13 +20,14 @@ P="$INSTALL/orchestrations/projects/metrolinx"; L="$INSTALL/orchestrations/logs"
 
 C="$W/project"; mkdir -p "$C"
 for f in config.env config.copilot.env llm-settings.json manifest.json plugins.json prompts prd.json; do [ -e "$P/$f" ] && cp -a "$P/$f" "$C/"; done
-mkdir -p "$W/logs"; cp "$L/codeline-discovery.json" "$W/logs/"
+# Laid out as the install is: spec-mode-runner finds the seam registry beside the log folder (<logs>/../agents).
+mkdir -p "$W/orch/logs"; cp -a "$REPO_ROOT/orchestrations/agents" "$W/orch/agents"; cp "$L/codeline-discovery.json" "$W/orch/logs/"
 export EPAM_PROVIDER_SET=copilot
 export COPILOT_GITHUB_TOKEN="$("$NODE" -e 'const s=require("fs").readFileSync(process.env.HOME+"/.copilot/config.json","utf8").split("\n").filter(l=>!/^\s*\/\//.test(l)).join("\n");process.stdout.write(JSON.parse(s).copilotTokens["https://github.com:dune94"]||"")')"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/lib/env-file.sh"; load_project_env "$C" || { echo "RESULT setup=project env failed"; exit 0; }
-FIRST=$("$NODE" -e 'console.log(require(process.argv[1]).codelines[0].path)' "$W/logs/codeline-discovery.json")
-export EPAM_PROJECT_CONFIG_DIR="$C" LOG_DIR="$W/logs" ACTIVITY_FILE="$W/logs/agent-activity.jsonl" EPAM_AGENT_REPLY_LOG_DIR="$W/replies"
+FIRST=$("$NODE" -e 'console.log(require(process.argv[1]).codelines[0].path)' "$W/orch/logs/codeline-discovery.json")
+export EPAM_PROJECT_CONFIG_DIR="$C" LOG_DIR="$W/orch/logs" ACTIVITY_FILE="$W/orch/logs/agent-activity.jsonl" EPAM_AGENT_REPLY_LOG_DIR="$W/replies"
 export PROJECT_ROOT="$FIRST" PRD_FILE="$C/prd.json"
 mkdir -p "$EPAM_AGENT_REPLY_LOG_DIR"
 
@@ -49,10 +50,10 @@ const toolGrant = require(path.join(scripts, 'lib/agent-tools.js')).readOnlyTool
   for (const c of survey.codelines || []) console.log(`RESULT survey ${c.codeline}: ${c.state} surfaces=${(c.surfaces || []).length}`);
 })();
 JS
-N=0; for f in "$W"/logs/copilot-calls/*.jsonl; do [ -f "$f" ] && N=$((N + $(grep -c 'Permission denied' "$f"))); done
+N=0; for f in "$W"/orch/logs/copilot-calls/*.jsonl; do [ -f "$f" ] && N=$((N + $(grep -c 'Permission denied' "$f"))); done
 echo "RESULT permission_denied=$N"
-for cl in $("$NODE" -e 'for (const c of require(process.argv[1]).codelines) console.log(c.path)' "$W/logs/codeline-discovery.json"); do
-  n=$(cat "$W"/logs/copilot-calls/*.jsonl 2>/dev/null | "$NODE" -e '
+for cl in $("$NODE" -e 'for (const c of require(process.argv[1]).codelines) console.log(c.path)' "$W/orch/logs/codeline-discovery.json"); do
+  n=$(cat "$W"/orch/logs/copilot-calls/*.jsonl 2>/dev/null | "$NODE" -e '
 let t="";process.stdin.on("data",d=>t+=d).on("end",()=>{let n=0;for(const l of t.split("\n")){try{const e=JSON.parse(l);
 if(e.type==="tool.execution_start"&&JSON.stringify(e.data.arguments||{}).includes(process.argv[1]))n++}catch{}}console.log(n)})' "$cl")
   echo "RESULT tool_calls_into $(basename "$cl")=$n"

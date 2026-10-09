@@ -23,6 +23,8 @@ C="$W/project"; mkdir -p "$C/prompts"
 for f in config.env config.copilot.env llm-settings.json manifest.json plugins.json codeline-facts.json prd.json; do [ -e "$P/$f" ] && cp -a "$P/$f" "$C/"; done
 # The project's own prompts as the run had them (its reviewer prompt among them) — all but the one under test.
 for f in "$P"/prompts/*.json; do [ "$(basename "$f" .json)" = "$ID" ] || cp -a "$f" "$C/prompts/"; done
+# GEN_FACTS: the codeline facts to generate from (default: the install's, as the last run left them).
+[ -n "${GEN_FACTS:-}" ] && cp "$GEN_FACTS" "$C/codeline-facts.json" && echo "RESULT facts_from=$GEN_FACTS"
 _before=$(md5sum "$P/codeline-facts.json" "$P/prompts/$ID.json" 2>/dev/null | cut -c1-32 | tr '\n' ' ')
 export EPAM_PROVIDER_SET=copilot
 export COPILOT_GITHUB_TOKEN="$("$NODE" -e 'const s=require("fs").readFileSync(process.env.HOME+"/.copilot/config.json","utf8").split("\n").filter(l=>!/^\s*\/\//.test(l)).join("\n");process.stdout.write(JSON.parse(s).copilotTokens["https://github.com:dune94"]||"")')"
@@ -30,6 +32,8 @@ export COPILOT_GITHUB_TOKEN="$("$NODE" -e 'const s=require("fs").readFileSync(pr
 . "$SCRIPT_DIR/lib/env-file.sh"; load_project_env "$C" || { echo "RESULT setup=project env failed"; exit 0; }
 export EPAM_PROJECT_CONFIG_DIR="$C" LOG_DIR="$W/logs" ACTIVITY_FILE="$W/logs/agent-activity.jsonl" EPAM_AGENT_REPLY_LOG_DIR="$W/replies"
 mkdir -p "$LOG_DIR" "$EPAM_AGENT_REPLY_LOG_DIR"
+# The run's discovery artefact beside its logs, as the pipeline leaves it — a seam's codeline scope is read from it.
+cp "$L/codeline-discovery.json" "$LOG_DIR/"
 
 "$NODE" - "$SCRIPT_DIR" "$REPO_ROOT" "$C" "$L/codeline-discovery.json" "$ID" "$W" <<'JS' 2> "$W/build.stderr"
 const path = require('path'), fs = require('fs');

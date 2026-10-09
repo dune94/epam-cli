@@ -41,7 +41,7 @@
         },
         {
           "from": "claude-sonnet-5",
-          "to": "claude-opus-5"
+          "to": "claude-opus-5-5"
         }
       ],
       "rungs": [
@@ -66,14 +66,7 @@
       "$why": "Skips Haiku. 25 seams resolve here and would waste a rung proving a small model cannot do the work. Same ceiling as high, entered two rungs up.",
       "startModel": "claude-sonnet-5",
       "modelLadder": [
-        {
-          "from": "claude-sonnet-5",
-          "to": "claude-opus-4-8"
-        },
-        {
-          "from": "claude-opus-4-8",
-          "to": "claude-opus-5"
-        }
+        {"from": "claude-sonnet-5", "to": "claude-opus-5-5"}
       ],
       "rungs": [
         {
@@ -116,6 +109,16 @@
       "autoCompressAt": 150000,
       "maxOutputTokens": 64000,
       "charsPerToken": 4
+    },
+    "claude-opus-5-5": {
+      "matchOn": "model",
+      "matchSubstring": "claude-opus-5-5",
+      "thinking": "adaptive",
+      "promptCacheTtl": "1h",
+      "autoCompressAt": 150000,
+      "maxOutputTokens": 64000,
+      "charsPerToken": 4,
+      "$why": "Explicit, and BEFORE claude-opus-5: matching is by first substring hit, and 'claude-opus-5' is a substring of 'claude-opus-5-5' — without this entry Opus 5.5 silently took Opus 5's settings. Values as Opus 5; not vendor-checked."
     },
     "claude-opus-4-8": {
       "matchOn": "model",

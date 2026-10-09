@@ -261,6 +261,11 @@
       "outputPerMillion": null,
       "$why": "On a declared ladder rung but not yet checked against the vendor. Null is a KNOWN unknown per this file: a guessed price is worse than a visible gap."
     },
+    "claude-opus-5-5": {
+      "inputPerMillion": null,
+      "outputPerMillion": null,
+      "$why": "On a declared ladder rung (2026-10-09: the Claude ladder climbs Sonnet 5 -> Opus 5.5) but not yet checked against the vendor. Null is a KNOWN unknown per this file: a guessed price is worse than a visible gap; a call's real cost is the one its runner reports."
+    },
     "claude-opus-4-8": {
       "inputPerMillion": null,
       "outputPerMillion": null,

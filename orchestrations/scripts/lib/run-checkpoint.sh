@@ -488,7 +488,7 @@ _spec_inputs_digest() {
 lane_restore_approved_prd() {
     local _ck="$1" _work="$2"
     [ -f "$_ck/prd.json" ] || return 0
-    local _lack="$(dirname "${BASH_SOURCE[0]}")/handlers/stories-lacking-spec.js"
+    local _lack; _lack="$(dirname "${BASH_SOURCE[0]}")/handlers/stories-lacking-spec.js"
     [ -f "$_work" ] && [ -z "$("${NODE_BIN:-node}" "$_lack" "$_work" 2>/dev/null)" ] && return 0
     [ -n "$("${NODE_BIN:-node}" "$_lack" "$_ck/prd.json" 2>/dev/null)" ] && return 0
     cp "$_ck/prd.json" "$_work" || return 1

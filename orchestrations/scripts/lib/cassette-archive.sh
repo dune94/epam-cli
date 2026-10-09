@@ -85,7 +85,7 @@ export_run_cassette() {
             info "[cassette] $_dest already exists with ${_prior_count} trace(s) and this export holds ${_new_count} — keeping the original"
             rm -rf "$_tmp"; return 0
         fi
-        local _kept="${_dest}.superseded-$(date -u +%Y%m%dT%H%M%SZ)"
+        local _kept; _kept="${_dest}.superseded-$(date -u +%Y%m%dT%H%M%SZ)"
         mv "$_dest" "$_kept" 2>/dev/null || { warning "[cassette] could not set aside $_dest — keeping it, run not re-archived"; rm -rf "$_tmp"; return 0; }
         info "[cassette] the earlier export (${_prior_count} trace(s)) is kept at $_kept"
     fi

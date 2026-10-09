@@ -41,3 +41,23 @@ export function failureAnalyst(world: World, prompt: string, story: string, cont
   delete answer.provisioning; delete answer.tool_spec;
   return JSON.stringify(answer);
 }
+
+/**
+ * agent-failure-analyst — why an agent produced nothing usable, and what its next attempt must do first. Read from the
+ * prompt's own sections, as a model reads them: what the agent produced, why it was refused, and the class's hint (the
+ * template states the corrective each failure class needs). Nothing about any project or agent is known here.
+ */
+export function agentFailureDiagnosis(prompt: string): string {
+  const section = (name: RegExp) => {
+    const at = prompt.search(name); if (at < 0) return '';
+    const rest = prompt.slice(at).split('\n').slice(1).join('\n');
+    const end = rest.search(/\n=== /); return (end < 0 ? rest : rest.slice(0, end)).trim();
+  };
+  const produced = (section(/=== WHAT THE AGENT PRODUCED/).split('\n').find((l) => l.trim()) || 'nothing').trim().slice(0, 200);
+  const why = section(/=== WHY THIS ATTEMPT WAS REFUSED/).split('\n')[0]?.trim().slice(0, 200) || 'it produced no usable output';
+  // The class hint is the paragraph before the first section header (the template places it there).
+  const head = prompt.slice(0, Math.max(0, prompt.search(/\n=== /)));
+  const hint = (head.split(/(?<=\.)\s+/).find((s) => /directive must|must make|FIRST action|commit output/i.test(s)) || '').trim();
+  const diagnosis = `The agent said "${produced}" and was refused because ${why}. ${hint || 'Its next attempt must produce the required output first, before anything else.'}`;
+  return JSON.stringify({ diagnosis, target: 'skill', reason: 'The refusal names exactly what was missing; the retry must start there.' });
+}

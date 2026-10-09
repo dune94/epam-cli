@@ -19,7 +19,7 @@ import { roleAssigner } from './assign';
 import { segmented } from './segments';
 import { writerDelivers } from './writer';
 import { testCriteria } from './tc';
-import { failureAnalyst } from './analyst';
+import { failureAnalyst, agentFailureDiagnosis } from './analyst';
 import { perStoryList } from './per-story';
 import { codelineSelection } from './discovery';
 import { fixPlan } from './fixplan';
@@ -86,6 +86,8 @@ export function correct(world: World, install: string): Behaviour {
     // A seam reached through several templates: the diagnosis behaviour answers only the prompt
     // that asks for the contract's required keys; the seam's other prompts take the default.
     const asksContract = (contract?.requiredKeys || []).every((k) => prompt.includes(`"${k}"`));
+    // agent self-heal's analyst (template agent-failure-analyst) asks in prose, never naming the contract's key.
+    if (produces === 'diagnosis' && call.template === 'agent-failure-analyst') return { kind: 'text', text: wrapped(agentFailureDiagnosis(prompt), contract) };
     if (DIAGNOSING[produces] && asksContract) return { kind: 'text', text: wrapped(DIAGNOSING[produces](world, prompt, call, contract), contract) };
     if (WHOLE[produces]) return { kind: 'text', text: wrapped(WHOLE[produces](world, prompt, call, contract), contract) };
     const tplText = agent.decl.templateText(call.template);

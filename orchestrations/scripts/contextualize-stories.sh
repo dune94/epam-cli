@@ -50,6 +50,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # fixed model silently, and there were sixteen of those.
 # shellcheck source=lib/seam-ladder.sh
 . "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
+# The one shell edge to the self-heal analyst (a rejected estimate goes through it, like every retry).
+. "$SCRIPT_DIR/lib/attempt-analyst.sh"
 # WHICH AGENT THIS IS — declared ONCE, and exported so ai-run.sh keys this agent's ladder rung
 # state to it. Without it every agent shared one counter ("agent__<story>"): one agent escalating
 # advanced the ladder for all of them, and team-lead-review's cross-process resume read a key
@@ -119,6 +121,12 @@ DRY_RUN=false
 JSON_MODE=false
 RECONCILE_MODE=false
 CALIBRATE_MODE=false
+STORY_FILTER=""
+# A REJECTED ESTIMATE IS RETRIED, NOT REVERTED (AMSD-2974 run 2, 2026-10-09: the reviewer rejected the
+# estimate and the story silently kept its pre-CPA values — no self-heal, no retry, no climb). Each round
+# re-asks this agent for one story with the reviewer's issues, one rung up its ladder.
+CPA_REVIEW_ROUND="${CPA_REVIEW_ROUND:-0}"
+CPA_REVIEW_MAX_ROUNDS="${CPA_REVIEW_MAX_ROUNDS:-3}"
 
 # ── Confidence thresholds ───────────────────────────────────────────────────
 BLEND_HIGH=0.75      # >= this: trust CPA fully
@@ -135,6 +143,7 @@ BLEND_ADJ_FLOOR=0.25
 # ── Arg parsing ─────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case $1 in
+    --story)   STORY_FILTER="$2"; shift 2 ;;
     --phase)   PHASE_FILTER="$2"; shift 2 ;;
     --apply)   APPLY_MODE=true;   shift ;;
     --strict)  STRICT_MODE=true;  shift ;;
@@ -319,7 +328,9 @@ fi
 # ── Story extraction ─────────────────────────────────────────────────────────
 log "Loading stories from $(basename "$PRD_FILE")..."
 
-if [ -n "$PHASE_FILTER" ]; then
+if [ -n "$STORY_FILTER" ]; then
+  story_ids="$STORY_FILTER"
+elif [ -n "$PHASE_FILTER" ]; then
   phase_exists=$(jq --arg p "$PHASE_FILTER" '.implementationOrder | has($p)' "$PRD_FILE")
   if [ "$phase_exists" != "true" ]; then
     error "Phase '$PHASE_FILTER' not found in implementationOrder"
@@ -759,6 +770,12 @@ while IFS= read -r sid; do
   printf '%s' "$adjacent_json"     > "$_cpa_argdir/adjacent.json"
   printf '%s' "$MANIFEST_JSON"     > "$_cpa_argdir/manifest.json"
   printf '%s' "$SYSTEM_PROMPT"     > "$_cpa_argdir/system_prompt.txt"
+  # The reviewer's rejection of the previous round's estimate, when this is a retry round.
+  if [ -n "${CPA_REVIEW_FEEDBACK_FILE:-}" ] && [ -s "$CPA_REVIEW_FEEDBACK_FILE" ]; then
+    cp "$CPA_REVIEW_FEEDBACK_FILE" "$_cpa_argdir/feedback.json"
+  else
+    echo 'null' > "$_cpa_argdir/feedback.json"
+  fi
 
   inference_input=$(jq -n \
     --slurpfile story "$_cpa_argdir/story.json" \
@@ -768,9 +785,12 @@ while IFS= read -r sid; do
     --slurpfile adjacentStories "$_cpa_argdir/adjacent.json" \
     --slurpfile manifest "$_cpa_argdir/manifest.json" \
     --rawfile systemPrompt "$_cpa_argdir/system_prompt.txt" \
+    --slurpfile feedback "$_cpa_argdir/feedback.json" \
+    --argjson round "$CPA_REVIEW_ROUND" \
     '{story: $story[0], kbChunks: $kbChunks[0], codebaseSignals: $codebaseSignals[0],
       formulaEstimate: $formulaEstimate[0], adjacentStories: $adjacentStories[0],
-      manifest: $manifest[0], systemPrompt: $systemPrompt}')
+      manifest: $manifest[0], systemPrompt: $systemPrompt,
+      reviewerFeedback: $feedback[0], reviewRound: $round}')
   rm -rf "$_cpa_argdir"
 
   # STDERR CAPTURED, NEVER DISCARDED. This ran under 2>/dev/null with '|| echo ""' after it, so a
@@ -1165,6 +1185,8 @@ fi
 if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
   log "Applying blended estimates to prd.json..."
   backup="${PRD_FILE}.before-cpa"
+  # A retry round keeps its own copy; the first round's backup is the one the operator restores from.
+  [ "$CPA_REVIEW_ROUND" -gt 0 ] && backup="${PRD_FILE}.before-cpa-round${CPA_REVIEW_ROUND}"
   cp "$PRD_FILE" "$backup"
   success "Backed up prd.json → $(basename "$backup")"
 
@@ -1263,7 +1285,7 @@ if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
       _cpa_after=$(jq --arg id "$sid" '.stories[] | select(.id==$id) | {estimatedAiMinutes,estimatedCost,estimatedTokens,estimatedTurns,estimatedHours,effort,cpaConfidence,cpaGate}' "$PRD_FILE" 2>/dev/null || echo '{}')
       # The reviewer's identity is its SI (seam prd-change-reviewer), resolved by the hub — never a
       # persona pasted into the prompt (operator, 2026-09-30: one path).
-      _cpa_verdict=$(echo "STORY: ${sid}
+      _cpa_review_raw=$(echo "STORY: ${sid}
 CHANGE TYPE: cpa_estimate
 
 BEFORE:
@@ -1281,13 +1303,37 @@ Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
         "$_cpa_ai_runner_cmd" \
             --provider "${ORCH_GATE_PROVIDER}" \
             --model    "${EPAM_MODEL:-}" \
-        2>/dev/null | \
-        python3 "$SCRIPT_DIR/lib/handlers/cpa-review-verdict.py" 2>/dev/null || echo "fail")
+        2>/dev/null || true)
+      _cpa_verdict=$(printf '%s' "$_cpa_review_raw" | python3 "$SCRIPT_DIR/lib/handlers/cpa-review-verdict.py" 2>/dev/null || echo "fail")
       if [ "$_cpa_verdict" = "fail" ]; then
-        warning "  $sid: CPA estimate REJECTED by reviewer — reverting to pre-CPA values"
+        _cpa_issues=$(printf '%s' "$_cpa_review_raw" | python3 "$SCRIPT_DIR/lib/handlers/prd-change-issues.py" 2>/dev/null || true)
+        warning "  $sid: CPA estimate REJECTED by reviewer (round $((CPA_REVIEW_ROUND + 1))/${CPA_REVIEW_MAX_ROUNDS}): ${_cpa_issues:-no details} — reverting to pre-CPA values"
         jq --arg id "$sid" --argjson before "$_cpa_before" \
            '(.stories[] | select(.id==$id)) |= (. + $before)' \
            "$PRD_FILE" > "${PRD_FILE}.tmp" && mv "${PRD_FILE}.tmp" "$PRD_FILE"
+        # The rejection is kept on disk: what was proposed, what the reviewer said.
+        _cpa_rej_dir="$(dirname "$CPA_LOG")/cpa-rejections"; mkdir -p "$_cpa_rej_dir"
+        _cpa_rej="$_cpa_rej_dir/${sid}-round$((CPA_REVIEW_ROUND + 1)).json"
+        jq -n --arg sid "$sid" --argjson round "$((CPA_REVIEW_ROUND + 1))" --argjson rejected "$_cpa_after" \
+              --argjson before "$_cpa_before" --arg issues "$_cpa_issues" --arg raw "$_cpa_review_raw" \
+              '{storyId:$sid, round:$round, rejectedEstimate:$rejected, before:$before, issues:$issues, reviewerAnswer:$raw}' \
+              > "$_cpa_rej" 2>/dev/null || true
+        if [ $((CPA_REVIEW_ROUND + 1)) -lt "$CPA_REVIEW_MAX_ROUNDS" ]; then
+          # SELF-HEAL, THEN RETRY ONE RUNG UP. The analyst is told why (the reviewer's issues) and
+          # records its corrective for this agent; the next round re-asks the estimator with the
+          # reviewer's issues in hand, on the next rung of its ladder, and is reviewed again.
+          AGENT_ANALYST_STORY_ID="$sid" STORY_ROLE="cpa-inference" AI_RUNNER_CMD="$_cpa_ai_runner_cmd" \
+            run_attempt_analyst rejected "the reviewer rejected this story's CPA estimate: ${_cpa_issues:-no details given}" \
+              "$_cpa_rej" "$_cpa_rej" >&2 \
+            || warning "  $sid: self-heal analyst FAILED — the retry runs with the reviewer's issues only"
+          info "  $sid: re-asking CPA with the reviewer's issues (round $((CPA_REVIEW_ROUND + 2))/${CPA_REVIEW_MAX_ROUNDS})"
+          CPA_REVIEW_ROUND=$((CPA_REVIEW_ROUND + 1)) CPA_REVIEW_FEEDBACK_FILE="$_cpa_rej" \
+            bash "$SCRIPT_DIR/contextualize-stories.sh" --apply --story "$sid" >&2
+          _cpa_retry_rc=$?
+          [ "$_cpa_retry_rc" -eq 3 ] && GRAND_BLOCK=$((GRAND_BLOCK + 1))
+        else
+          error "  $sid: CPA estimate rejected in all ${CPA_REVIEW_MAX_ROUNDS} rounds — the story keeps its pre-CPA values"
+        fi
       fi
     fi
 

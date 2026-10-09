@@ -210,6 +210,13 @@ function buildPrompt(input) {
     adjSection,
     manifestSection,
     rcaSection,
+    // A RETRY ROUND CARRIES THE REVIEWER'S REJECTION of the previous estimate (contextualize-stories.sh).
+    input.reviewerFeedback
+      ? `## Reviewer's Rejection of the Previous Estimate\n\`\`\`json\n${JSON.stringify({
+          rejectedEstimate: input.reviewerFeedback.rejectedEstimate,
+          issues: input.reviewerFeedback.issues,
+        }, null, 2)}\n\`\`\``
+      : '',
   ].filter(Boolean).join('\n\n');
 
   return renderEngineTemplate('cpa-inference', {
@@ -365,7 +372,7 @@ async function main() {
     let seam = {};
     try {
       seam = require('./seam-invocation.js')
-        .seamInvocationEnv('cpa-inference', undefined, { rung: Math.max(0, (attempt || 1) - 1) });
+        .seamInvocationEnv('cpa-inference', undefined, { rung: Math.max(0, (Number(input && input.reviewRound) || 0) + (attempt || 1) - 1) });
     } catch (e) {
       process.stderr.write(`WARN: seam 'cpa-inference' did not resolve: ${(e && e.message) || e}\n`);
     }

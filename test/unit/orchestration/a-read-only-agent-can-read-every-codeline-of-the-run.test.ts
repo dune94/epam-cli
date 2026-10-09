@@ -55,16 +55,34 @@ describe('a read-only agent can read every codeline of the run', () => {
     expect(r).not.toContain(e.root);
   });
 
-  it('in a lane, the lane\'s own codelines are the scope (EPAM_CODELINE_PATHS)', () => {
-    const e = estate(); discovered(e);
-    const env = seamInvocationEnv('prompt-review', undefined, { env: { LOG_DIR: e.logs, PROJECT_ROOT: e.go, EPAM_CODELINE_PATHS: `${e.go},${e.lib}` } });
-    expect(roots(env)).toEqual([e.go, e.lib].sort());
+  it('discovery reads the candidates it chooses between; once it has answered, every agent reads its ANSWER', () => {
+    // Blind (no read access) discovery dropped cx-shared in one live sample of three; reading a manifest that listed a
+    // worktree as a repository, it chose the worktree (run 5). The manifest now folds worktrees (a-worktree-is-not-a-
+    // repository-of-its-own); discovery reads that list, and everyone after it reads only what it chose.
+    const e = estate();
+    const candidates = [e.lib, e.go, e.up, e.mx, join(e.root, 'unrelated-repo')].join(',');
+    const disc = seamInvocationEnv('codeline-discovery', undefined, { env: { LOG_DIR: e.logs, PROJECT_ROOT: e.lib, EPAM_CODELINE_PATHS: candidates } });
+    expect(roots(disc)).toEqual(candidates.split(',').sort());
+    discovered(e);
+    const after = seamInvocationEnv('prompt-review', undefined, { env: { LOG_DIR: e.logs, PROJECT_ROOT: e.lib, EPAM_CODELINE_PATHS: candidates } });
+    expect(roots(after), 'an agent after discovery read the candidates, not the answer').toEqual([e.lib, e.go, e.up, e.mx].sort());
   });
 
-  it('before discovery has answered, discovery itself can read the estate it searches', () => {
+  it('with no answer and no candidate list, nothing is added — PROJECT_ROOT alone is not a read grant', () => {
     const e = estate();
-    const env = seamInvocationEnv('codeline-discovery', undefined, { env: { LOG_DIR: e.logs, PROJECT_ROOT: e.lib, JIRA_CODELINE_ROOT: e.root } });
-    expect(roots(env)).toEqual([e.root]);
+    for (const seam of ['estate-survey', 'prompt-builder']) {
+      const env = seamInvocationEnv(seam, undefined, { env: { LOG_DIR: e.logs, PROJECT_ROOT: e.lib, JIRA_CODELINE_ROOT: e.root } });
+      expect(env.EPAM_READ_ROOTS, `${seam} was granted read roots before the run had codelines`).toBeUndefined();
+    }
+  });
+
+  it('the estate root is never granted, before discovery or after', () => {
+    const e = estate();
+    const before = seamInvocationEnv('codeline-discovery', undefined, { env: { LOG_DIR: e.logs, PROJECT_ROOT: e.lib, JIRA_CODELINE_ROOT: e.root } });
+    discovered(e);
+    const after = seamInvocationEnv('codeline-discovery', undefined, { env: { LOG_DIR: e.logs, PROJECT_ROOT: e.lib, JIRA_CODELINE_ROOT: e.root } });
+    expect(roots(before)).not.toContain(e.root);
+    expect(roots(after)).not.toContain(e.root);
   });
 
   it('a write grant is not widened — its caller decides what it may touch', () => {

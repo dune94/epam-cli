@@ -47,27 +47,34 @@ export EPAM_AGENT_REPLY_LOG_DIR="$W/replies"
 mkdir -p "$LOG_DIR" "$EPAM_AGENT_REPLY_LOG_DIR"
 _facts_before=$(md5sum "$P/codeline-facts.json" 2>/dev/null | cut -c1-32)
 
-# From the (copied) install's directory, as the live run was.
-( cd "$W/install" && "$NODE" "$SCRIPT_DIR/lib/codeline-discovery.js" --issues "$W/issues.json" --root "$ROOT" --out "$W/discovery.json" ) \
-  > "$W/discovery.log" 2>&1
-echo "RESULT discovery_exit=$?"
-echo "RESULT install_untouched=$([ "$(md5sum "$P/codeline-facts.json" 2>/dev/null | cut -c1-32)" = "$_facts_before" ] && echo yes || echo NO)"
-[ -s "$W/discovery.json" ] || { echo "RESULT verdict=NO ANSWER (see $W/discovery.log)"; exit 0; }
-
-# Where every fact came from: a file inside the repository it describes, or not.
-"$NODE" -e '
+# From the (copied) install's directory, as the live run was. DISCOVERY_SAMPLES separate real agent calls: discovery is
+# a model, and one good answer proves nothing about the next (live 2026-10-09: 4, 3, then 5, 2, 5 codelines).
+SAMPLES="${DISCOVERY_SAMPLES:-3}"; SETS=(); WT_TOTAL=0; DENIED=0
+for i in $(seq 1 "$SAMPLES"); do
+  S="$W/sample-$i"; mkdir -p "$S/logs"
+  ( cd "$W/install" && LOG_DIR="$S/logs" ACTIVITY_FILE="$S/logs/agent-activity.jsonl" \
+      "$NODE" "$SCRIPT_DIR/lib/codeline-discovery.js" --issues "$W/issues.json" --root "$ROOT" --out "$S/discovery.json" ) \
+    > "$S/discovery.log" 2>&1
+  [ -s "$S/discovery.json" ] || { echo "RESULT sample $i: NO ANSWER (see $S/discovery.log)"; SETS+=("<none>"); continue; }
+  # A chosen codeline that is a git WORKTREE of another chosen codeline is that repository again, not a codeline:
+  # its .git is a file naming the other's .git/worktrees/ (read from disk, no name pattern).
+  read -r SET WT < <("$NODE" -e '
 const fs=require("fs"), path=require("path");
-const d=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-let facts=0, inside=0; const outside=[];
-for (const c of d.codelines||[]) for (const f of c.facts||[]) {
-  facts++;
-  const src=String(f.source||""); const file=src.split(/\s|:|,/)[0];
-  const abs=path.isAbsolute(file)?file:path.join(c.path||"",file);
-  const ok = !!file && fs.existsSync(abs) && path.resolve(abs).startsWith(path.resolve(c.path||"/nonexistent")+path.sep);
-  if (ok) inside++; else outside.push(`${c.name}: ${src.slice(0,140)} — ${String(f.text).slice(0,90)}`);
-}
-console.log(`RESULT codelines=${(d.codelines||[]).map(c=>c.name).join(",")}`);
-console.log(`RESULT facts=${facts} sourced_in_repo=${inside} sourced_elsewhere=${outside.length}`);
-for (const o of outside) console.log(`RESULT elsewhere: ${o}`);
-console.log(`RESULT verdict=${outside.length===0?"every fact is the repository speaking":"facts sourced outside the repository"}`);
-' "$W/discovery.json"
+const d=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); const cls=d.codelines||[];
+const gitDir=(p)=>{try{const g=path.join(p,".git");const st=fs.statSync(g);if(st.isDirectory())return path.resolve(g);
+  const m=fs.readFileSync(g,"utf8").match(/gitdir:\s*(.+)/);return m?path.resolve(p,m[1].trim()):"";}catch{return ""}};
+const mains=new Set(cls.map(c=>gitDir(c.path)).filter(g=>!/[\/]worktrees[\/]/.test(g)));
+const wt=cls.filter(c=>{const g=gitDir(c.path);const m=g.match(/^(.*)[\/]worktrees[\/][^\/]+$/);return m&&mains.has(m[1]);});
+console.log(cls.map(c=>c.name).sort().join(",")+" "+wt.length);' "$S/discovery.json")
+  N=0; for f in "$S"/logs/copilot-calls/*.jsonl; do [ -f "$f" ] && N=$((N + $(grep -c 'Permission denied' "$f"))); done
+  echo "RESULT sample $i: codelines=$SET worktree_chosen=$WT read_denied=$N"
+  SETS+=("$SET"); WT_TOTAL=$((WT_TOTAL + WT)); DENIED=$((DENIED + N))
+done
+echo "RESULT install_untouched=$([ "$(md5sum "$P/codeline-facts.json" 2>/dev/null | cut -c1-32)" = "$_facts_before" ] && echo yes || echo NO)"
+SAME=$(printf '%s\n' "${SETS[@]}" | sort -u | wc -l)
+echo "RESULT samples=$SAMPLES distinct_sets=$SAME worktree_chosen=$WT_TOTAL"
+if [ "$WT_TOTAL" -eq 0 ] && [ "$SAME" -eq 1 ] && [ "${SETS[0]}" != "<none>" ]; then
+  echo "RESULT verdict=GREEN — every sample chose ${SETS[0]}, no worktree"
+else
+  echo "RESULT verdict=RED"
+fi

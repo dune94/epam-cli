@@ -451,14 +451,18 @@ function runCodelinePaths(src) {
   const split = (v) => String(v || '').split(/[,:\n]/).map((x) => x.trim()).filter(Boolean);
   const lane = split(src.EPAM_CODELINE_PATHS);
   if (lane.length) return lane;
-  try {
-    if (hasDiscovery(src)) {
-      const disc = JSON.parse(require('fs').readFileSync(require('path').join(src.LOG_DIR, 'codeline-discovery.json'), 'utf8'));
-      const found = (disc.codelines || []).map((c) => c && c.path).filter(Boolean);
-      if (found.length) return [...new Set(found)];
-    }
-  } catch { /* an unreadable artefact leaves the single-codeline answer */ }
+  const found = discoveredPaths(src);
+  if (found.length) return found;
   return split(src.PROJECT_ROOT);
+}
+
+/** The codelines discovery answered with this run (LOG_DIR/codeline-discovery.json), or [] before it has answered. */
+function discoveredPaths(src) {
+  try {
+    if (!hasDiscovery(src)) return [];
+    const disc = JSON.parse(require('fs').readFileSync(require('path').join(src.LOG_DIR, 'codeline-discovery.json'), 'utf8'));
+    return [...new Set((disc.codelines || []).map((c) => c && c.path).filter(Boolean))];
+  } catch { return []; }
 }
 
 
@@ -546,13 +550,18 @@ function seamInvocationEnv(agent, agentsDir, opts) {
         // The channel and the list are separate switches: granting one without the other
         // produces an agent that quietly has nothing.
         env.AI_GATE_ALLOW_TOOLS = '1';
-        // A READ GRANT READS THE RUN'S CODELINES. A runner that confines an agent to its working
-        // directory (copilot: --add-dir) is told which folders the grant covers; before this, only the
-        // spec pass and the writer said, and every estate-wide agent of AMSD-2974 runs 3 and 4 saw
-        // one codeline of four. Before discovery has answered, discovery reads the estate it searches.
+        // A READ GRANT READS THE RUN'S CODELINES — the ones discovery ANSWERED with (its persisted artefact), never its
+        // own candidate list. A runner that confines an agent to its working directory (copilot: --add-dir) is told
+        // which folders the grant covers; before this every estate-wide agent of AMSD-2974 runs 3 and 4 saw one
+        // codeline of four. Before discovery has answered, nothing is added — exactly as before: discovery passes all 34
+        // candidates as EPAM_CODELINE_PATHS, and granting those let it open a worktree the pipeline made and choose it
+        // as a fifth codeline (run 5, 2026-10-09).
+        // Discovery itself reads the candidates it chooses between (its manifest — one entry per repository, a
+        // worktree folded into its repository: lib/codeline-discovery.js buildRepoManifest). Blind, it guessed from
+        // names and dropped cx-shared in one live sample of three (2026-10-09).
         if (READ_GRANTS.has(profile.toolGrant)) {
-          const readable = paths.length > 1 || hasDiscovery(src) ? paths
-            : [src.JIRA_CODELINE_ROOT || paths[0]].filter(Boolean);
+          const found = discoveredPaths(src);
+          const readable = found.length ? found : (src.EPAM_CODELINE_PATHS ? paths : []);
           if (readable.length) env.EPAM_READ_ROOTS = [...new Set(readable)].join('\n');
         }
       } else {

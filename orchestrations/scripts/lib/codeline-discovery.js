@@ -193,7 +193,23 @@ function buildRepoManifest(rootDir) {
     entries.push({ name, path: full });
   }
 
-  return entries;
+  // A WORKTREE IS NOT A REPOSITORY OF ITS OWN. A directory whose .git is a FILE naming another listed repository's
+  // .git/worktrees/ is that repository's checkout — listed beside it, discovery chose cx-shared-line-7.x (a worktree the
+  // pipeline made for release-line builds) as a fifth codeline (AMSD-2974 run 5, 2026-10-09). Identity read from git's
+  // own file, not a name: a worktree of a repository OUTSIDE the estate is still the only checkout here, and stays.
+  const gitDirOf = (p) => {
+    try {
+      const g = path.join(p, '.git');
+      if (fs.statSync(g).isDirectory()) return path.resolve(g);
+      const m = fs.readFileSync(g, 'utf8').match(/gitdir:\s*(.+)/);
+      return m ? path.resolve(p, m[1].trim()) : '';
+    } catch { return ''; }
+  };
+  const listed = new Set(entries.map((e) => gitDirOf(e.path)).filter(Boolean));
+  return entries.filter((e) => {
+    const m = gitDirOf(e.path).match(/^(.*)[\\/]worktrees[\\/][^\\/]+$/);
+    return !(m && listed.has(m[1]));
+  });
 }
 
 // ── The evidence handed to the discovery agent ─────────────────────────────

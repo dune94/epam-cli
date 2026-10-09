@@ -23,6 +23,13 @@ import { tmpdir } from 'node:os';
 const REPO_ROOT = join(__dirname, '../../../');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { buildProjectPrompts } = require(join(REPO_ROOT, 'orchestrations/scripts/lib/project-prompt-builder.js'));
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const contract = require(join(REPO_ROOT, 'orchestrations/scripts/lib/project-prompt-contract.js'));
+// The generator's reply in the builder's CURRENT contract — one --- SEGMENT n --- block per piece of the template around
+// its placeholders. This suite's stand-in returned the bare body after the contract moved to segments, and all 13
+// tests failed inside the builder ("no --- SEGMENT n --- blocks"), so the cache was guarded by nothing.
+const PROBE_BODY = 'Do the work for __X__.';
+const PROBE_REPLY = contract.formatSegments(contract.splitByPlaceholders(PROBE_BODY).segments);
 
 /** One template, so what is measured is caching and nothing else. */
 function project() {
@@ -33,7 +40,7 @@ function project() {
   mkdirSync(join(proj, 'prompts'), { recursive: true });
   writeFileSync(join(templates, 'probe.json'), JSON.stringify({
     id: 'probe', version: 1, description: 'a probe', layer: 'project', placeholders: ['__X__'],
-    body: 'Do the work for __X__.',
+    body: PROBE_BODY,
   }));
   writeFileSync(join(templates, 'project-prompt-generation.json'), JSON.stringify({
     id: 'project-prompt-generation', version: 1, description: 'the generator', layer: 'project',
@@ -58,7 +65,7 @@ async function runUnder(p: any, codeline: string | undefined, opts: any = {}) {
     registryFile: join(p.dir, 'registry.json'),
     projectConfigDir: p.proj,
     projectContext: 'ctx', codelineContext: 'cl', mintedRoles: '',
-    runText: async () => { generations += 1; return 'Do the work for __X__.'; },
+    runText: async () => { generations += 1; return PROBE_REPLY; },
     log: () => {},
     ...opts,
   });

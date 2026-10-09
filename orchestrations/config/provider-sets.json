@@ -78,6 +78,11 @@
         "env": {
           "COPILOT_OFFLINE": "true"
         }
+      },
+      "billing": {
+        "$why": "Copilot bills AI credits (June 2026: 1 credit = $0.01) and reports each session's billed usage in nano credits (session.shutdown totalNanoAiu). The runner converts that to dollars with these two facts; the price of a credit is the vendor's, declared here, never a number in code.",
+        "usdPerAiCredit": 0.01,
+        "nanoAiuPerCredit": 1000000000
       }
     },
     "codemie-web": {

@@ -90,7 +90,7 @@ describe('a call on a CLI that records usage only in its session', () => {
     const r = judge('ok-1.0.85.jsonl', 'empty.stderr', 'session-state-1.0.85');
     expect(r.status, r.stderr).toBe(0);
     expect(r.json).toMatchObject({ is_error: false, result: 'HELLO' });
-    expect(r.json.usage).toEqual({ input_tokens: 100, output_tokens: 7 });
+    expect(r.json.usage).toEqual({ input_tokens: 100, output_tokens: 7, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 });
   });
 
   it('without the session record the call still judges — usage is unknown (0), never borrowed', () => {

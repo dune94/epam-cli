@@ -55,9 +55,30 @@ function sessionUsage(events, sessionStateDir) {
     const metrics = Object.values((shutdown.data && shutdown.data.modelMetrics) || {});
     const sum = (k) => metrics.reduce((n, m) => n + (Number(m.usage && m.usage[k]) || 0), 0);
     return { input_tokens: sum('inputTokens'), output_tokens: sum('outputTokens'),
+      cache_read_input_tokens: sum('cacheReadTokens'), cache_creation_input_tokens: sum('cacheWriteTokens'),
+      // WHAT IT COST: the session's billed usage in nano AI credits (live AMSD-2974 run 2, 2026-10-09: 116 calls
+      // recorded $0 while this sat in every session's record). null when the record does not carry it.
+      nano_aiu: Number.isFinite(Number(shutdown.data.totalNanoAiu)) ? Number(shutdown.data.totalNanoAiu) : null,
       premium_requests: Number(shutdown.data.totalPremiumRequests) || 0 };
   }
   return null;
+}
+
+/** The copilot set's declared credit price (config/provider-sets.json sets.copilot.billing). */
+function billing() {
+  try {
+    const sets = JSON.parse(fs.readFileSync(require('path').join(__dirname, '..', '..', '..', 'config', 'provider-sets.json'), 'utf8'));
+    const b = (sets.sets && sets.sets.copilot && sets.sets.copilot.billing) || {};
+    return { usd: Number(b.usdPerAiCredit), nano: Number(b.nanoAiuPerCredit) };
+  } catch { return { usd: NaN, nano: NaN }; }
+}
+
+/** The session's billed cost in dollars; 0 when it is not known. */
+function billedUsd(fromSession) {
+  if (!fromSession || fromSession.nano_aiu == null) return 0;
+  const { usd, nano } = billing();
+  if (!(usd > 0) || !(nano > 0)) return 0;
+  return (fromSession.nano_aiu / nano) * usd;
 }
 
 function judgeCall(jsonlText, stderrText, sessionStateDir) {
@@ -100,9 +121,12 @@ function judgeCall(jsonlText, stderrText, sessionStateDir) {
     result: error ? '' : answer,
     stop_reason: error ? 'error' : 'end_turn',
     usage: fromSession
-      ? { input_tokens: fromSession.input_tokens, output_tokens: Math.max(outputTokens, fromSession.output_tokens) }
+      ? { input_tokens: fromSession.input_tokens, output_tokens: Math.max(outputTokens, fromSession.output_tokens),
+          cache_read_input_tokens: fromSession.cache_read_input_tokens, cache_creation_input_tokens: fromSession.cache_creation_input_tokens }
       : { input_tokens: 0, output_tokens: outputTokens },
-    total_cost_usd: 0,
+    // Dollars from the billed credits, at the copilot set's declared rate; no record = unknown, never a confident $0.
+    total_cost_usd: billedUsd(fromSession),
+    ...(billedUsd(fromSession) > 0 || (fromSession && fromSession.nano_aiu === 0) ? { cost_is_estimate: false } : {}),
     premium_requests: premium,
     num_turns: turns,
     ...(error ? { error } : {}),

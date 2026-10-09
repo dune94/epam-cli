@@ -135,3 +135,39 @@ _run_release_lines lib ${JSON.stringify(lanePrd)} /w/lib ${JSON.stringify(laneLo
     expect(rec[0].spec).not.toBe('0');
   });
 });
+
+// Live AMSD-2974 run 2, resuming past pause 2 (2026-10-09): the lane's checkpoint (and the copy reviewed at the pause)
+// held this run's spec, but the lane's working PRD had been rewritten without it; the resume judged the working copy,
+// found "a pending story with no spec" and ran the Spec Phase again — a completed step repeated, and a new spec the
+// operator never reviewed. A working PRD that LOST the spec its checkpoint holds is not an edit to keep: the approved
+// PRD is restored from the checkpoint first (lib/run-checkpoint.sh lane_restore_approved_prd).
+describe('a lane whose working PRD lost the spec its checkpoint holds resumes from the checkpoint', () => {
+  function restore(ckPrd: object, workPrd: object) {
+    const d = tmp();
+    const ck = join(d, 'ck'); mkdirSync(ck);
+    writeFileSync(join(ck, 'prd.json'), JSON.stringify(ckPrd));
+    const work = join(d, 'work.json'); writeFileSync(work, JSON.stringify(workPrd));
+    const r = spawnSync('bash', ['-c', `warning(){ echo "WARN $*"; }; log(){ echo "LOG $*"; }; info(){ :; }; error(){ :; }
+NODE_BIN=${JSON.stringify(process.execPath)}; SCRIPT_DIR=${JSON.stringify(SCRIPTS)}
+. ${JSON.stringify(join(SCRIPTS, 'lib/run-checkpoint.sh'))}
+lane_restore_approved_prd ${JSON.stringify(ck)} ${JSON.stringify(work)}; echo "RC=$?"`], { encoding: 'utf8' });
+    return { out: r.stdout + r.stderr, work: JSON.parse(readFileSync(work, 'utf8')) };
+  }
+  const SPECIFIED = { implementationOrder: { core: ['S-1'] }, stories: [{ ...specified({ planHash: planHash(PLAN) }), overallPlan: PLAN }] };
+  const LOST = { implementationOrder: { core: ['S-1'] }, stories: [{ id: 'S-1', phase: 'core', status: 'pending', overallPlan: PLAN }] };
+  it('the working PRD lost the spec: restored from the checkpoint, and says so', () => {
+    const r = restore(SPECIFIED, LOST);
+    expect(r.work.stories[0].specification, r.out).toBeTruthy();
+    expect(r.out).toMatch(/restored/);
+  });
+  it('the working PRD carries the spec (an operator edit at the pause included): left as it is', () => {
+    const edited = JSON.parse(JSON.stringify(SPECIFIED)); edited.stories[0].title = 'edited at the pause';
+    const r = restore(SPECIFIED, edited);
+    expect(r.work.stories[0].title).toBe('edited at the pause');
+  });
+  it('the checkpoint itself has no spec: nothing to restore — the lane is specified again (2026-10-08 still holds)', () => {
+    const r = restore(LOST, LOST);
+    expect(r.work.stories[0].specification).toBeUndefined();
+    expect(r.out).not.toMatch(/restored/);
+  });
+});

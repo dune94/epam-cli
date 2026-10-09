@@ -480,6 +480,22 @@ _spec_inputs_digest() {
     "${NODE_BIN:-node}" "$_o/scripts/lib/handlers/spec-inputs-digest.js" "$_o" 2>/dev/null || true
 }
 
+# lane_restore_approved_prd <lane_checkpoint_dir> <lane_work_prd> — a working PRD that LOST the spec its checkpoint holds
+# is not an edit to keep: when the work PRD has a pending story without a spec and the checkpoint's PRD specifies every
+# pending story, the approved PRD is restored from the checkpoint. Live AMSD-2974 run 2 (2026-10-09): resumed past pause
+# 2, the working copy had been rewritten without the spec, the resume judged it and ran the Spec Phase again. A
+# checkpoint with no spec restores nothing (2026-10-08: that lane is specified again).
+lane_restore_approved_prd() {
+    local _ck="$1" _work="$2"
+    [ -f "$_ck/prd.json" ] || return 0
+    local _lack="$(dirname "${BASH_SOURCE[0]}")/handlers/stories-lacking-spec.js"
+    [ -f "$_work" ] && [ -z "$("${NODE_BIN:-node}" "$_lack" "$_work" 2>/dev/null)" ] && return 0
+    [ -n "$("${NODE_BIN:-node}" "$_lack" "$_ck/prd.json" 2>/dev/null)" ] && return 0
+    cp "$_ck/prd.json" "$_work" || return 1
+    log "[orch]   the lane's working PRD had lost the spec its checkpoint holds — restored the PRD approved at the pause"
+    return 0
+}
+
 # lane_spec_is_current <lane_checkpoint_dir> <lane_work_prd>
 # 0 — resume the lane from its checkpoint: its story is completed, or its spec was built from today's
 #     inputs. 1 — specify it again: its checkpoint recorded no spec-inputs digest, or a different one

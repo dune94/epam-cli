@@ -1024,6 +1024,8 @@ _run_codeline_loop() {
     if [ -n "${EPAM_RESUME_FROM_STAGE:-}" ] && [ "$(_stage_rank "$EPAM_RESUME_FROM_STAGE")" -lt "$_want" ]; then
       return 1
     fi
+    # The approved PRD first, when the working copy lost its spec (lib/run-checkpoint.sh lane_restore_approved_prd).
+    lane_restore_approved_prd "$_rck" "$_rout"
     # A SPEC BUILT FROM INPUTS THAT NO LONGER HOLD IS SPECIFIED AGAIN (lib/run-checkpoint.sh).
     if ! lane_spec_is_current "$_rck" "$_rout"; then
       log "[orch] Codeline '${_rcl}': not resuming its pre-writer checkpoint — the lane is specified again"

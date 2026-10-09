@@ -129,7 +129,11 @@ ticket, the project and the stack, and reports what is missing, without making a
 <code>JIRA_PROJECT_KEY</code>. The wrapper refuses to start with a plain list of anything missing,
 then hands off to the tested launcher. It reimplements nothing.</p>
 <p>To run on a different stack for one run:</p>
-<pre><code>EPAM_PROVIDER_SET=openrouter ./orchestrations/scripts/pipeline --jira AMSD-1234</code></pre>
+<pre><code>EPAM_PROVIDER_SET=copilot ./orchestrations/scripts/pipeline --jira AMSD-1234</code></pre>
+<p>The stacks are the ones <code>orchestrations/config/provider-sets.json</code> declares: <code>claude</code> (default),
+<code>openrouter</code>, <code>codemie</code>, <code>copilot</code>, <code>codemie-web</code>, <code>mockserver</code>.
+The wrapper refuses to start when that stack's runner is not on <code>PATH</code>, or when the project has no
+overlay for it (<code>config.&lt;stack&gt;.env</code> in the project's config folder).</p>
 
 <h2 id="watch">3. Where to watch it — dashboards, Langfuse, Grafana</h2>
 <p>Defaults below. If another install already holds a port, this install steps every port by +10

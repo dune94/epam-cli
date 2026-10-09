@@ -27,7 +27,7 @@ check that enforces it.
 | `git` | "the pipeline works on git codelines" | `install.sh` → `need git` |
 | `jq` | "the pipeline parses JSON with it throughout" | `install.sh` → `need jq` |
 | `node` | "the engine and the CLI are node" | `install.sh` → `need node` |
-| `python3` | 88 handlers under `orchestrations/scripts/lib/handlers` are executed with it. All imports are stdlib plus one local module — **there is no venv and no `pip install` step** | `install.sh`, the `python3` block |
+| `python3` | 90 handlers under `orchestrations/scripts/lib/handlers` are executed with it. All imports are stdlib plus one local module — the handlers need no venv and no `pip install`. One stack adds its own environment: on `codemie-web` the installer creates `.codemie-web/venv` (`python3 -m venv`) and installs `codemie-plugins==0.2.0` into it; `--check` verifies it is there | `install.sh`, the `python3` block and the stack's `pythonEnv` (`provider-sets.json`) |
 | The active stack's **runner CLI** on `PATH` | "the commonest real failure" — the run shells out to it | `install.sh`, resolved from `provider-sets.json` → the stack's `settingsFile` → its first `runners` key |
 
 The runner is *not* named in any script — it is read from config. As declared today
@@ -39,6 +39,7 @@ The runner is *not* named in any script — it is read from config. As declared 
 | `openrouter` | `claude` | `OPENROUTER_API_KEY`, `MINIMAX_API_KEY` |
 | `codemie` | `codemie-claude` | none |
 | `copilot` | `copilot` (GitHub Copilot CLI) | `COPILOT_GITHUB_TOKEN` |
+| `codemie-web` | `codemie` (CodeMie CLI) | none |
 | `mockserver` | `claude` | none |
 
 Run `./orchestrations-installer/install.sh --check` to have the machine answer this for itself
@@ -108,9 +109,9 @@ Without `--dest`, `install.sh` only ever configures the tree it is already sitti
 ### 2b. Into a new folder, from a tagged ref (what everyone else uses)
 
 ```bash
-./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v1.51
+./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.77
 # or, with no checkout at all — install.sh self-clones:
-npx amsd-pipeline --dest ~/amsd-pipeline --ref v1.51
+npx amsd-pipeline --dest ~/amsd-pipeline --ref v2.0.77
 ```
 
 `--dest` is what makes the installer useful to anyone who is not this checkout: it packages the
@@ -138,7 +139,7 @@ Read from `install.sh`'s own argument parser — this is the complete list:
 | Flag | Effect |
 |---|---|
 | `--dest <path>` | Package the ref into `<path>` and install **that** tree. Creates it if absent. |
-| `--ref <tag\|sha\|branch>` | Which commit to package. Default `HEAD`. |
+| `--ref <tag\|sha\|branch>` | Which commit to package. Default `HEAD`. A ref that is not in the checkout is fetched first (`git fetch --tags`), for at most `EPAM_INSTALL_FETCH_TIMEOUT` seconds (default 120). |
 | `--repo <url>` | Clone source when `install.sh` was obtained alone (npx, raw download). Default `https://github.com/dune94/amsd-pipeline.git`, also settable as `EPAM_REPO`. |
 | `--stack <name>` | Which provider set to install for. Default: `provider-sets.json`'s `defaultSet`, or `EPAM_PROVIDER_SET`. An unknown name errors and lists the declared stacks. |
 | `--no-docker` | Skip the observability stack and the launch dashboard entirely. |
@@ -178,9 +179,9 @@ Two things to know about that file:
 So the first install of a stack with required credentials is a two-step operation:
 
 ```bash
-./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v1.51   # creates .env, then fails
+./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.77   # creates .env, then fails
 $EDITOR ~/amsd-pipeline/.env                                              # fill it in
-./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v1.51  # re-run — now it completes
+./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.77  # re-run — now it completes
 ```
 
 On the default `claude` stack, which declares no required credentials, an install can complete with

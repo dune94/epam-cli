@@ -104,7 +104,7 @@ and read the line rather than take this page's word for it.</p>
 <tr><td><code>git</code></td><td>"the pipeline works on git codelines"</td><td><code>install.sh</code> → <code>need git</code></td></tr>
 <tr><td><code>jq</code></td><td>"the pipeline parses JSON with it throughout"</td><td><code>install.sh</code> → <code>need jq</code></td></tr>
 <tr><td><code>node</code></td><td>"the engine and the CLI are node"</td><td><code>install.sh</code> → <code>need node</code></td></tr>
-<tr><td><code>python3</code></td><td>88 handlers under <code>orchestrations/scripts/lib/handlers</code> are executed with it. Every import is stdlib plus one local module — <strong>no venv, no <code>pip install</code>, no <code>requirements.txt</code></strong>: the interpreter is the whole requirement</td><td><code>install.sh</code>, the <code>python3</code> block</td></tr>
+<tr><td><code>python3</code></td><td>90 handlers under <code>orchestrations/scripts/lib/handlers</code> are executed with it. Every import is stdlib plus one local module — the handlers need no venv, no <code>pip install</code>, no <code>requirements.txt</code>. One stack adds its own environment: on <code>codemie-web</code> the installer creates <code>.codemie-web/venv</code> (<code>python3 -m venv</code>) and installs <code>codemie-plugins==0.2.0</code> into it; <code>--check</code> verifies it is there</td><td><code>install.sh</code>, the <code>python3</code> block</td></tr>
 <tr><td>The active stack's <strong>runner CLI</strong> on <code>PATH</code></td><td>"the commonest real failure" — the run shells out to it</td><td><code>install.sh</code>, resolved from <code>provider-sets.json</code> → the stack's <code>settingsFile</code> → its first <code>runners</code> key</td></tr>
 </table>
 
@@ -115,10 +115,11 @@ and read the line rather than take this page's word for it.</p>
 <tr><td><code>openrouter</code></td><td><code>claude</code></td><td><code>OPENROUTER_API_KEY</code>, <code>MINIMAX_API_KEY</code></td></tr>
 <tr><td><code>codemie</code></td><td><code>codemie-claude</code></td><td>none</td></tr>
 <tr><td><code>copilot</code></td><td><code>copilot</code> (GitHub Copilot CLI)</td><td><code>COPILOT_GITHUB_TOKEN</code></td></tr>
+<tr><td><code>codemie-web</code></td><td><code>codemie</code> (CodeMie CLI)</td><td>none</td></tr>
 <tr><td><code>mockserver</code></td><td><code>claude</code></td><td>none</td></tr>
 </table>
-<p>Neither <code>claude</code> nor <code>codemie-claude</code> is installed by this repo —
-<code>codemie-claude</code> is an internal EPAM tool obtained through your organization's own
+<p>None of <code>claude</code>, <code>codemie-claude</code> or <code>codemie</code> is installed by this repo —
+<code>codemie-claude</code> and <code>codemie</code> are internal EPAM tools obtained through your organization's own
 distribution. Rather than trusting the table above, have the machine answer for itself:
 <code>./orchestrations-installer/install.sh --check</code>.</p>
 
@@ -211,7 +212,7 @@ changed since it started</code>). Nothing else restarts daemons: not by hand, no
 ./orchestrations-installer/install.sh --stack codemie     # install for a specific stack
 ./orchestrations-installer/install.sh --no-docker         # skip dashboards entirely
 ./orchestrations-installer/install.sh --check             # verify an existing install, change nothing
-./orchestrations-installer/install.sh --dest ~/somewhere --ref v1.7   # package that ref into a NEW tree, then install it</code></pre>
+./orchestrations-installer/install.sh --dest ~/somewhere --ref v2.0.77   # package that ref into a NEW tree, then install it</code></pre>
 
 <p><code>npx amsd-pipeline</code> is the very same script — <code>bin/amsd-pipeline.js</code> does
 nothing but <code>spawnSync('bash', [install.sh, ...argv])</code>, so every flag below works
@@ -220,7 +221,7 @@ parser, this is the complete list:</p>
 <table>
 <tr><th>Flag</th><th>Effect</th></tr>
 <tr><td><code>--dest &lt;path&gt;</code></td><td>Package the ref into <code>&lt;path&gt;</code> and install <strong>that</strong> tree; creates it if absent. Without it, <code>install.sh</code> only ever configures the tree it is already sitting inside.</td></tr>
-<tr><td><code>--ref &lt;tag|sha|branch&gt;</code></td><td>Which commit to package. Default <code>HEAD</code>. Tags are fetched first, so a ref a colleague just pushed still resolves.</td></tr>
+<tr><td><code>--ref &lt;tag|sha|branch&gt;</code></td><td>Which commit to package. Default <code>HEAD</code>. A ref that is not in the checkout is fetched first (<code>git fetch --tags</code>), for at most <code>EPAM_INSTALL_FETCH_TIMEOUT</code> seconds (default 120), so a ref a colleague just pushed still resolves.</td></tr>
 <tr><td><code>--repo &lt;url&gt;</code></td><td>Clone source when <code>install.sh</code> was obtained alone (npx, a raw download). Default <code>https://github.com/dune94/amsd-pipeline.git</code>; also settable as <code>EPAM_REPO</code>.</td></tr>
 <tr><td><code>--stack &lt;name&gt;</code></td><td>Which provider set to install for. Default: <code>provider-sets.json</code>'s <code>defaultSet</code>, or <code>EPAM_PROVIDER_SET</code>. An unknown name errors and lists the declared stacks — never a silent fall-through onto another stack.</td></tr>
 <tr><td><code>--no-docker</code></td><td>Skip the observability stack and the launch dashboard entirely.</td></tr>
@@ -247,9 +248,9 @@ running</code> — and then <strong>checks the values, not just the file</strong
 stack declares a required credential that is still empty, the install FAILS with
 <code>✗ the '&lt;stack&gt;' stack needs these, still empty in .env: OPENROUTER_API_KEY ...</code>.
 So:</p>
-<pre><code>./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v1.51   # creates .env, then fails
+<pre><code>./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.77   # creates .env, then fails
 $EDITOR ~/amsd-pipeline/.env                                              # fill it in
-./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v1.51  # re-run — now it completes</code></pre>
+./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.77  # re-run — now it completes</code></pre>
 <p>On the default <code>claude</code> stack, which declares no required credentials, an install can
 complete with an empty <code>.env</code> — the file is still created, and still needs the Jira
 values before a brownfield run will start.</p>

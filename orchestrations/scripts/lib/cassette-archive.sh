@@ -40,9 +40,15 @@ export_run_cassette() {
     fi
 
     local _dest="$_cass_dir/${_project}-${_run_id}"
+    # A RUN WITH PAUSES EXPORTS AT EVERY LEG. The first leg (pause 1) wrote this directory and every
+    # later leg kept it, so the run's cassette held the Codeline and Agents Phases only (AMSD-2974
+    # run 2, 2026-10-09: 11 traces). The session is the whole run, so a later export holds every
+    # earlier trace: it replaces the cassette only when it holds MORE, and the earlier one is kept
+    # beside it, never deleted.
+    local _prior_count=-1
     if [ -d "$_dest" ]; then
-        info "[cassette] $_dest already exists — keeping the original, exporting nothing"
-        return 0
+        _prior_count=$(jq -r '.traceCount // 0' "$_dest/manifest.json" 2>/dev/null || echo 0)
+        [[ "$_prior_count" =~ ^[0-9]+$ ]] || _prior_count=0
     fi
 
     local _exporter="${EPAM_CASSETTE_EXPORTER:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../cassette-export.js}"
@@ -72,6 +78,17 @@ export_run_cassette() {
     fi
 
     mkdir -p "$_cass_dir" 2>/dev/null
+    if [ "$_prior_count" -ge 0 ]; then
+        local _new_count; _new_count=$(jq -r '.traceCount // 0' "$_tmp/c/manifest.json" 2>/dev/null || echo 0)
+        [[ "$_new_count" =~ ^[0-9]+$ ]] || _new_count=0
+        if [ "$_new_count" -le "$_prior_count" ]; then
+            info "[cassette] $_dest already exists with ${_prior_count} trace(s) and this export holds ${_new_count} — keeping the original"
+            rm -rf "$_tmp"; return 0
+        fi
+        local _kept="${_dest}.superseded-$(date -u +%Y%m%dT%H%M%SZ)"
+        mv "$_dest" "$_kept" 2>/dev/null || { warning "[cassette] could not set aside $_dest — keeping it, run not re-archived"; rm -rf "$_tmp"; return 0; }
+        info "[cassette] the earlier export (${_prior_count} trace(s)) is kept at $_kept"
+    fi
     if mv "$_tmp/c" "$_dest" 2>/dev/null; then
         success "[cassette] run '$_run_id' archived to $_dest — $(printf '%s' "$_out" | tr '\n' ' ' | tail -c 120)"
     else

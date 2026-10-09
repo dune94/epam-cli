@@ -19,7 +19,7 @@
  */
 import { describe, it, expect, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync, readFileSync, chmodSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync, readFileSync, chmodSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { engineSource } from '../../lib/engine-source';
@@ -89,6 +89,19 @@ describe('a completed run leaves a cassette in the durable directory', () => {
     expect(JSON.parse(engineSource(join(existing, 'manifest.json'))).session,
       'the existing cassette was overwritten').toBe('ORIGINAL');
     expect(r.out, 'it overwrote silently — say so instead').toMatch(/already|exists|keeping/i);
+  });
+
+  it('a later leg of the same run that holds MORE traces replaces it — the earlier export is kept beside it', () => {
+    // AMSD-2974 run 2: the pause-1 export (11 traces) was the run's cassette for good.
+    const d = tmp('cas-'); const cass = join(d, 'cassettes');
+    const existing = join(cass, 'metrolinx-20261009T083016Z');
+    mkdirSync(existing, { recursive: true });
+    writeFileSync(join(existing, 'manifest.json'), '{"session":"PAUSE-1","traceCount":1}');
+    const r = run({ session: '20261009T083016Z', project: 'metrolinx', exporter: stubExporter(d, true), cassettes: cass });
+    expect(JSON.parse(engineSource(join(existing, 'manifest.json'))).traceCount, r.out).toBe(3);
+    const kept = readdirSync(cass).filter((n) => n.startsWith('metrolinx-20261009T083016Z.superseded-'));
+    expect(kept.length, 'the earlier export was deleted').toBe(1);
+    expect(JSON.parse(engineSource(join(cass, kept[0], 'manifest.json'))).session).toBe('PAUSE-1');
   });
 
   it('says LOUDLY why it could not, using the REAL exporter against a Langfuse that is down', () => {

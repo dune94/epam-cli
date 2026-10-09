@@ -593,6 +593,38 @@ _run_work_dir() {
     mktemp -d "${TMPDIR:-/tmp}/orch-run-XXXXXX"
 }
 
+# archive_prior_lane_state — ONCE PER RUN, before any lane works: every file in the lane log folders (logs/lanes/<lane>,
+# lines/<line>) older than this run's own start moves to logs/archive/lanes-before-<run>/ — never deleted. The folders
+# survive every launch (the fresh-launch reset clears only logs/), so a run inherited another run's retry counters,
+# ladder positions, rejection records, self-heal ledger and review/gate history (AMSD-2974 run 2 at pause 2,
+# 2026-10-09: upexpress at attempt 10 of 12, 17 old self-heal events). What this run wrote is newer and stays.
+archive_prior_lane_state() {
+    local _lanes="${LOG_DIR:-}/lanes"
+    [ -d "$_lanes" ] || return 0
+    local _run="${EPAM_RESUME_RUN:-${ORCH_RUN_ID:-}}"
+    [ -n "$_run" ] || return 0
+    local _marker=""
+    if [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ]; then
+        _marker="${EPAM_PROJECT_CONFIG_DIR}/runs/${_run}/lane-state-archived"
+        [ -f "$_marker" ] && return 0
+    fi
+    # The run's start is in its id (YYYYMMDDTHHMMSSZ, UTC).
+    local _start
+    _start=$(printf '%s' "$_run" | sed -nE 's/^([0-9]{4})([0-9]{2})([0-9]{2})T([0-9]{2})([0-9]{2})([0-9]{2})Z?$/\1-\2-\3 \4:\5:\6 UTC/p')
+    [ -n "$_start" ] || return 0
+    local _ref; _ref=$(mktemp "${TMPDIR:-/tmp}/run-start-XXXXXX") || return 0
+    touch -d "$_start" "$_ref" 2>/dev/null || { rm -f "$_ref"; return 0; }
+    local _dest="${LOG_DIR}/archive/lanes-before-${_run}" _n=0 _f _rel
+    while IFS= read -r -d '' _f; do
+        _rel="${_f#"$_lanes"/}"
+        mkdir -p "$_dest/$(dirname "$_rel")" 2>/dev/null && mv "$_f" "$_dest/$_rel" 2>/dev/null && _n=$((_n + 1))
+    done < <(find "$_lanes" -type f ! -newer "$_ref" -print0 2>/dev/null)
+    rm -f "$_ref"
+    [ "$_n" -gt 0 ] && log "[orch] archived ${_n} file(s) of earlier runs' lane state → ${_dest} (this run starts with none of it)"
+    [ -n "$_marker" ] && { mkdir -p "${_marker%/*}" 2>/dev/null; date -u +%Y-%m-%dT%H:%M:%SZ > "$_marker"; }
+    return 0
+}
+
 # base_fresh_story_branches <prd> — ONCE PER RUN, before anything reads them, every codeline a brownfield story may be
 # worked in (its own and every one discovery grounded, lib/plan-scope.js) is put on the story's branch, freshly based on
 # the codeline's baseline. ensure_story_branch pins any commit the reset would orphan under epam-rescue/*. Once per RUN,
@@ -667,6 +699,7 @@ _run_codeline_loop() {
   # (2026-10-09). A codeline a killed line pass left on the line's branch is put back. Then the story without a plan
   # gets one (lib/handlers/write-missing-plans.js), shown every codeline discovery grounded; the codelines the plan
   # names join the story and the run's outputDirs (lib/plan-scope.js) — so the lane list below is the plan's.
+  archive_prior_lane_state
   base_fresh_story_branches "$_prd_path"
   _return_codelines_from_release_lines "$_prd_path"
   "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/write-missing-plans.js" "$_prd_path" || true

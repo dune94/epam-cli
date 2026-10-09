@@ -220,6 +220,18 @@ _run_agent_mint() {
       # by the mint step (every installed prompt kept, only the missing ones built).
       log "[mint] deferred decision settled: resuming ${EPAM_RESUME_RUN} — no completion marker (an earlier prompt build did not finish); keeping this run's roster, agents and prompts, completing the missing prompts"
       EPAM_SKIP_AGENT_MINT=1
+    elif [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
+       && "$NODE_BIN" "$SCRIPT_DIR/lib/project-roster.js" --kept-for "$1" "$EPAM_PROJECT_CONFIG_DIR" 2>/dev/null; then
+      # THE PREVIOUS RUN'S AGENTS ARE THIS RUN'S. A run that died before its prompt set completed wrote no completion
+      # marker, and every fresh launch over the same codelines threw its reviewed roster away and paid to mint it again
+      # (AMSD-2974 run 6 -> 7, 2026-10-09). The roster is kept when it is current for today's seam bases and the
+      # investigators it minted cover exactly this run's codelines (project-roster.js keptRosterFor). The installed
+      # prompt copies are cleared so the builder serves the reviewed cache — a kept copy would be re-reviewed, paid —
+      # and only prompts the cache does not hold are generated.
+      log "[mint] deferred decision settled: the previous run's agents are current and were minted for exactly this run's codelines — kept, nothing minted; prompts come from the reviewed cache"
+      rm -rf "$EPAM_PROJECT_CONFIG_DIR/prompts" 2>/dev/null || true
+      mkdir -p "$EPAM_PROJECT_CONFIG_DIR/prompts" 2>/dev/null || true
+      EPAM_SKIP_AGENT_MINT=1
     else
       log "[mint] deferred decision settled: this run is not ${_detected_cl:-<unresolved>}'s completed codeline — clearing the previous run's agents and prompts"
       codeline_minted_clear

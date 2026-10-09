@@ -1030,7 +1030,55 @@ function classifyReviewVerdict(verdict) {
       + 'approved | sound | changes_requested | defects_found | review_failed | nothing_to_review',
   };
 }
+/**
+ * THE AGENTS THE MINT MADE, read back from what it wrote: the names in the project's registries (project-roles.json:
+ * implementers; project-investigators.json: investigators) with the kind the roster records for each. Nothing is
+ * listed here — the registries name them, the roster types them. [] when there are none.
+ */
+function mintedFromRegistries(projectConfigDir) {
+  const read = (f) => { try { return JSON.parse(fs.readFileSync(path.join(projectConfigDir, f), 'utf8')); } catch { return null; } };
+  const roster = read('roster.json');
+  const roles = read('project-roles.json');
+  const inv = read('project-investigators.json');
+  const names = [...new Set([
+    ...((roles && Array.isArray(roles.roles)) ? roles.roles : []),
+    ...((inv && Array.isArray(inv.investigators)) ? inv.investigators : []),
+  ])];
+  const agents = (roster && roster.agents) || {};
+  return names.filter((n) => agents[n] && agents[n].kind)
+    .map((n) => ({ name: n, kind: agents[n].kind, rationale: agents[n].rationale || '' }));
+}
+
+/**
+ * IS THE ROSTER ON DISK THIS RUN'S? A run that dies before its prompt set completes writes no completion marker, and
+ * the next fresh launch over the SAME codelines threw away its reviewed agents and paid to mint them again (AMSD-2974
+ * run 6 -> 7, 2026-10-09). The roster is this run's when it derives from today's seam bases (rosterIsCurrent) AND the
+ * investigators it minted cover exactly the codelines this run's PRD names — no more, no fewer. Anything else is
+ * another context's roster, and the clean slate applies.
+ */
+function keptRosterFor(projectConfigDir, prdFile, registryFile) {
+  const rosterFile = projectRosterPath(projectConfigDir);
+  if (!rosterFile || !fs.existsSync(rosterFile)) return { ok: false, reason: 'no roster on disk' };
+  const cur = rosterIsCurrent(rosterFile, registryFile);
+  if (!cur.ok) return { ok: false, reason: `not current: ${cur.reason}` };
+  let runCls = [];
+  try {
+    const prd = JSON.parse(fs.readFileSync(prdFile, 'utf8'));
+    runCls = ((prd.project && prd.project.outputDirs) || []).map((o) => o && o.codeline).filter(Boolean);
+  } catch { return { ok: false, reason: 'the run\'s PRD is unreadable' }; }
+  let byCl = {};
+  try { byCl = JSON.parse(fs.readFileSync(path.join(projectConfigDir, 'project-investigators.json'), 'utf8')).byCodeline || {}; }
+  catch { return { ok: false, reason: 'no investigators recorded by codeline' }; }
+  const a = [...new Set(runCls)].sort(); const b = Object.keys(byCl).sort();
+  if (!a.length) return { ok: false, reason: 'the run names no codeline' };
+  if (a.join('\n') !== b.join('\n')) return { ok: false, reason: `minted for ${b.join(',') || 'none'}, this run is ${a.join(',')}` };
+  if (!mintedFromRegistries(projectConfigDir).length) return { ok: false, reason: 'no minted agent is recorded' };
+  return { ok: true, reason: `current, minted for exactly ${a.join(',')}` };
+}
+
 module.exports = {
+  mintedFromRegistries,
+  keptRosterFor,
   seamBaseForRun,
   classifyReviewVerdict,
   withMintedAgents,
@@ -1058,5 +1106,13 @@ if (require.main === module && process.argv[2] === '--is-current') {
   const { registryPath } = require('./seam-invocation.js');
   const v = rosterIsCurrent(process.argv[3], registryPath());
   if (!v.ok) process.stderr.write(`${v.reason}\n`);
+  process.exit(v.ok ? 0 : 1);
+}
+
+// node project-roster.js --kept-for <prd.json> <projectConfigDir>   exit 0 when the roster on disk is this run's
+if (require.main === module && process.argv[2] === '--kept-for') {
+  const { registryPath } = require('./seam-invocation.js');
+  const v = keptRosterFor(process.argv[4], process.argv[3], registryPath());
+  process.stderr.write(`${v.reason}\n`);
   process.exit(v.ok ? 0 : 1);
 }

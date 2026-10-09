@@ -19,11 +19,15 @@ P="$INSTALL/orchestrations/projects/metrolinx"; L="$INSTALL/orchestrations/logs"
 [ -f "$L/codeline-discovery.json" ] || { echo "RESULT setup=no discovery artefact at $L"; exit 0; }
 
 C="$W/project"; mkdir -p "$C"
-for f in config.env config.copilot.env llm-settings.json manifest.json plugins.json prompts prd.json; do [ -e "$P/$f" ] && cp -a "$P/$f" "$C/"; done
+for f in llm-settings.json manifest.json plugins.json prompts prd.json; do [ -e "$P/$f" ] && cp -a "$P/$f" "$C/"; done
+for f in "$P"/config*.env; do [ -e "$f" ] && cp -a "$f" "$C/"; done
 # Laid out as the install is: spec-mode-runner finds the seam registry beside the log folder (<logs>/../agents).
 mkdir -p "$W/orch/logs"; cp -a "$REPO_ROOT/orchestrations/agents" "$W/orch/agents"; cp "$L/codeline-discovery.json" "$W/orch/logs/"
-export EPAM_PROVIDER_SET=copilot
-export COPILOT_GITHUB_TOKEN="$("$NODE" -e 'const s=require("fs").readFileSync(process.env.HOME+"/.copilot/config.json","utf8").split("\n").filter(l=>!/^\s*\/\//.test(l)).join("\n");process.stdout.write(JSON.parse(s).copilotTokens["https://github.com:dune94"]||"")')"
+# The provider set under test (default copilot); the Copilot token is read only for the copilot set. On the claude set
+# the subscription's OAuth session pays, so any API key is unset rather than allowed to outrank it.
+export EPAM_PROVIDER_SET="${SURVEY_SET:-copilot}"
+[ "$EPAM_PROVIDER_SET" = "claude" ] && unset ANTHROPIC_API_KEY CLAUDE_API_KEY EPAM_API_KEY_ANTHROPIC
+[ "$EPAM_PROVIDER_SET" = "copilot" ] && export COPILOT_GITHUB_TOKEN="$("$NODE" -e 'const s=require("fs").readFileSync(process.env.HOME+"/.copilot/config.json","utf8").split("\n").filter(l=>!/^\s*\/\//.test(l)).join("\n");process.stdout.write(JSON.parse(s).copilotTokens["https://github.com:dune94"]||"")')"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/lib/env-file.sh"; load_project_env "$C" || { echo "RESULT setup=project env failed"; exit 0; }
 FIRST=$("$NODE" -e 'console.log(require(process.argv[1]).codelines[0].path)' "$W/orch/logs/codeline-discovery.json")

@@ -778,6 +778,11 @@ if (require.main !== module) return;
       const implementerNames = Object.entries(storedRoster.agents || {})
         .filter(([, a]) => a && a.kind === 'implementer')
         .map(([name]) => name);
+      // THE KEPT ROSTER'S OWN ROLES, so the prompts keyed by them are found: a skipped mint left _mintedDetail empty, the
+      // builder keyed its cache on a placeholder that names no role, and every prompt that names a minted agent missed
+      // (13 of run 6's 20 reviewed prompts, 2026-10-09). Read back from what the mint wrote — never typed here.
+      _mintedDetail = require('./lib/project-roster.js').mintedFromRegistries(process.env.EPAM_PROJECT_CONFIG_DIR || '');
+      _mintedNames = _mintedDetail.map((m) => m.name);
       if (implementerNames.length > 0) {
         rosterLib.registerProjectRoles(AGENTS_DIR, implementerNames);
         process.stderr.write(

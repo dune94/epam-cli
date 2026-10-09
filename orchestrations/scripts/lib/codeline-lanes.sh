@@ -593,6 +593,31 @@ _run_work_dir() {
     mktemp -d "${TMPDIR:-/tmp}/orch-run-XXXXXX"
 }
 
+# lane_paused_since <lane_log_dir> <marker> — did this lane (or a release line of it) record a pause after <marker>
+# (touched when this run's lanes started)? A lane paused before its writer is not a lane that finished: it recorded
+# paused-run.json in its OWN log dir, which no launcher reads. A record older than the marker is an earlier launch's.
+lane_paused_since() {
+    local _dir="${1:-}" _marker="${2:-}"
+    [ -d "$_dir" ] && [ -f "$_marker" ] || return 1
+    [ -n "$(find "$_dir" -name paused-run.json -newer "$_marker" 2>/dev/null | head -1)" ]
+}
+
+# record_lanes_pause <marker> — when any lane paused during this run, the RUN is paused: recorded where every launcher
+# reads it (lib/checkpoints.sh record_run_pause, in LOG_DIR), with how to resume. Returns 1 when no lane paused.
+# Found rehearsing AMSD-2974, 2026-10-09: every lane paused before its writer and the run reported "Pipeline complete".
+record_lanes_pause() {
+    local _marker="${1:-}"
+    [ -f "$_marker" ] && [ -d "${LOG_DIR:-}/lanes" ] || return 1
+    local _recs; _recs=$(find "${LOG_DIR}/lanes" -name paused-run.json -newer "$_marker" 2>/dev/null)
+    [ -n "$_recs" ] || return 1
+    local _n _stage
+    _n=$(printf '%s\n' "$_recs" | awk -F/lanes/ '{split($2,a,"/"); print a[1]}' | sort -u | grep -c .)
+    _stage=$(jq -r '.stage // ""' "$(printf '%s\n' "$_recs" | head -1)" 2>/dev/null)
+    record_run_pause "${_stage:-pre-writer}"
+    log "[orch] ⏸  Run paused — ${_n} lane(s) paused at ${_stage:-a pause}. Resume with: EPAM_RESUME_RUN=${ORCH_RUN_ID:-} <your launcher>"
+    return 0
+}
+
 _run_codeline_loop() {
   local _prd_path="$1"
   local _log_file="${2:-/tmp/orch-$(date +%Y%m%dT%H%M%S).log}"
@@ -600,6 +625,9 @@ _run_codeline_loop() {
   # phase loop itself (calling us once per phase via --phase X), set this to
   # run only that phase across all codelines. Empty = run every PRD phase.
   local _phase_filter="${3:-}"
+  # When this run's lanes started: a lane pause recorded after it is this run's (lane_paused_since, record_lanes_pause).
+  local _lanes_started="${LOG_DIR:-/tmp}/.lanes-started"
+  mkdir -p "${LOG_DIR:-/tmp}" 2>/dev/null; : > "$_lanes_started"
 
   # Extract codeline:path entries from project.outputDirs.
   # Falls back to project.outputDir + JIRA_DEFAULT_CODELINE for single-codeline PRDs.
@@ -1112,7 +1140,11 @@ _run_codeline_loop() {
         error "[orch] Phase '${_phase}' for '${_cl}' failed (exit $_pex)"
         _cl_failed=1; _overall=1; break
       fi
-      log "[orch] Phase '${_phase}' — '${_cl}' done."
+      if lane_paused_since "$_lane_log_dir" "$_lanes_started"; then
+        log "[orch] Phase '${_phase}' — '${_cl}' PAUSED (inputs ready, writer not started)."
+      else
+        log "[orch] Phase '${_phase}' — '${_cl}' done."
+      fi
     done
 
     # A SHARED CODELINE SHIPS ON EVERY RELEASE LINE ITS STORY'S PLAN NAMES (lib/release-lines.sh): its stories,
@@ -1180,7 +1212,7 @@ _run_codeline_loop() {
       # lanes/<codeline>/. Cost tracking that silently reports zero is worse than
       # none, so the append-only ledgers are concatenated back, in declared lane
       # order, once the lane has finished writing them.
-      for _ledger in phase-cost.jsonl agent-activity.jsonl healing-events.jsonl; do
+      for _ledger in phase-cost.jsonl agent-activity.jsonl healing-events.jsonl phase-gates.jsonl; do
         if [ -n "${LOG_DIR:-}" ] && [ -s "${LOG_DIR}/lanes/${_cl}/${_ledger}" ]; then
           cat "${LOG_DIR}/lanes/${_cl}/${_ledger}" >> "${LOG_DIR}/${_ledger}" 2>/dev/null || true
         fi
@@ -1344,7 +1376,11 @@ _run_codeline_loop() {
         error "[orch] Phase '${_phase}' for '${_cl}' failed (exit $_pex)"
         _cl_failed=1; _overall=1; break
       fi
-      log "[orch] Phase '${_phase}' — '${_cl}' done."
+      if lane_paused_since "$_lane_log_dir" "$_lanes_started"; then
+        log "[orch] Phase '${_phase}' — '${_cl}' PAUSED (inputs ready, writer not started)."
+      else
+        log "[orch] Phase '${_phase}' — '${_cl}' done."
+      fi
     done
 
     # A SHARED CODELINE SHIPS ON EVERY RELEASE LINE ITS STORY'S PLAN NAMES (lib/release-lines.sh): its stories,
@@ -1354,7 +1390,7 @@ _run_codeline_loop() {
     fi
 
     # The append-only ledgers back into the parent, as the parallel loop folds them.
-    for _ledger in phase-cost.jsonl agent-activity.jsonl healing-events.jsonl; do
+    for _ledger in phase-cost.jsonl agent-activity.jsonl healing-events.jsonl phase-gates.jsonl; do
       if [ -n "${LOG_DIR:-}" ] && [ -s "${_lane_log_dir}/${_ledger}" ]; then
         cat "${_lane_log_dir}/${_ledger}" >> "${LOG_DIR}/${_ledger}" 2>/dev/null || true
       fi
@@ -1475,8 +1511,15 @@ assert_cost_ledger_not_silently_empty || true
 # Here, at completion, because that is when the run knows its own id and the recording is
 # whole. It cannot fail the run: the work is finished by this point, and a run that succeeded
 # must not be reported failed because a recording could not be fetched.
-log "[orch] ✅ Pipeline complete." \
-    || error "[orch] ⚠️  Pipeline completed with errors."
+# A RUN WHOSE LANES PAUSED IS PAUSED, NOT COMPLETE; and `log ... || error ...` always took the first branch (log returns
+# 0), so a failed run printed "Pipeline complete" too (live AMSD-2974 run 9: "complete", then "aborting").
+if [ "$_overall" = "0" ] && record_lanes_pause "$_lanes_started"; then
+  :
+elif [ "$_overall" = "0" ]; then
+  log "[orch] ✅ Pipeline complete."
+else
+  error "[orch] ⚠️  Pipeline completed with errors."
+fi
 
   return $_overall
 }

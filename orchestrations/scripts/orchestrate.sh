@@ -359,11 +359,23 @@ run_phase() {
   fi
 
   local phase_exit=0
+  # A PAUSE IS NOT A COMPLETED PHASE — as greenfield_run_phases reads it (lib/greenfield-lifecycle.sh). The orchestrator
+  # exits 0 at a pause and records it in paused-run.json; read after the phase, the record ends the run with the resume
+  # line. Cleared before the phase, so a record from an earlier leg cannot stop this one.
+  local _pause_record="${EPAM_PROJECT_OUTPUT_DIR:-${LOG_DIR:-$REPO_ROOT/orchestrations/logs}}/paused-run.json"
+  rm -f "$_pause_record"
   bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
     --phase "$phase" \
     --reset \
     2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}
   echo ""
+  if [ "$phase_exit" -eq 0 ] && [ -f "$_pause_record" ]; then
+    RUN_PAUSED_AT="$(jq -r '.stage // ""' "$_pause_record" 2>/dev/null)"
+    RUN_PAUSED_ID="$(jq -r '.runId // ""' "$_pause_record" 2>/dev/null)"
+    info "━━━ Phase: $phase — PAUSED at ${RUN_PAUSED_AT:-a pause} (run '${RUN_PAUSED_ID}'); the run stops here ━━━"
+    info "  Resume with:  EPAM_RESUME_RUN=${RUN_PAUSED_ID} <your launcher>"
+    return 0
+  fi
 
   # exit 2 = gate remediation was applied — reset stories and retry once
   if phase_exit_is_retryable "$phase_exit"; then
@@ -384,12 +396,20 @@ run_phase() {
     return 0
   fi
 
-  [ "$phase_exit" -ne 0 ] && fail "Phase '$phase' failed (exit $phase_exit) — aborting pipeline"
+  # An `if`, not `[ ... ] && fail`: as the function's last command, a false test returned 1 from a phase that SUCCEEDED,
+  # and set -e ended the launcher there — silently, exit 1, before the spend report and the story validation below
+  # (no live run's log ever reached "Validating story completion"; found rehearsing AMSD-2974, 2026-10-09).
+  if [ "$phase_exit" -ne 0 ]; then
+    fail "Phase '$phase' failed (exit $phase_exit) — aborting pipeline"
+  fi
 }
 
 # ── Execute phases ────────────────────────────────────────────────────────────
+RUN_PAUSED_AT=""
 for _phase in $PHASES; do
   run_phase "$_phase"
+  # A paused run is neither passed nor failed: its stories are waiting for the resume.
+  [ -z "$RUN_PAUSED_AT" ] || exit 0
 done
 
 # ── Report spend ──────────────────────────────────────────────────────────────

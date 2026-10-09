@@ -434,6 +434,34 @@ function resolveSeam(agent, file, opts) {
     'it unconfigured would run it with no ladder, no effort and no tool grants.');
 }
 
+// The grant kinds that only read. A write grant's reach is its caller's decision (the writer's lane).
+const READ_GRANTS = new Set(['read-only', 'read-network']);
+
+function hasDiscovery(src) {
+  try { return !!src.LOG_DIR && require('fs').existsSync(require('path').join(src.LOG_DIR, 'codeline-discovery.json')); }
+  catch { return false; }
+}
+
+/**
+ * THE RUN'S CODELINES, as a seam's scope: the lane's own set once lanes run (EPAM_CODELINE_PATHS); before them,
+ * every codeline discovery found (its persisted artefact, LOG_DIR/codeline-discovery.json); else PROJECT_ROOT.
+ * PROJECT_ROOT alone was the whole answer before the lanes, so every estate-wide agent saw one codeline of four.
+ */
+function runCodelinePaths(src) {
+  const split = (v) => String(v || '').split(/[,:\n]/).map((x) => x.trim()).filter(Boolean);
+  const lane = split(src.EPAM_CODELINE_PATHS);
+  if (lane.length) return lane;
+  try {
+    if (hasDiscovery(src)) {
+      const disc = JSON.parse(require('fs').readFileSync(require('path').join(src.LOG_DIR, 'codeline-discovery.json'), 'utf8'));
+      const found = (disc.codelines || []).map((c) => c && c.path).filter(Boolean);
+      if (found.length) return [...new Set(found)];
+    }
+  } catch { /* an unreadable artefact leaves the single-codeline answer */ }
+  return split(src.PROJECT_ROOT);
+}
+
+
 /**
  * The environment an agent's seam is configured to run with.
  *
@@ -510,8 +538,7 @@ function seamInvocationEnv(agent, agentsDir, opts) {
     // Codeline paths come from the run, never from here: EPAM_CODELINE_PATHS is set by the
     // codeline loop, and PROJECT_ROOT is the single-codeline case.
     const src = (opts && opts.env) || process.env;
-    const paths = String(src.EPAM_CODELINE_PATHS || src.PROJECT_ROOT || '')
-      .split(/[,:]/).map((x) => x.trim()).filter(Boolean);
+    const paths = runCodelinePaths(src);
     try {
       const grant = require('./agent-tools.js').toolGrantFor(profile.toolGrant, paths);
       if (grant) {
@@ -519,6 +546,15 @@ function seamInvocationEnv(agent, agentsDir, opts) {
         // The channel and the list are separate switches: granting one without the other
         // produces an agent that quietly has nothing.
         env.AI_GATE_ALLOW_TOOLS = '1';
+        // A READ GRANT READS THE RUN'S CODELINES. A runner that confines an agent to its working
+        // directory (copilot: --add-dir) is told which folders the grant covers; before this, only the
+        // spec pass and the writer said, and every estate-wide agent of AMSD-2974 runs 3 and 4 saw
+        // one codeline of four. Before discovery has answered, discovery reads the estate it searches.
+        if (READ_GRANTS.has(profile.toolGrant)) {
+          const readable = paths.length > 1 || hasDiscovery(src) ? paths
+            : [src.JIRA_CODELINE_ROOT || paths[0]].filter(Boolean);
+          if (readable.length) env.EPAM_READ_ROOTS = [...new Set(readable)].join('\n');
+        }
       } else {
         // A DECLARED "none" IS A DECISION, NOT AN OMISSION.
         //

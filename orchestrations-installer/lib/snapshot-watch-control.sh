@@ -20,14 +20,24 @@ start_snapshot_watch() {
     local _old_pid=""
     [ -f "$_pidfile" ] && _old_pid="$(cat "$_pidfile" 2>/dev/null)"
     if [ -n "$_old_pid" ] && kill -0 "$_old_pid" 2>/dev/null; then
-        _ok "already running (pid $_old_pid)"
-        return 0
+        # RUNNING FROM THIS INSTALL, OR NOT AT ALL. snapshot.js resolves project paths against its
+        # working directory; a watcher started from the repo checkout fed the install's dashboard the
+        # repo's PRD (AMSD-2974, 2026-10-09). One running anywhere else is replaced.
+        local _old_cwd; _old_cwd="$(readlink "/proc/$_old_pid/cwd" 2>/dev/null || true)"
+        if [ -z "$_old_cwd" ] || [ "$_old_cwd" = "$(cd "$_root" && pwd -P)" ]; then
+            _ok "already running (pid $_old_pid)"
+            return 0
+        fi
+        kill "$_old_pid" 2>/dev/null
+        rm -f "$_pidfile"
+        _ok "replacing the watcher running from $_old_cwd (pid $_old_pid) — it must run from this install"
     fi
 
     local _daemonize="setsid"
     command -v setsid >/dev/null 2>&1 || _daemonize=""
 
-    ( exec </dev/null >>"$_log" 2>&1
+    ( cd "$_root" || exit 1
+      exec </dev/null >>"$_log" 2>&1
       exec $_daemonize "${NODE_BIN:-node}" "$_script" ) &
     echo $! > "$_pidfile"
     sleep 0.3

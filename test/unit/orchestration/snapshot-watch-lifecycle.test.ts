@@ -36,7 +36,7 @@ function fixture() {
   const marker = path.join(dir, 'snapshot-watch.marker');
   fs.writeFileSync(path.join(dir, 'orchestrations/scripts/snapshot-watch.js'), `
 const fs = require('fs');
-fs.appendFileSync(${JSON.stringify(marker)}, process.pid + '\\n');
+fs.appendFileSync(${JSON.stringify(marker)}, process.pid + ' ' + process.cwd() + '\\n');
 setInterval(() => {}, 60000);
 `);
 
@@ -67,6 +67,35 @@ start_snapshot_watch "${f.dir}"
     try { process.kill(pid, 0); alive = true; } catch { alive = false; }
     expect(alive, 'pidfile does not point at a real running process').toBe(true);
     expect(fs.existsSync(f.marker), 'snapshot-watch.js was never actually executed').toBe(true);
+  });
+
+  it('runs from the install it belongs to, whatever directory the installer was run from (AMSD-2974, 2026-10-09)', () => {
+    const f = fixture();
+    const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'not-the-install-'));
+    cleanups.push(() => fs.rmSync(elsewhere, { recursive: true, force: true }));
+    const r = spawnSync('bash', ['-c', `. "${f.dir}/orchestrations-installer/lib/snapshot-watch-control.sh"\n_ok(){ :; }\n_bad(){ :; }\nstart_snapshot_watch "${f.dir}"`],
+      { encoding: 'utf8', timeout: 10_000, cwd: elsewhere });
+    expect(r.status, r.stderr).toBe(0);
+    for (let i = 0; i < 40 && !fs.existsSync(f.marker); i++) spawnSync('sleep', ['0.05']);
+    const [, cwd] = fs.readFileSync(f.marker, 'utf8').trim().split(' ');
+    expect(cwd).toBe(fs.realpathSync(f.dir));
+  });
+
+  it('a watcher already running from somewhere else is replaced by one running from the install', () => {
+    const f = fixture();
+    const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'not-the-install-'));
+    cleanups.push(() => fs.rmSync(elsewhere, { recursive: true, force: true }));
+    const stray = spawnSync('bash', ['-c', `cd "${elsewhere}"; (exec setsid node -e 'setInterval(()=>{},60000)' </dev/null >/dev/null 2>&1) & echo $!`], { encoding: 'utf8' });
+    const strayPid = Number(stray.stdout.trim());
+    cleanups.push(() => { try { process.kill(strayPid, 'SIGKILL'); } catch { /* gone */ } });
+    fs.writeFileSync(f.pidfile, String(strayPid));
+    spawnSync('sleep', ['0.3']);
+    const r = spawnSync('bash', ['-c', `. "${f.dir}/orchestrations-installer/lib/snapshot-watch-control.sh"\n_ok(){ echo "OK $*"; }\n_bad(){ :; }\nstart_snapshot_watch "${f.dir}"`],
+      { encoding: 'utf8', timeout: 10_000 });
+    expect(r.stdout, r.stderr).toMatch(/replacing/);
+    const pid = Number(fs.readFileSync(f.pidfile, 'utf8').trim());
+    expect(pid).not.toBe(strayPid);
+    expect(fs.realpathSync(`/proc/${pid}/cwd`)).toBe(fs.realpathSync(f.dir));
   });
 
   it('stop_snapshot_watch actually kills it and removes the pidfile', async () => {

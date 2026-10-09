@@ -47,6 +47,7 @@
       "tag": "ROSTER_REVIEW",
       "_why_tag": "Judged by validateTaggedOutput against TOOL_ROSTER_REVIEW; the verdict vocabulary is that tool's enum, and the rehearsal stand-in reads it from there."
     },
+    "prompt-claim-adjudicator": {"kind": "declared", "tag": "ADJUDICATION", "requiredKeys": ["holds"], "knownKeys": ["holds", "evidence"], "_why": "lib/prompt-build-calls.js reads ONE <ADJUDICATION>{holds, evidence}</ADJUDICATION> block; an absent or unreadable ruling leaves the reviewer's strike standing (lib/prompt-review.js)."},
     "prompt-review": {
       "kind": "declared",
       "tag": "PROMPT_REVIEW",

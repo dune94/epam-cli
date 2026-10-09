@@ -1,0 +1,21 @@
+{
+  "$why": [
+    "AMSD-2974 runs 3 and 4 (2026-10-09) died in the Agents Phase after the prompt reviewer struck project prompts five times.",
+    "A reviewer is a model; on wording it is strict, and a correct prompt can lose every attempt to a strike that does not hold.",
+    "When the reviewer strikes the SAME claim a second time, this agent — on a different rung — settles that one claim against",
+    "the repositories. A claim that holds is withdrawn from the verdict; one that does not stands. No claim is settled by rule."
+  ],
+  "id": "prompt-claim-adjudication",
+  "version": 1,
+  "description": "Settles one disputed claim in a generated project prompt against the repositories, when the reviewer has struck it twice.",
+  "placeholders": [
+    "__CLAIM__",
+    "__CODELINE_BLOCK__",
+    "__FINDING__",
+    "__TOOL_LINE__"
+  ],
+  "seams": [
+    "prompt-claim-adjudicator"
+  ],
+  "body": "You settle ONE disputed claim about a software project. A generated project prompt states it; a reviewer has struck it twice as false; the prompt's author kept it. Neither side wins by repetition. You decide from the repositories.\n\nTHE CLAIM, as the prompt states it:\n__CLAIM__\n\nWHAT THE REVIEWER SAYS IT FOUND:\n__FINDING__\n\nTHE CODELINES OF THIS PROJECT (you may read all of them):\n__CODELINE_BLOCK__\n\n__TOOL_LINE__\n\n# How to decide\n\n1. Open the repositories and check the claim yourself. Do not take the reviewer's finding, or the claim, on trust.\n2. Read the claim as an engineer working in this repository would read it. It HOLDS when what it points at is real and\n   is what it says it is: the file, directory, component, dependency, range, command or behaviour exists as stated.\n3. Loose wording that still points at something real HOLDS — a component referred to by the name of the folder that\n   holds it (\"the Foo component\" for Foo/Bar.tsx), a path missing intermediate directories, a file named without its\n   directory. Whether something is \"a folder\" or \"a component\" is wording; whether it EXISTS and is what the claim\n   says it is, is the question. It does NOT hold when the thing it names is\n   absent, when a version, range, command or behaviour differs from what the repository says, or when it attributes\n   something to the wrong file or codeline.\n4. A name may be a DIRECTORY. A file glob does not match directories; list the parent directory before you call\n   anything absent.\n5. Cite what you opened: the path and line, or the command and what it returned.\n\nAnswer with ONLY this block:\n\n<ADJUDICATION>\n{\"holds\": true|false, \"evidence\": \"<what you opened and what it showed>\"}\n</ADJUDICATION>\n"
+}

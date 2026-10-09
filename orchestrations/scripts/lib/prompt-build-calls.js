@@ -34,6 +34,28 @@ function promptBuildCalls({
       seamEnv, { costAgent: 'prompt-builder' });
   };
 
+  // THE ADJUDICATOR — one disputed claim, settled in the repositories by another agent on another rung.
+  const adjudicate = async ({ id, claim, finding }) => {
+    const vals = { __CLAIM__: claim, __FINDING__: finding || '(the reviewer gave no finding)', __CODELINE_BLOCK__: codelineContext || '', __TOOL_LINE__: toolGrant || '' };
+    let prompt;
+    try { prompt = promptsLib.buildPrompt('prompt-claim-adjudication', projectConfigDir, vals); } catch (e) {
+      // A project provisioned before this seam existed has no copy; the template is what bootstrap would copy.
+      const ep = require('./engine-prompt.js');
+      const tpl = JSON.parse(fs.readFileSync(ep.templatePathFor('prompt-claim-adjudication'), 'utf8'));
+      prompt = ep.substituteOnce(tpl.body, Object.keys(vals), vals);
+    }
+    const seamEnv = seamInvocationEnv('prompt-claim-adjudicator', agentsDir);
+    if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
+    seamEnv.EPAM_AGENT_NAME = 'prompt-claim-adjudicator';
+    const out = await runClaude(promptExec, prompt, path.join(logDir, `prompt-adjudication-${id}.log`), seamEnv, { costAgent: 'prompt-claim-adjudicator' });
+    const m = String(out || '').match(/<ADJUDICATION>([\s\S]*?)<\/ADJUDICATION>/);
+    if (!m) return null;
+    try {
+      const r = JSON.parse(m[1].trim().replace(/^```(?:json)?/i, '').replace(/```$/, ''));
+      return { holds: r.holds === true, evidence: String(r.evidence || '') };
+    } catch { return null; }
+  };
+
   const reviewPrompt = reviewEnabled ? makePromptReviewer({
     render: makePromptRenderer(promptsLib),
     invoke: (prompt, logPath) => {
@@ -66,10 +88,11 @@ function promptBuildCalls({
     }),
     logPathFor: (id) => path.join(logDir, `prompt-review-${id}.log`),
     recordVerdict: (rec) => fs.appendFileSync(path.join(logDir, 'prompt-review-verdicts.jsonl'), `${JSON.stringify(rec)}\n`),
+    adjudicate,
     projectConfigDir,
   }) : undefined;
 
-  return { runText, reviewPrompt };
+  return { runText, reviewPrompt, adjudicate };
 }
 
 module.exports = { promptBuildCalls };

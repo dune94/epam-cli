@@ -31,7 +31,20 @@ const fs = require('fs');
  * @param {string}   [deps.projectConfigDir]
  * @returns {Function} async ({id, template, generated}) => {ok:boolean, reason?:string}
  */
-function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectConfigDir, attempts = 2, recordVerdict }) {
+// THE SAME CLAIM, reworded or not: a strike on a later attempt matches an earlier one when one contains the other, or
+// most of their words are shared. Only a REPEATED strike goes to the adjudicator.
+function _claimKey(t) { return String(t || '').toLowerCase().replace(/[^a-z0-9^@./_-]+/g, ' ').trim(); }
+function _sameClaim(a, b) {
+  if (!a || !b) return false;
+  if (a.includes(b) || b.includes(a)) return true;
+  const A = new Set(a.split(' ')); const B = new Set(b.split(' '));
+  const inter = [...A].filter((w) => B.has(w)).length;
+  return inter / Math.max(1, Math.min(A.size, B.size)) >= 0.7;
+}
+
+function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectConfigDir, attempts = 2, recordVerdict, adjudicate }) {
+  // What this reviewer has struck so far, per prompt: the second strike of the same claim is adjudicated.
+  const _struck = new Map();
   const _warn = typeof warn === 'function' ? warn : (m) => process.stderr.write(`${m}\n`);
   return async function reviewPrompt({ id, template, generated }) {
     let prompt;
@@ -69,7 +82,10 @@ function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectC
           const tplDoc = JSON.parse(fs.readFileSync(ep.templatePathFor('prompt-review'), 'utf8'));
           const tplBody = tplDoc.body
             || Object.values(tplDoc.bodies || {}).filter((b) => typeof b === 'string').join('\n');
-          prompt = ep.substituteOnce(tplBody, values({ id, template, generated }));
+          // substituteOnce takes (body, keys, values); called with (body, values) it substituted nothing and the
+          // bootstrap review judged the unfilled template text.
+          const _vals = values({ id, template, generated });
+          prompt = ep.substituteOnce(tplBody, Object.keys(_vals), _vals);
           _warn(`[prompt-review] ${id}: this project has no reviewer prompt yet — reviewing from `
             + 'the TEMPLATE for this bootstrap generation; the project copy takes over once minted');
         } catch (e2) {
@@ -125,8 +141,39 @@ function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectC
     }
     // THE BUILDER IS TOLD WHAT THE REVIEWER FOUND, not only which claim it struck — without the evidence
     // it cannot tell a wrong fact from one that does not belong in a reusable prompt, and repeats it.
-    const bad = Array.isArray(verdict.falseClaims)
-      ? verdict.falseClaims.map((c) => {
+    // A CLAIM STRUCK TWICE IS SETTLED, NOT REPEATED. The reviewer is a model and strict on wording; a correct prompt
+    // lost every attempt to strikes that did not hold, and the run ended (AMSD-2974 runs 3 and 4). A claim this
+    // reviewer already struck for this prompt goes to the adjudicator — another agent, on another rung — which checks
+    // that one claim in the repositories. Upheld: the strike is withdrawn. Otherwise, or with no ruling: it stands.
+    let claims = Array.isArray(verdict.falseClaims) ? verdict.falseClaims : [];
+    if (typeof adjudicate === 'function' && claims.length) {
+      const seen = _struck.get(id) || []; _struck.set(id, seen);
+      const kept = [];
+      for (const c of claims) {
+        const text = typeof c === 'string' ? c : (c && c.claim) || '';
+        const key = _claimKey(text);
+        const repeated = seen.some((k) => _sameClaim(k, key));
+        seen.push(key);
+        if (repeated && text) {
+          let ruling = null; // the adjudicator's claim-ruling: { holds, evidence }
+          try {
+            ruling = await adjudicate({ id, claim: text, finding: (c && (c.found || c.finding || c.evidence)) || '' });
+          } catch (e) { _warn(`[prompt-review] ${id}: the adjudicator did not run (${e && e.message}) — the strike stands`); }
+          if (typeof recordVerdict === 'function') {
+            try { recordVerdict({ id, at: new Date().toISOString(), adjudication: { claim: text, ruling } }); } catch { /* never fails the review */ }
+          }
+          if (ruling && ruling.holds === true) {
+            _warn(`[prompt-review] ${id}: struck twice, UPHELD by the adjudicator — withdrawn: "${text.slice(0, 100)}" (${String(ruling.evidence || '').slice(0, 160)})`);
+            continue;
+          }
+          _warn(`[prompt-review] ${id}: struck twice, and the adjudicator ${ruling ? 'agreed it is false' : 'gave no ruling'} — stands: "${text.slice(0, 100)}"`);
+        }
+        kept.push(c);
+      }
+      claims = kept;
+    }
+    const bad = claims.length
+      ? claims.map((c) => {
         if (typeof c === 'string') return c;
         if (!c || !c.claim) return '';
         const said = c.found || c.correction || c.evidence || '';

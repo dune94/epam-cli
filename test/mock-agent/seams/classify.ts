@@ -10,6 +10,16 @@
  * is known here; every name is read from the request.
  */
 export function acClassification(prompt: string): string {
+  // THE CODELINE-ONLY QUESTION (ac-gate-codeline-assignment: a brownfield story with no criteria) asks for one key, in
+  // the shape its own answer line shows. Its offered values are the quoted names it lists; the one whose reason says
+  // the work spans codelines is the split value. Same rule as below: several offered, the split value; one, that one.
+  const only = /Answer:\s*\n\s*\{"codeline":/.exec(prompt);
+  if (only) {
+    const listed = [...prompt.slice(0, only.index).matchAll(/^\s*-\s*"([^"]+)"\s+—([^\n]*)$/gm)];
+    const split = listed.find((m) => /spans multiple codelines/.test(m[2]))?.[1];
+    const named = listed.map((m) => m[1]).filter((c) => c !== split);
+    return JSON.stringify({ codeline: named.length > 1 && split ? split : named[0] });
+  }
   const section = prompt.slice(prompt.indexOf('CODELINE CLASSIFICATION'));
   const offered = [...section.split(/When codeline is/)[0].matchAll(/^\s*-\s*"([^"]+)"\s+—/gm)].map((m) => m[1]);
   const spanning = offered.find((o) => /spans multiple codelines/.test((section.match(new RegExp(`"${o}"\\s+—([^\\n]*)`)) || [])[1] || ''));

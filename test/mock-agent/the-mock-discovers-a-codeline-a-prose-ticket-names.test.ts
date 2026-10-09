@@ -15,6 +15,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { codelineSelection } from './seams/discovery';
+import { acClassification } from './seams/classify';
 
 const ROOT = join(__dirname, '../..');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -63,5 +64,25 @@ describe('code-form terms still come first', () => {
     });
     const r = ask('Toast Notification greeting is wrong', 'getGreeting() returns the wrong text', e);
     expect(r.codelines.map((c: { name: string }) => c.name)).toEqual(['a']);
+  });
+});
+
+// Fresh rehearsal, 2026-10-09: a brownfield story with no criteria is routed by ac-gate's codeline-only question
+// (template ac-gate-codeline-assignment, sent at the ac-classification seam). The mock answered it as the full
+// classification, read no offered codelines from its CODELINES block, omitted "codeline", refused itself as stale —
+// and the run spun on it.
+describe('the codeline-only assignment question', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { renderEngineTemplate } = require(join(ROOT, 'orchestrations/scripts/lib/engine-prompt.js'));
+  const render = (list: string[]) => renderEngineTemplate('ac-gate-codeline-assignment', {
+    __JIRA_KEY__: 'T-1', __TITLE__: PROSE.title, __DESCRIPTION__: PROSE.description,
+    __CODELINE_LIST__: list.map((c) => `- "${c}" — the ticket's ToastNotification is implemented in this repository`).join('\n'),
+    __SPLIT_VALUE__: 'both',
+  });
+  it('several codelines offered: answered with the split value, in the shape the question asks', () => {
+    expect(JSON.parse(acClassification(render(['shared', 'site'])))).toEqual({ codeline: 'both' });
+  });
+  it('one codeline offered: that codeline', () => {
+    expect(JSON.parse(acClassification(render(['shared'])))).toEqual({ codeline: 'shared' });
   });
 });

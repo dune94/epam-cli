@@ -170,8 +170,15 @@ describe('claude.sh — HEALING_BROKEN uses token-overlap matching to tolerate a
     throw new Error('end of function not found');
   }
 
+  // The matcher moved to lib/handlers/healing-root-causes.py (2026-10-08) — ONE definition, read by this check and by the
+  // retry-extension evidence. The check must call it; the rules below are asserted where they now live.
+  const MATCHER = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../../orchestrations/scripts/lib/handlers/healing-root-causes.py'), 'utf8');
+  it('the check asks the shared matcher how many latest diagnoses repeat the current one', () => {
+    expect(extractHealingBody()).toMatch(/healing-root-causes\.py" repeats "\$heal_log" "\$story_id" "\$current_diagnosis"/);
+  });
+
   it('extracts significant word tokens (len>=4) as the PRIMARY comparison, not a fixed-length prefix', () => {
-    const body = extractHealingBody();
+    const body = MATCHER;
     expect(body).toMatch(/\{4,\}/);
     expect(body).toMatch(/STOPWORDS/);
     // [:20] may still appear as a fallback for the rare case both diagnoses have
@@ -180,7 +187,7 @@ describe('claude.sh — HEALING_BROKEN uses token-overlap matching to tolerate a
   });
 
   it('requires both an overlap-count floor and a ratio floor between two diagnoses', () => {
-    const body = extractHealingBody();
+    const body = MATCHER;
     expect(body).toMatch(/min\(3,\s*len\(ta\),\s*len\(tb\)\)/);
     expect(body).toMatch(/ratio >= 0\.4/);
   });

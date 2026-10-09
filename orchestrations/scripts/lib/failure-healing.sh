@@ -2177,56 +2177,7 @@ check_healing_effectiveness() {
     # shared word; ratio alone lets two long, mostly-unrelated diagnoses match on a
     # handful of incidental shared words (e.g. both mentioning "file" and "server").
     local repeat_count
-    repeat_count=$(python3 - "$heal_log" "$story_id" "$current_diagnosis" 2>/dev/null << 'PYEOF' || echo 0
-import json, re, sys
-
-heal_log, story, current = sys.argv[1], sys.argv[2], sys.argv[3]
-
-STOPWORDS = {
-    'the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 'be', 'been',
-    'to', 'of', 'in', 'on', 'at', 'for', 'with', 'from', 'by', 'as', 'not', 'it',
-    'its', 'this', 'that', 'which', 'so', 'than', 'then', 'because', 'due', 'into',
-    'used', 'use', 'uses', 'using', 'causes', 'cause', 'caused', 'agent', 'code',
-}
-
-def tokens(text):
-    words = re.findall(r"[a-zA-Z']{4,}", text.lower())
-    return set(w for w in words if w not in STOPWORDS)
-
-def same_root_cause(a, b):
-    ta, tb = tokens(a), tokens(b)
-    if not ta or not tb:
-        return a[:20] == b[:20]
-    overlap = ta & tb
-    ratio = len(overlap) / min(len(ta), len(tb))
-    # min(3, ...) scales the absolute-overlap floor down for short diagnoses — a
-    # diagnosis with only 2 significant words (e.g. "exact repeats") could never
-    # reach a flat floor of 3 even when identical to itself.
-    min_overlap = min(3, len(ta), len(tb))
-    return len(overlap) >= min_overlap and ratio >= 0.4
-
-events = []
-with open(heal_log) as f:
-    for line in f:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-            if obj.get('story_id') == story and obj.get('event') != 'HEALING_BROKEN':
-                events.append(obj.get('diagnosis', ''))
-        except Exception:
-            pass
-
-count = 0
-for d in reversed(events):
-    if same_root_cause(d, current):
-        count += 1
-    else:
-        break
-print(count)
-PYEOF
-)
+    repeat_count=$(python3 "$SCRIPT_DIR/lib/handlers/healing-root-causes.py" repeats "$heal_log" "$story_id" "$current_diagnosis" 2>/dev/null || echo 0)
     if [ "${repeat_count:-0}" -ge 2 ]; then
         # Deterministic safety net before giving up: a known, mechanical fix may
         # exist for this exact recurring symptom even though the LLM analyst

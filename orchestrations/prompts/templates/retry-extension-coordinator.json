@@ -9,8 +9,8 @@
     "cpa-inference"
   ],
   "id": "retry-extension-coordinator",
-  "version": 1,
-  "body": "__COORDINATOR_PROFILE__\n\nSTORY: __STORY_ID__\nCurrent retry_count: __RETRY_COUNT__ / MAX_RETRIES: __MAX_RETRIES__\nAcceptance criteria count (scope proxy): __AC_COUNT__\n\nEVIDENCE (pre-computed, treat as ground truth -- do not re-derive):\n__EVIDENCE__\n\nEvery self-heal attempt so far produced a DISTINCT diagnosis (no repeats), and no HEALING_BROKEN sentinel has fired -- this story is showing real, converging progress, not a stuck loop. Decide if extending its retry budget is pragmatic.\n\nOutput ONLY: {\"extend\":true|false,\"extraRetries\":<1-3>,\"reason\":\"<one sentence>\"}",
+  "version": 2,
+  "body": "__COORDINATOR_PROFILE__\n\nSTORY: __STORY_ID__\nCurrent retry_count: __RETRY_COUNT__ / MAX_RETRIES: __MAX_RETRIES__\nAcceptance criteria count (scope proxy): __AC_COUNT__\n\nEVIDENCE (pre-computed, treat as ground truth -- do not re-derive):\n__EVIDENCE__\n\ndistinct_diagnoses counts distinct ROOT CAUSES (rewordings of one cause count once). repeated_root_causes lists every cause self-heal diagnosed again without a different fix (HEALING_BROKEN); last_diagnoses are the latest diagnoses and the remedy (target) each prescribed. Decide whether more attempts are likely to produce a different result: extend when the story is converging on distinct, grounded causes; do not extend when the same cause keeps recurring and nothing about the next attempt would differ, or when the latest diagnoses place the fault outside the writer's code -- more attempts by the same writer cannot fix that.\n\nOutput ONLY: {\"extend\":true|false,\"extraRetries\":<1-3>,\"reason\":\"<one sentence>\"}",
   "placeholders": [
     "__RETRY_COUNT__",
     "__MAX_RETRIES__",

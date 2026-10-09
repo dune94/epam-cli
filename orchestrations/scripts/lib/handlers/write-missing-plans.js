@@ -19,12 +19,16 @@ const path = require('path');
 const prdFile = process.argv[2];
 const prd = JSON.parse(fs.readFileSync(prdFile, 'utf8'));
 const dirs = (prd.project && Array.isArray(prd.project.outputDirs)) ? prd.project.outputDirs : [];
+const { planScope, adoptPlanCodelines } = require('../plan-scope.js');
 
 // A STORY IS PLANNED ONCE PER RUN. A resume restores the canonical PRD from the run's checkpoint, which never held the
 // plan; asked again, the detective answered differently (AMSD-2974, 2026-10-07). The plan a run wrote is kept under the
 // run and is the plan on every later launch of it.
 const cfg = process.env.EPAM_PROJECT_CONFIG_DIR || process.env.PROJECT_CONFIG_DIR || '';
 const run = process.env.EPAM_RESUME_RUN || process.env.ORCH_RUN_ID || '';
+// What discovery grounded this run (one top-level key per codeline, with its path); absent = the story's own codelines.
+let facts = null;
+try { facts = cfg ? JSON.parse(fs.readFileSync(path.join(cfg, 'codeline-facts.json'), 'utf8')) : null; } catch { facts = null; }
 const keptDir = cfg && run ? path.join(cfg, 'runs', run, 'plans') : '';
 const keptFile = (id) => (keptDir ? path.join(keptDir, `${String(id).replace(/[^A-Za-z0-9._-]/g, '_')}.json`) : '');
 const keep = (s) => {
@@ -36,10 +40,11 @@ const keep = (s) => {
 let restored = false;
 for (const s of prd.stories || []) {
   if (!s) continue;
-  if (s.overallPlan) { keep(s); continue; }
+  if (s.overallPlan) { keep(s); if (adoptPlanCodelines(s, prd, facts).length) restored = true; continue; }
   const f = keptFile(s.id);
   if (f && fs.existsSync(f)) {
     s.overallPlan = JSON.parse(fs.readFileSync(f, 'utf8'));
+    adoptPlanCodelines(s, prd, facts);
     restored = true;
     process.stderr.write(`[plan] ${s.id}: the plan this run wrote is kept — ${f}\n`);
   }
@@ -57,12 +62,15 @@ const runner = require(path.join(__dirname, '..', '..', 'spec-mode-runner.js'));
   for (const s of wanting) {
     const first = (Array.isArray(s.codelines) && s.codelines[0]) || s.codeline;
     const root = (dirs.find((d) => d && d.codeline === first) || {}).path || prd.project.outputDir || '';
-    const probe = { ...s, codeline: first };
+    // THE DETECTIVE IS SHOWN EVERY CODELINE DISCOVERY GROUNDED (lib/plan-scope.js), not only the router's pick: the plan
+    // decides which codelines change and which only receive (AMSD-2974 run 1, 2026-10-09).
+    const scope = planScope(s, prd, facts);
+    const probe = { ...s, codeline: first, codelines: scope.codelines };
     delete probe.overallPlan;
     const prevRoot = process.env.PROJECT_ROOT;
     process.env.PROJECT_ROOT = root;
     try {
-      await runner.runCodeGraphDetective(probe, process.env.LOG_DIR || '', { prd });
+      await runner.runCodeGraphDetective(probe, process.env.LOG_DIR || '', { prd: { ...prd, project: { ...prd.project, outputDirs: scope.outputDirs } } });
     } catch (e) {
       process.stderr.write(`[plan] ${s.id}: the detective did not answer (${(e && e.message) || e})\n`);
     } finally {
@@ -72,6 +80,8 @@ const runner = require(path.join(__dirname, '..', '..', 'spec-mode-runner.js'));
       s.overallPlan = probe.overallPlan;
       keep(s);
       changed = true;
+      const added = adoptPlanCodelines(s, prd, facts);
+      if (added.length) process.stderr.write(`[plan] ${s.id}: the plan works ${added.join(', ')} too — the story is worked in ${s.codelines.join(', ')}\n`);
       process.stderr.write(`[plan] ${s.id}: plan written (${probe.overallPlan.codelines.length} codeline(s), `
         + `${(probe.overallPlan.packages || []).reduce((n, p) => n + (p.releaseLines || []).length, 0)} release line(s))\n`);
     } else {

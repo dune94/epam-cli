@@ -593,6 +593,38 @@ _run_work_dir() {
     mktemp -d "${TMPDIR:-/tmp}/orch-run-XXXXXX"
 }
 
+# base_fresh_story_branches <prd> — ONCE PER RUN, before anything reads them, every codeline a brownfield story may be
+# worked in (its own and every one discovery grounded, lib/plan-scope.js) is put on the story's branch, freshly based on
+# the codeline's baseline. ensure_story_branch pins any commit the reset would orphan under epam-rescue/*. Once per RUN,
+# not per launch: with the operator's pauses the lanes are first reached by a resumed leg, so "not a resume" never held;
+# the run's own marker (runs/<id>/story-branches-based) keeps every later leg — a resume after the writer included —
+# off the branches, where this run's own work is.
+base_fresh_story_branches() {
+    local _prd="${1:-}"
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -f "$_prd" ] || return 0
+    command -v ensure_story_branch >/dev/null 2>&1 || return 0
+    local _run="${EPAM_RESUME_RUN:-${ORCH_RUN_ID:-}}"
+    local _marker=""
+    if [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -n "$_run" ]; then
+        _marker="${EPAM_PROJECT_CONFIG_DIR}/runs/${_run}/story-branches-based"
+        [ -f "$_marker" ] && return 0
+    fi
+    local _line _root _story
+    while IFS=$'\t' read -r _root _story; do
+        [ -n "$_root" ] && [ -n "$_story" ] || continue
+        log "[orch] fresh run: basing '${_root##*/}' on its story branch for ${_story} before anything reads it"
+        ensure_story_branch "$_root" "$_story" "${JIRA_BASELINE_BRANCH:-}" || true
+    done < <("$NODE_BIN" -e '
+      const fs=require("fs"),path=require("path");const [prdF,cfg,lib]=process.argv.slice(1);
+      const prd=JSON.parse(fs.readFileSync(prdF,"utf8"));let facts=null;
+      try{facts=cfg?JSON.parse(fs.readFileSync(path.join(cfg,"codeline-facts.json"),"utf8")):null}catch{}
+      const {planScope}=require(lib);const seen=new Set();
+      for(const s of prd.stories||[]){if(!s||!s.id)continue;for(const d of planScope(s,prd,facts).outputDirs){const k=d.path+"\t"+s.id;if(!seen.has(k)){seen.add(k);console.log(k)}}}
+    ' "$_prd" "${EPAM_PROJECT_CONFIG_DIR:-}" "$SCRIPT_DIR/lib/plan-scope.js" 2>/dev/null)
+    [ -n "$_marker" ] && { mkdir -p "${_marker%/*}" 2>/dev/null; date -u +%Y-%m-%dT%H:%M:%SZ > "$_marker"; }
+    return 0
+}
+
 # lane_paused_since <lane_log_dir> <marker> — did this lane (or a release line of it) record a pause after <marker>
 # (touched when this run's lanes started)? A lane paused before its writer is not a lane that finished: it recorded
 # paused-run.json in its OWN log dir, which no launcher reads. A record older than the marker is an earlier launch's.
@@ -628,6 +660,16 @@ _run_codeline_loop() {
   # When this run's lanes started: a lane pause recorded after it is this run's (lane_paused_since, record_lanes_pause).
   local _lanes_started="${LOG_DIR:-/tmp}/.lanes-started"
   mkdir -p "${LOG_DIR:-/tmp}" 2>/dev/null; : > "$_lanes_started"
+
+  # ── THE PLAN COMES FIRST, AND IT DECIDES THE LANES ─────────────────────────
+  # A fresh run's codelines are put on their story branches, freshly based, BEFORE anything reads them: the detective
+  # and the spec pass read the checkout, and a fresh AMSD-2974 run read earlier runs' commits as existing code
+  # (2026-10-09). A codeline a killed line pass left on the line's branch is put back. Then the story without a plan
+  # gets one (lib/handlers/write-missing-plans.js), shown every codeline discovery grounded; the codelines the plan
+  # names join the story and the run's outputDirs (lib/plan-scope.js) — so the lane list below is the plan's.
+  base_fresh_story_branches "$_prd_path"
+  _return_codelines_from_release_lines "$_prd_path"
+  "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/write-missing-plans.js" "$_prd_path" || true
 
   # Extract codeline:path entries from project.outputDirs.
   # Falls back to project.outputDir + JIRA_DEFAULT_CODELINE for single-codeline PRDs.
@@ -1009,11 +1051,6 @@ _run_codeline_loop() {
   #     skipped with a warning rather than silently writing a contract nobody
   #     consumed. Lanes that genuinely integrate must set
   #     EPAM_PARALLEL_CODELINES=0.
-  # A STORY SPECIFIED BEFORE IT HAD A PLAN GETS ONE (lib/handlers/write-missing-plans.js) — the detective's plan
-  # only, once, before any lane, so every lane and every release line is worked from it.
-  # A codeline a killed line pass left on the line's branch is put back first — the detective reads the codeline.
-  _return_codelines_from_release_lines "$_prd_path"
-  "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/write-missing-plans.js" "$_prd_path" || true
   _EPAM_PARALLEL_LANES="${EPAM_PARALLEL_CODELINES:-1}"
   if [ "$_EPAM_PARALLEL_LANES" = "1" ] && [ "${#_cl_entries[@]}" -gt 1 ]; then
     local _p_cls=() _p_wts=() _p_prds=() _p_pids=() _p_spec=() _lane_spec_mode=""

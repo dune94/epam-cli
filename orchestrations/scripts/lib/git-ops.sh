@@ -412,11 +412,23 @@ ensure_story_branch() {
     if git -C "$codeline_root" rev-parse -q --verify "refs/tags/${baseline_branch}^{commit}" >/dev/null 2>&1; then
         _base_ref="refs/tags/${baseline_branch}"
     elif git -C "$codeline_root" remote get-url origin >/dev/null 2>&1; then
-        if ! git -C "$codeline_root" fetch origin "$baseline_branch" --quiet 2>/dev/null; then
-            warning "  [story-branch] $story_id: could not fetch origin/${baseline_branch} — proceeding on current branch state"
-            return 1
+        if git -C "$codeline_root" fetch origin "$baseline_branch" --quiet 2>/dev/null; then
+            _base_ref="origin/${baseline_branch}"
+        else
+            # THE CODELINE'S OWN BASELINE. One project declares one baseline for several codelines, and a codeline need not
+            # have it (cx-shared's default is master, it has no develop). Left on its current branch, a fresh run's
+            # detective read earlier runs' commits as existing code (AMSD-2974, 2026-10-09). codeline_baseline_ref
+            # answers from the codeline's own refs: its default branch, origin/HEAD.
+            local _own; _own=$(codeline_baseline_ref "$codeline_root" "$baseline_branch")
+            if [ -n "$_own" ] && [ "$_own" != "$baseline_branch" ] \
+               && git -C "$codeline_root" fetch origin "${_own#origin/}" --quiet 2>/dev/null; then
+                _base_ref="$_own"
+                info "  [story-branch] $story_id: this codeline has no ${baseline_branch} — basing on its own default, ${_own}"
+            else
+                warning "  [story-branch] $story_id: could not fetch origin/${baseline_branch} — proceeding on current branch state"
+                return 1
+            fi
         fi
-        _base_ref="origin/${baseline_branch}"
     elif git -C "$codeline_root" rev-parse --verify --quiet "refs/heads/${baseline_branch}" >/dev/null 2>&1; then
         _base_ref="$baseline_branch"
         info "  [story-branch] $story_id: no 'origin' remote — basing off the local '${baseline_branch}'"

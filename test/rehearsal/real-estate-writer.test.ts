@@ -27,6 +27,9 @@ import { configFor, standInsFor, vendorEdge, type ProjectRun } from '../mock-age
 
 const R = process.env.REHEARSAL_ROOT || '';
 const RUN = process.env.REHEARSAL_RESUME_RUN || '';
+// FRESH: a new run, as the operator launches one — the ticket ingested through the real Jira client from a stub tracker
+// serving it, both pauses taken and resumed by run id, exactly as the live run is driven.
+const FRESH = process.env.REHEARSAL_FRESH === '1';
 const TICKET = process.env.REHEARSAL_TICKET || '';
 const PROJECT = process.env.REHEARSAL_PROJECT || '';
 const children: ChildProcess[] = [];
@@ -34,7 +37,7 @@ afterAll(() => { for (const c of children) { try { c.kill('SIGKILL'); } catch { 
 const git = (cwd: string, ...a: string[]) => execFileSync('git', a, { cwd, encoding: 'utf8' }).trim();
 const strip = (t: string) => t.replace(/\x1b\[[0-9;]*m/g, '');
 
-describe.runIf(R && RUN && TICKET && PROJECT)('the operator relaunch on a copy of the real estate', () => {
+describe.runIf(R && (RUN || FRESH) && TICKET && PROJECT)('the operator relaunch on a copy of the real estate', () => {
   it('runs every lane through the writer, the merge and the gates', async () => {
     const install = join(R, 'install');
     const codelineRoot = join(R, 'codelines');
@@ -55,12 +58,27 @@ describe.runIf(R && RUN && TICKET && PROJECT)('the operator relaunch on a copy o
 
     const passthrough = Object.fromEntries(['EPAM_PASSED_LANES', 'EPAM_ESTIMATION_MANIFEST', 'EPAM_AGENT_MEMORY_SHARE', 'NODE_OPTIONS', 'EPAM_WHOLE_SUITE_CHECK']
       .filter((k) => process.env[k]).map((k) => [k, process.env[k] as string]));
+    // FRESH: the ticket the earlier ingest produced (the copy's PRD), served by the stub tracker the £0 projects use.
+    let jiraUrl = 'http://127.0.0.1:9';
+    if (FRESH) {
+      const s = (JSON.parse(readFileSync(prd, 'utf8')).stories || []).find((x: { jiraKey?: string; id: string }) => (x.jiraKey || x.id) === TICKET);
+      expect(s, `the copy's PRD holds no ${TICKET} to serve`).toBeTruthy();
+      const issues = join(journal, 'tracker-issues.json');
+      writeFileSync(issues, JSON.stringify([{ key: TICKET, summary: s.title, description: s.description }], null, 1));
+      const { spawn } = await import('node:child_process');
+      const srv = spawn(process.execPath, [join(__dirname, '../fixtures/mock-pipeline/mock-jira-server.js'), '--issues', issues], { stdio: ['ignore', 'pipe', 'inherit'] });
+      children.push(srv);
+      jiraUrl = await new Promise<string>((ok, no) => {
+        srv.stdout!.on('data', (b: Buffer) => { const m = /LISTENING:(\d+)/.exec(String(b)); if (m) ok(`http://127.0.0.1:${m[1]}`); });
+        setTimeout(() => no(new Error('the stub tracker never listened')), 10_000);
+      });
+    }
     const env = zeroCostEnv(bin, agent.url, {
       ...configFor(install, PROJECT, config), ...vendorEdge(r), ...passthrough,
       EPAM_FREE_RUN: '1',
-      JIRA_URL: 'http://127.0.0.1:9', JIRA_EMAIL: 'rehearsal@local', JIRA_TOKEN: 'rehearsal-no-access',
+      JIRA_URL: jiraUrl, JIRA_EMAIL: 'rehearsal@local', JIRA_TOKEN: 'rehearsal-no-access',
       JIRA_CODELINE_ROOT: codelineRoot,
-      EPAM_RESUME_RUN: RUN,
+      ...(FRESH ? {} : { EPAM_RESUME_RUN: RUN }),
       EPAM_PARALLEL_CODELINES: '0', EPAM_PAUSE_AFTER_AGENT_MINT: '1', EPAM_PAUSE_BEFORE_WRITER: '1',
       SKIP_REGRESSION_GUARD: 'true',
     });
@@ -68,8 +86,21 @@ describe.runIf(R && RUN && TICKET && PROJECT)('the operator relaunch on a copy o
     delete env.GH_TOKEN; delete env.GITHUB_TOKEN;
     expect(env.COPILOT_GITHUB_TOKEN || '', 'a real-looking Copilot token reached the rehearsal').not.toMatch(/^(gho_|ghp_|ghu_|github_pat_)/);
 
-    const res = await run('bash', [join(install, 'orchestrations/scripts/pipeline'), '--jira', TICKET], { cwd: install, env, timeout: 4 * 60 * 60_000 });
-    const text = strip(res.stdout + res.stderr);
+    // Each leg ends at a pause (exit 0 + logs/paused-run.json) or at the end. A pause is resumed by its run id — the
+    // operator's resume — up to the two pauses this launch takes.
+    const pauseRecord = join(install, 'orchestrations/logs/paused-run.json');
+    let res = { status: -1, stdout: '', stderr: '' } as { status: number | null; stdout: string; stderr: string };
+    let text = '';
+    for (let leg = 0; leg < 3; leg += 1) {
+      try { require('node:fs').rmSync(pauseRecord, { force: true }); } catch { /* none */ }
+      res = await run('bash', [join(install, 'orchestrations/scripts/pipeline'), '--jira', TICKET], { cwd: install, env, timeout: 4 * 60 * 60_000 });
+      text += `\n===== leg ${leg} (exit ${res.status}) =====\n${strip(res.stdout + res.stderr)}`;
+      writeFileSync(join(journal, `launch-leg${leg}.log`), strip(res.stdout + res.stderr));
+      if (res.status !== 0 || !existsSync(pauseRecord)) break;
+      const paused = JSON.parse(readFileSync(pauseRecord, 'utf8'));
+      console.log(`[rehearsal] leg ${leg} paused at ${paused.stage} (run ${paused.runId}) — resuming`);
+      env.EPAM_RESUME_RUN = paused.runId;
+    }
     writeFileSync(join(journal, 'launch.log'), text);
     writeFileSync(join(journal, 'calls.json'), JSON.stringify(agent.calls.map((c) => ({ n: c.n, seam: c.seam, story: c.story })), null, 1));
     const tail = text.split('\n').slice(-80).join('\n');

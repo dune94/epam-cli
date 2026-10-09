@@ -35,6 +35,24 @@ export function codeTerms(ticket: string): string[] {
   return [...out];
 }
 
+/**
+ * What a prose title names: runs of capitalised words joined as one identifier ("Toast Notification" → ToastNotification,
+ * "Pop-Up" → PopUp), then each capitalised word alone — the order a model with search tools tries them. All-caps
+ * tokens (product tags such as "GO") are left to the codelines' names; nothing is known about any project here.
+ */
+export function titleTerms(title: string): string[] {
+  const runs: string[][] = []; let cur: string[] = [];
+  for (const m of title.matchAll(/([A-Za-z]+)([^A-Za-z]*)/g)) {
+    const w = m[1]; const sep = m[2];
+    if (/^[A-Z][a-z]+$/.test(w)) cur.push(w); else { if (cur.length) runs.push(cur); cur = []; }
+    if (!/^[\s-]*$/.test(sep)) { if (cur.length) runs.push(cur); cur = []; }
+  }
+  if (cur.length) runs.push(cur);
+  const compounds = runs.filter((r) => r.length > 1).map((r) => r.join(''));
+  const singles = runs.flat().filter((w) => w.length >= 4);
+  return [...new Set([...compounds, ...singles])];
+}
+
 /** The first file under `root` containing `term` (or the path itself, for a path term). */
 function find(root: string, term: string, budget = { files: 4000 }): string | null {
   if (term.includes('/') && existsSync(join(root, term))) return term;
@@ -65,14 +83,17 @@ const onDisk = (r: { dir: string; path: string }, world?: World) =>
 export function codelineSelection(prompt: string, world?: World): string {
   const tickets = between(prompt, /JIRA TICKETS:/, /REPOSITORY MANIFEST/);
   const repos = [...between(prompt, /REPOSITORY MANIFEST/, /\n\n[A-Z]/).matchAll(/-\s*dir:\s*(\S+)\s*\n\s*path:\s*(\S+)/g)].map((m) => ({ dir: m[1], path: m[2] })).map((r) => ({ ...r, path: onDisk(r, world) }));
-  const terms = codeTerms(tickets);
-  const codelines = repos.flatMap((r) => {
+  const title = (/title:\s*(.+)/.exec(tickets) || [, 'the ticket'])[1];
+  const select = (terms: string[]) => repos.flatMap((r) => {
     for (const t of terms) {
       const hit = existsSync(r.path) ? find(r.path, t) : null;
       if (hit) return [{ name: identifier(r.dir), path: r.path, reason: `the ticket's "${t}" is implemented in this repository`, evidence: hit === t ? `file ${hit}` : `${hit} contains "${t}"`, facts: [] }];
     }
     return [];
   });
-  const title = (/title:\s*(.+)/.exec(tickets) || [, 'the ticket'])[1];
+  // Code-form terms first; only when they ground nothing, what the title names in prose.
+  let terms = codeTerms(tickets);
+  let codelines = select(terms);
+  if (!codelines.length) { terms = [...terms, ...titleTerms(title)]; codelines = select(titleTerms(title)); }
   return JSON.stringify({ codelines, unsure: codelines.length ? [] : [{ part: title, why: `none of ${terms.join(', ') || 'the ticket\'s terms'} was found in any listed repository` }] }, null, 2);
 }

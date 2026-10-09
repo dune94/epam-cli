@@ -849,6 +849,9 @@ unset _ep_i _ep_j
 . "$SCRIPT_DIR/lib/orchestration-resume.sh"
 apply_resume_if_requested
 
+# Dashboards up from the first phase on every path; a multi-codeline run never reached the later call.
+start_dashboards_watch
+
 if is_parent; then
   if [ "${JIRA_PIPELINE:-0}" = "1" ]; then
     # Jira flow: ingest → synthesize → route codelines

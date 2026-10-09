@@ -325,6 +325,10 @@ start_dashboards_watch() {
     local dashboards_dir="$AUTOMATION_DIR/dashboards"
     local config_path="$dashboards_dir/.eleventy.js"
     local local_eleventy_bin="$dashboards_dir/node_modules/.bin/eleventy"
+    # THE INSTALL'S OWN ELEVENTY. The installer puts it in the install root's node_modules (it is a
+    # root dependency); dashboards/ has none, so every run fell to npx — a registry fetch, not the
+    # installed build.
+    [ -x "$local_eleventy_bin" ] || local_eleventy_bin="$(dirname "$AUTOMATION_DIR")/node_modules/.bin/eleventy"
 
     if [ "${EPAM_DASH_AUTO_SERVE:-1}" != "1" ]; then
         info "Dashboard auto-serve disabled (EPAM_DASH_AUTO_SERVE=0)."

@@ -1281,10 +1281,6 @@ if (require.main !== module) return;
         + 'picking one silently is how a project ends up running prompts nobody chose.');
     }
 
-    // Resolved by the generator below, consumed by its reviewer. Declared here so the two
-    // cannot be reordered without the reviewer losing it.
-    let _promptGeneratorModel = '';
-
     process.env.EPAM_AGENT_NAME = 'prompt-builder';
     // Opt-in per project; the registry's prompt-review.enabledBy names this variable.
     // ON UNLESS A PROJECT EXPLICITLY TURNS IT OFF.
@@ -1358,101 +1354,12 @@ if (require.main !== module) return;
       // AI_GATE_ALLOW_TOOLS is what actually opens the tool channel; the seam decides WHICH
       // tools. Granting the channel without the list, or the list without the channel, both
       // produce an agent that quietly has nothing.
-      runText: (prompt, meta) => {
-        // THE RETRY CLIMBS. Attempt N runs rung N-1 of the ladder this seam declares.
-        //
-        // This called seamInvocationEnv with no rung on every attempt, so all three attempts ran
-        // the same model: `meta.attempt` arrived here and was used for the log filename and
-        // nothing else. Run 20260827T092415Z aborted on 'tc-writer' after three refusals from one
-        // model, with sonnet and opus unused in the chain the seam had already published.
-        // Feeding the refusal back is the other half of a retry; without the climb it asks the
-        // same model to notice what it just missed.
-        const _rung = Math.max(0, (Number((meta && meta.attempt) || 1) || 1) - 1);
-        const seamEnv = seamInvocationEnv('prompt-builder', path.join(engineRoot, 'orchestrations', 'agents'), { rung: _rung });
-        if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
-        // THE REVIEWER WILL RUN THIS MODEL. Captured at the moment the generator resolves it,
-        // because a DECLARED tier and a RESOLVED model are not the same fact: both seams declare
-        // ladder=top today, so they match by coincidence, and change either declaration — or let
-        // the runner escalate one on an empty response — and they diverge with nothing to say so.
-        // A prompt is the contract every agent in the run executes against; a reviewer that
-        // cannot reproduce the generator's reasoning is reviewing text it could not have written.
-        _promptGeneratorModel = seamEnv.EPAM_MODEL || '';
-        // The identity travels WITH the seam. It was set on process.env far above, so the two could
-        // drift apart without either looking wrong — and elsewhere in this stage they already had.
-        seamEnv.EPAM_AGENT_NAME = 'prompt-builder';
-        return spec.runClaude(
-          promptExec, prompt,
-          path.join(LOG_DIR, `prompt-build-${(meta && meta.id) || 'unknown'}.log`),
-          seamEnv, { costAgent: 'prompt-builder' });
-      },
-      // THE REVIEWER, WHEN THE PROJECT ASKS FOR ONE.
-      //
-      // prompt-review is a full seam — its own template, three required inputs, a declared
-      // produces — invoked behind this optional parameter, which no caller supplied. So the one
-      // artefact every downstream agent inherits WHOLE was the only generated thing installed
-      // unexamined, while its sibling roster-review ran on every mint.
-      //
-      // Opt-in, because turning it on costs a model call per generated prompt (35 last run) and
-      // can block provisioning: the project says EPAM_PROMPT_REVIEW_ENABLED=1. The registry marks
-      // the seam optIn and names this variable, so the two cannot drift.
-      // THE REVIEWER, WHEN THE PROJECT ASKS FOR ONE — lib/prompt-review.js.
-      //
-      // It lived here as an anonymous closure, which no test could reach: on 2026-08-18 its
-      // ability to REJECT was disabled by hand and all 268 tests passed. It fails open by design
-      // (a reviewer that cannot run must not condemn the artefact), so every internal defect looks
-      // exactly like approval — which is precisely why the body has to be executable by a test.
-      // Every dependency is injected here; the paths are covered by
-      // the-prompt-reviewer-was-never-executed.test.ts.
-      reviewPrompt: _promptReviewEnabled ? makePromptReviewer({
-        render: makePromptRenderer(promptsLib),
-        invoke: (prompt, logPath) => {
-          const seamEnv = seamInvocationEnv('prompt-review', path.join(engineRoot, 'orchestrations', 'agents'));
-          if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
-          seamEnv.EPAM_AGENT_NAME = 'prompt-review';
-          // THE GENERATOR'S RUNG, not this seam's. No fallback: if the generator never resolved a
-          // model there is nothing to review against, and quietly using the reviewer's own is how
-          // a code reviewer judged kimi-k3's work from glm-5.2 for three cycles.
-          // A KEPT PROMPT IS JUDGED BEFORE ANYTHING IS GENERATED (a resume re-reviews what it keeps,
-          // 2026-10-06), so no generation has resolved a model yet. The rung that made it is the
-          // generator seam's first, resolved the way runText resolves attempt 1 — still the generator's.
-          if (!_promptGeneratorModel) {
-            _promptGeneratorModel = seamInvocationEnv('prompt-builder', path.join(engineRoot, 'orchestrations', 'agents'), { rung: 0 }).EPAM_MODEL || '';
-          }
-          if (!_promptGeneratorModel) {
-            throw new Error(
-              '[prompt-review] the generator resolved no model, so there is no rung to review on. '
-              + 'Refusing to judge a prompt from a model that did not write it.');
-          }
-          seamEnv.EPAM_MODEL = _promptGeneratorModel;
-          return spec.runClaude(promptExec, prompt, logPath, seamEnv, { costAgent: 'prompt-review' });
-        },
-        values: ({ id, template, generated }) => ({
-          // THE ROSTER, so a claim naming an agent can be CHECKED rather than refused. Built from the
-          // same minted detail the generator is handed, so the two cannot disagree about who exists.
-          __ROSTER_BLOCK__: (Array.isArray(_mintedDetail) && _mintedDetail.length
-            ? _mintedDetail.map((m) => `- ${m.name}${m.kind ? ` [${m.kind}]` : ''}`).join('\n')
-            : '- (this project minted no agents of its own)'),
-          __PROMPT_ID__: id,
-          // A MULTI-BODY TEMPLATE HAS NO .body, AND THE REVIEWER MUST SEE THE SOURCE.
-          //
-          // 21 templates carry `bodies` instead of `body`. This read .body — undefined for every one
-          // of them — so the reviewer was handed an EMPTY source and asked to check a generated prompt
-          // against nothing. It cannot evidence a false claim that way, and would return a clean
-          // verdict that means nothing while costing a model call.
-          //
-          // Same shape as the join(undefined) comma that aborted runs 9 and 10. Uses the SAME helper
-          // the generator and the contract check use, so the readers cannot drift again.
-          __TEMPLATE_BODY__: require('./lib/project-prompt-builder.js').templateBodyText(template),
-          __GENERATED_BODY__: (generated && generated.body) || '',
-          __CODELINE_BLOCK__: _codelineContext,
-          __TICKET_BLOCK__: (Array.isArray(stories) ? stories : [])
-            .map((t) => `- ${t.id || ''}: ${t.title || ''}`).join('\n'),
-          __TOOL_LINE__: toolGrant || '',
-        }),
-        logPathFor: (id) => path.join(LOG_DIR, `prompt-review-${id}.log`),
-        recordVerdict: (rec) => fs.appendFileSync(path.join(LOG_DIR, 'prompt-review-verdicts.jsonl'), `${JSON.stringify(rec)}\n`),
-        projectConfigDir,
-      }) : undefined,
+      // The generator and its reviewer — one definition, shared with the live-token harness.
+      ...require('./lib/prompt-build-calls.js').promptBuildCalls({
+        engineRoot, logDir: LOG_DIR, runClaude: spec.runClaude, promptExec, projectConfigDir,
+        codelineContext: _codelineContext, stories, mintedDetail: _mintedDetail, toolGrant,
+        reviewEnabled: _promptReviewEnabled,
+      }),
       log: (m) => process.stderr.write(`${m}\n`),
     });
     // SAY WHICH IT WAS. Reporting "0 copied, 0 generated" for a skip reads as a provisioning run

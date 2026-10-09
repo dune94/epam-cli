@@ -28,6 +28,9 @@ import { join } from 'node:path';
 const ROOT = join(__dirname, '../../..');
 const BUILDER = join(ROOT, 'orchestrations/scripts/lib/project-prompt-builder.js');
 const MINT = join(ROOT, 'orchestrations/scripts/mint-agents-step.js');
+// The generator and reviewer calls the mint makes live in lib/prompt-build-calls.js (one definition, shared with the
+// live-token harness); the mint passes reviewEnabled through to it.
+const CALLS = join(ROOT, 'orchestrations/scripts/lib/prompt-build-calls.js');
 const REGISTRY = JSON.parse(
   readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8'));
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -109,9 +112,10 @@ describe('a reviewer nobody invoked', () => {
   });
 
   it('THE MINT CAN TURN IT ON — the parameter is reachable from the caller', () => {
-    const src = readFileSync(MINT, 'utf8');
+    const src = readFileSync(MINT, 'utf8') + readFileSync(CALLS, 'utf8');
     expect(src, 'the only caller still cannot supply a reviewer at all')
       .toMatch(/reviewPrompt/);
+    expect(readFileSync(MINT, 'utf8'), 'the mint does not hand the review switch to the calls').toMatch(/reviewEnabled: _promptReviewEnabled/);
   });
 
   it('SUPPLIES EXACTLY THE PLACEHOLDERS ITS TEMPLATE DECLARES — no more, no fewer', () => {
@@ -120,7 +124,7 @@ describe('a reviewer nobody invoked', () => {
     // would go quiet again — the __MANIFEST_FILE__ failure, one seam over.
     const tpl = JSON.parse(readFileSync(
       join(ROOT, 'orchestrations/prompts/templates/prompt-review.json'), 'utf8'));
-    const src = readFileSync(MINT, 'utf8');
+    const src = readFileSync(CALLS, 'utf8');
     // The values the reviewer supplies, wherever they are built. Located by the injected
     // `values:` factory rather than a variable name, so a refactor moves the test with the code.
     const start = src.indexOf('values: ({ id, template, generated }) => ({');

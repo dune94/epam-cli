@@ -58,7 +58,7 @@ function offLadderModel(): string {
   throw new Error('could not pick a model absent from every ladder');
 }
 
-function runBlock(pendingIngest: 0 | 1) {
+function runBlock(pendingIngest: 0 | 1, resumeRunId?: string) {
   const d = mkdtempSync(join(tmpdir(), 'preflight-swap-')); dirs.push(d);
   const prd = join(d, 'prd.json');
   writeFileSync(prd, JSON.stringify({
@@ -72,6 +72,7 @@ function runBlock(pendingIngest: 0 | 1) {
     `PRD_FILE=${JSON.stringify(prd)}`,
     `EPAM_LLM_SETTINGS_FILE=${JSON.stringify(SETTINGS)}`,
     `_prd_pending_ingest=${pendingIngest}`,
+    resumeRunId ? `EPAM_RESUME_RUN=${JSON.stringify(resumeRunId)}` : 'unset EPAM_RESUME_RUN',
     'FAILS=0; PASS=0',
     'ok(){ echo "  ✓ $1"; }',
     'fail(){ echo "  ✗ $1"; FAILS=$((FAILS+1)); }',
@@ -95,5 +96,18 @@ describe('a set swap is not a pre-flight failure', () => {
     expect(r.fails,
       `pre-flight refused a run over a stale assignment the run is about to discard:\n${r.out}`).toBe(0);
     expect(r.out, 'the deferral must be announced, not silent').toMatch(/deferred/);
+  });
+
+  it('a greenfield resume with a provider-set swap is deferred — stale openrouter models must not block a claude resume', () => {
+    // RED: this must fail before the fix lands in preflight-check.sh.
+    // The fix adds an elif [[ -n "${EPAM_RESUME_RUN:-}" ]] branch that defers, matching
+    // the Jira ingest deferral above it. _mc_enforce_ladder in run-agent-orchestration.sh
+    // corrects the models before any story runs; refusing here blocks a legitimate swap.
+    // Live 2026-09-17, regintel 20260916T200108Z: resumed with EPAM_PROVIDER_SET=claude
+    // after an openrouter run; stories carried MiniMax-M2.7-highspeed — not on any claude ladder.
+    const r = runBlock(0, '20260916T200108Z');
+    expect(r.fails,
+      `pre-flight blocked a legitimate provider-set swap on resume:\n${r.out}`).toBe(0);
+    expect(r.out, 'the deferral must be announced, not silent').toMatch(/resume/);
   });
 });

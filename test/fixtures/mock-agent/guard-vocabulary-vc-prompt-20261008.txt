@@ -1,0 +1,88 @@
+GUARD SEAM: verification-criteria
+
+THE RULE THIS GUARD ENFORCES:
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+THE STATEMENTS THE GUARD WILL CHECK:
+1. Given a user completes an action that triggers a toast notification, when the message appears, then the notification is visually prominent and easily distinguishable from surrounding page content
+2. Given a screen reader user completes an action, when the notification is triggered, then the message is programmatically announced using appropriate ARIA live region attributes
+3. Given a notification contains important information, when it is displayed, then users are provided sufficient time to perceive and read the message before it disappears
+4. Given a notification is displayed, when additional time is required, then the user can dismiss or review the message without losing access to its content
+5. Given a notification communicates an error or required user action, when it is presented, then the message clearly explains the issue and any required next steps
+6. Given a notification is displayed, when zoomed or on mobile devices, then the notification remains visible, readable, and does not obstruct critical page functionality
+7. Given accessibility validation is completed, when testing is performed using keyboard navigation and screen readers, then the notification experience meets applicable WCAG 2.2 AA and AODA requirements
+
+DECLARED MANIFEST (the files this story says it will touch — in this project these live under one of the four codelines: cx-shared, next.gotransit.com, next.upexpress.com or next.metrolinx.com):
+- (none declared)
+
+CODE EVIDENCE (real findings from the metrolinx repository — ground truth; derive your vocabulary from these findings only, never from your own knowledge of React, react-toastify, Next.js, jest or any other library in these codelines):
+- src/components/OnboardingFormControls/OnboardingFormControls.tsx :: IOnboardingFormControlsAriaLabels — IOnboardingFormControlsAriaLabels is where the ticket's change attaches (useBreakpoint, preventDefault, renderAccessibleTooltip, toBeInTheDocument, renderOnPageNavigation, toBeTruthy, src/components/AspectRatio/AspectRatio.stories.tsx, src/interface/content/global.ts, src/components/OnboardingFormControls/__tests__/OnboardingFormControls.spec.tsx, src/utils/cn.ts, src/components/AccessibleTooltip/AccessibleTooltip.tsx, src/interface/content/footer.ts, src/components/Button/Button.tsx, src/components/BannerWithImage/BannerWithImage.tsx, src/components/Footer/utils/getFooterConfigs.ts, src/components/Accordion/__tests__/AccordionSummary.spec.tsx,  where the repository uses , write a new function)
+
+STORY CONTEXT:
+Title: [GO/UP/MX] Toast Notification (Pop-Up) Accessibility Enhancement 
+Description: 1. Problem Statement
+Toast notifications are currently used across GO/UP/MX websites to communicate important system feedback, such as successful form submissions, updates, etc. These notifications typically appear briefly on screen, are visually small, and disappear automatically after a short period of time. 
+Previous Control Gap AODA accessibility report identified that these notifications can be difficult for users to notice, particularly for users with low vision, cognitive disabilities, screen reader users, and individuals who may not be actively focused on the area where the notification appears. As a result, users may miss notifications and be uncertain whether their action was completed successfully.
+The current implementation may not fully align with WCAG requirements for status messages, error identification, and ensuring that important information is communicated effectively to assistive technologies. Toast notifications should be redesigned to improve visibility, accessibility, and user awareness while maintaining a consistent experience across digital channels.
+2. Business value
+- Improves compliance with AODA and WCAG 2.2 accessibility requirements
+- Reduces the risk of users missing important confirmation, warning, or error messages
+- Improves confidence that actions such as form submissions and updates  have been completed successfully
+- Enhances usability for screen reader users, users with low vision, and users with cognitive disabilities
+- Creates a consistent and accessible notification pattern across MX/GO/UP websites
+- Reduces customer confusion, duplicate submissions, and related customer support inquiries
+3. Requestor / Stakeholder
+>   Requestor:   Marketing - Digital  >   Main Stakeholder:  CDX
+
+4. Objective & User Story
+As a  MX/GO/UP website user  I want to  clearly receive and understand confirmation, notifications and error messages after completing an action  So that  I know whether my action was successful and do not miss important information
+5. Acceptance Criteria & Expected Outcome
+- Given  a user completes an action that triggers a toast notification,  when  the message appears,  then  the notification is visually prominent and easily distinguishable from surrounding page content
+- Given  a screen reader user completes an action,  when  the notification is triggered,  then  the message is programmatically announced using appropriate ARIA live region attributes
+- Given  a notification contains important information,  when  it is displayed,  then  users are provided sufficient time to perceive and read the message before it disappears
+- Given  a notification is displayed,  when  additional time is required,  then  the user can dismiss or review the message without losing access to its content
+- Given  a notification communicates an error or required user action,  when  it is presented,  then  the message clearly explains the issue and any required next steps
+- Given  a notification is displayed,  when   zoomed or on mobile devices,  then  the notification remains visible, readable, and does not obstruct critical page functionality
+- Given  accessibility validation is completed,  when  testing is performed using keyboard navigation and screen readers,  then  the notification experience meets applicable WCAG 2.2 AA and AODA requirements
+6. Designs & Assets  (CX / UX / UI only - delete if N/A)
+>  Are designs needed?  Y  >   Figma Link:  
+  
+WCAG / AODA References
+- WCAG 2.2 SC 4.1.3 Status Messages : Status messages must be programmatically conveyed to assistive technologies without requiring focus changes
+- WCAG 2.2 SC 3.3.1 Error Identification : Errors must be clearly identified and described to users
+- WCAG 2.2 SC 1.4.3 Contrast (Minimum) : Notifications must provide sufficient contrast to ensure readability
+- WCAG 2.2 SC 2.2.1 Timing Adjustable : Users must have adequate time to read content presented on screen
+- WCAG 2.2 SC 1.4.10 Reflow : Content must remain usable and readable at increased zoom levels
+- WCAG 2.2 SC 4.1.2 Name, Role, Value : Notification components must expose appropriate accessibility information to assistive technologies
+
+
+YOUR PREVIOUS ANSWER WAS REFUSED: the vocabulary holds no usable term
+Answer again, completely. Every item the request lists must be present in this answer.
+
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <GUARD_VOCABULARY> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<GUARD_VOCABULARY>
+{
+  "blacklist": [ {
+      "term": <string>
+         // The literal term or phrase to match, lowercase.,
+      "reason": <string>
+         // Short clause naming which part of the rule it breaks.,
+      "kind": <string> one of "implementation_noun" | "construction_verb" | "internal_structure" | "cross_comparison" | "other"   (optional),
+  } ]
+  "whitelist": [ {
+      "term": <string>,
+      "reason": <string>   (optional),
+  } ]
+}
+</GUARD_VOCABULARY>
+
+Submit the concrete terms that would VIOLATE the stated guard rule for this story, and the terms that represent its legitimate observable surface. Derive them from the supplied code evidence. Do not answer in prose.

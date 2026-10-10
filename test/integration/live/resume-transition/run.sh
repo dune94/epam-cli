@@ -76,15 +76,15 @@ timeout "${TRANSITION_TIMEOUT:-5400}" bash -c '
   _run_agent_mint "$3" "$4"; echo "MINT_STATUS=$?"
 ' _ "$NODEW" "$SCRIPT_DIR" "$PRD" "$W/mint.log" > "$W/settle.out" 2>&1
 
-O="$W/settle.out"; cnt(){ grep -c "$1" "$2" 2>/dev/null || echo 0; }
+O="$W/settle.out"; cnt(){ grep -c "$1" "$2" 2>/dev/null || true; }
 echo "RESULT scenario=$SC mode=$MODE"
 echo "RESULT settle=$(grep -o 'deferred decision settled: [^—]*' "$O" | head -1)"
 echo "RESULT mint_status=$(grep -o 'MINT_STATUS=[0-9]*' "$O" | cut -d= -f2)"
-echo "RESULT mint_runs=$(grep -c 'ROSTER_ONLY=0' "$W/mints.log" 2>/dev/null || echo 0) roster_only_runs=$(grep -c 'ROSTER_ONLY=1' "$W/mints.log" 2>/dev/null || echo 0)"
+echo "RESULT mint_runs=$(grep -c 'ROSTER_ONLY=0' "$W/mints.log" 2>/dev/null || true) roster_only_runs=$(grep -c 'ROSTER_ONLY=1' "$W/mints.log" 2>/dev/null || true)"
 echo "RESULT roster_reviews=$(cnt 'roster review (cycle' "$O")"
-echo "RESULT prompts_reused=$(cnt '\] reused ' "$O") prompts_generated=$(cnt '\] generated ' "$O") generation_attempts=$(grep -c ' attempt [0-9]*/' "$O" 2>/dev/null || echo 0)"
+echo "RESULT prompts_reused=$(cnt '\] reused ' "$O") prompts_generated=$(cnt '\] generated ' "$O") generation_attempts=$(grep -c ' attempt [0-9]*/' "$O" 2>/dev/null || true)"
 echo "RESULT installed=$(ls "$C/prompts"/*.json 2>/dev/null | wc -l)"
-echo "RESULT calls=$(wc -l < "$CALLS" 2>/dev/null || echo 0) by_agent=$(sort "$CALLS" 2>/dev/null | uniq -c | awk '{printf "%s:%s ",$2,$1}')"
+echo "RESULT calls=$(wc -l < "$CALLS" 2>/dev/null || true) by_agent=$(sort "$CALLS" 2>/dev/null | uniq -c | awk '{printf "%s:%s ",$2,$1}')"
 _names_after=$("$NODE" -e 'const r=require(process.argv[1]+"/lib/project-roster.js").mintedFromRegistries(process.argv[2]);console.log(r.map(m=>m.name+"["+m.kind+"]").sort().join(","))' "$SCRIPT_DIR" "$C")
 echo "RESULT agents_unchanged=$([ "$_names_before" = "$_names_after" ] && echo yes || echo "NO before=$_names_before after=$_names_after")"
 echo "RESULT install_untouched=$([ "$(find "$P" -maxdepth 2 -type f \( -name '*.json' -o -name '.complete-*' \) -not -path '*/runs/*' -exec md5sum {} + | sort | md5sum | cut -c1-32)" = "$_before" ] && echo yes || echo NO)"

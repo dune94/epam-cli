@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -20,8 +20,12 @@ import path from 'node:path';
 const REPO = path.resolve(__dirname, '../../..');
 const INSTALLER = path.join(REPO, 'orchestrations-installer/install.sh');
 
+const dirs: string[] = [];
+afterAll(() => { for (const d of dirs) fs.rmSync(d, { recursive: true, force: true }); });
+
 function fixture(opts: { openrouterKey?: string; minimaxKey?: string; stack?: string } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-creds-'));
+  dirs.push(dir);
   fs.mkdirSync(path.join(dir, 'orchestrations/config'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'orchestrations/scripts/lib'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'dist'), { recursive: true });
@@ -64,7 +68,8 @@ function fixture(opts: { openrouterKey?: string; minimaxKey?: string; stack?: st
 
 const run = (dir: string, stack: string) =>
   spawnSync('bash', [path.join(dir, 'orchestrations-installer/install.sh'), '--no-docker', '--stack', stack],
-    { cwd: dir, encoding: 'utf8', timeout: 30_000, env: { ...process.env, EPAM_NONINTERACTIVE: '1' } });
+    { cwd: dir, encoding: 'utf8', timeout: 30_000,
+      env: { ...process.env, EPAM_NONINTERACTIVE: '1', EPAM_BIN_DIR: path.join(dir, 'bin') } });
 
 describe('the installer verifies required credentials are actually filled in', () => {
   it('FAILS when a required credential is present in .env as an empty placeholder', () => {
@@ -108,5 +113,14 @@ describe('the installer verifies required credentials are actually filled in', (
     expect(tpl, '.env.example was never (re)generated').toMatch(/OPENROUTER_API_KEY=/);
     expect(tpl).toMatch(/MINIMAX_API_KEY=/);
     expect(tpl).toMatch(/openrouter/);
+  });
+
+  it('never overwrites the machine-wide epam shim', () => {
+    const shimPath = path.join(os.homedir(), '.local/bin/epam');
+    const before = fs.existsSync(shimPath) ? fs.readFileSync(shimPath, 'utf8') : null;
+    const dir = fixture({ openrouterKey: 'sk-real-key', minimaxKey: 'mm-real-key' });
+    run(dir, 'openrouter');
+    const after = fs.existsSync(shimPath) ? fs.readFileSync(shimPath, 'utf8') : null;
+    expect(after, 'install test must not overwrite ~/.local/bin/epam — add EPAM_BIN_DIR to run()').toBe(before);
   });
 });

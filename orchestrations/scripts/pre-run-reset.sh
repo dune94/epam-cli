@@ -863,7 +863,12 @@ if [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
     fi
 fi
 if [ "$_ROSTER_CURRENT" = "1" ] && [ "$_CODELINE_ASSETS_REUSED" = "1" ]; then
-    info "  Keeping the roster — this codeline's completed agents are reused"
+    # DEFERRED is not COMPLETED: with the codeline unknown, nothing has been judged reusable yet — the mint decides.
+    if [ "${_CODELINE_DECISION_DEFERRED:-0}" = "1" ]; then
+        info "  Keeping the roster for now — whether it is reused is decided by the mint, once discovery names the codelines"
+    else
+        info "  Keeping the roster — this codeline's completed agents are reused"
+    fi
 elif [ "$_ROSTER_CURRENT" = "1" ] && [ "${_IS_RESUMED_RUN:-0}" = "1" ]; then
     info "  Resuming — keeping this run's own reviewed roster; it is not re-derived"
 elif [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
@@ -1039,7 +1044,13 @@ fi
 # prompt builder. Removed and recreated so the builder writes into a clean directory rather than
 # over a mixture of this run's output and some earlier run's.
 if [ "$_CODELINE_ASSETS_REUSED" = "1" ]; then
-    info "  Keeping $(find "${_PROJECT_CFG_DIR:-/nonexistent}/prompts" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d '[:space:]') provisioned prompt(s) — this codeline's set completed"
+    # `|| true`: no prompts directory fails find, and under pipefail the assignment would end the reset (set -e).
+    _kept_prompts=$(find "${_PROJECT_CFG_DIR:-/nonexistent}/prompts" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d '[:space:]') || true
+    if [ "${_CODELINE_DECISION_DEFERRED:-0}" = "1" ]; then
+        info "  Keeping ${_kept_prompts} provisioned prompt(s) for now — the mint decides whether they are reused"
+    else
+        info "  Keeping ${_kept_prompts} provisioned prompt(s) — this codeline's set completed"
+    fi
 elif [ -n "${_PROJECT_CFG_DIR:-}" ] && [ -d "$_PROJECT_CFG_DIR/prompts" ]; then
     _PROMPTS_N=$(find "$_PROJECT_CFG_DIR/prompts" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d '[:space:]')
     # COPIED BEFORE THE WIPE, for the same reason as the roster above: these are the prompts the

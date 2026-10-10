@@ -107,7 +107,7 @@ describe('a step never runs twice in one run', () => {
     // Silently continuing when the artefact is missing is indistinguishable from a run that never
     // produced it, which is the failure mode every guard here exists to end.
     expect(MINT, 'a resume that finds no prompts installed does not say so')
-      .toMatch(/resuming, but no prompts are installed/);
+      .toMatch(/marked complete, but no prompts are installed/);
     expect(ROSTER, 'a roster that fails its contract is silently trusted instead of re-derived')
       .toMatch(/does not satisfy the contract/);
   });

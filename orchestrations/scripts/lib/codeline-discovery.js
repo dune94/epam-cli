@@ -554,13 +554,55 @@ function callLlm(prompt, opts = {}) {
 
 // ── Main ───────────────────────────────────────────────────────────────────
 
+/**
+ * discoveryReuse(prompt, manifest) -> { file, read(), write(answer) }
+ *
+ * Keyed by the rendered prompt (tickets, every candidate's name and path, the template) and the
+ * commit each candidate has checked out. A read returns the stored answer only when every path it
+ * chose is still a git repository; otherwise null and the agent is asked. Stored in the project
+ * config (EPAM_PROJECT_CONFIG_DIR/.discovery-cache); with no project config there is no reuse.
+ */
+function discoveryReuse(prompt, manifest) {
+  const none = { file: '', read: () => null, write: () => {} };
+  const cfg = process.env.EPAM_PROJECT_CONFIG_DIR;
+  if (!cfg) return none;
+  const { spawnSync } = require('child_process');
+  const head = (p) => {
+    const r = spawnSync('git', ['-C', p, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+    return r.status === 0 ? r.stdout.trim() : '';
+  };
+  const key = require('crypto').createHash('sha256')
+    .update(JSON.stringify({ prompt, heads: manifest.map((r) => [r.path, head(r.path)]) }))
+    .digest('hex');
+  const dir = path.join(cfg, '.discovery-cache');
+  const file = path.join(dir, `${key}.json`);
+  return {
+    file,
+    read: () => {
+      try {
+        const answer = JSON.parse(fs.readFileSync(file, 'utf8'));
+        const picked = (answer && answer.codelines) || [];
+        return picked.length && picked.every((c) => c && c.path && fs.existsSync(path.join(c.path, '.git')))
+          ? answer : null;
+      } catch { return null; }
+    },
+    write: (answer) => {
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(`${file}.tmp`, JSON.stringify(answer, null, 2));
+        fs.renameSync(`${file}.tmp`, file);
+      } catch (e) { log(`WARN: the discovery answer could not be kept for reuse: ${(e && e.message) || e}`); }
+    },
+  };
+}
+
 // Requirable without running. The prompt below is migrating into the template layer, and a
 // migration has to be provable byte-for-byte — which means a test must be able to call the
 // builder. An unguarded IIFE runs a whole discovery pass the moment anything requires this.
 module.exports = {
   // Exported so the extraction rule is assertable without a model call.
   extractJsonObject,
-  buildDiscoveryPrompt, buildRepoManifest };
+  buildDiscoveryPrompt, buildRepoManifest, discoveryReuse };
 
 if (require.main !== module) return;
 
@@ -609,8 +651,17 @@ if (require.main !== module) return;
   // proposals are re-proposed. That is self-correction, not a deterministic workaround: nothing
   // here invents a selection, and when the attempts are exhausted the run stops.
   // eslint-disable-next-line global-require
+  // THE SAME QUESTION IS NOT ASKED TWICE. A relaunch of a run that died before its first pause
+  // asked discovery again about the same tickets and repositories at the same commits (AMSD-2974,
+  // runs 3-7, 2026-10-09). The answer is reused only when the whole prompt and the commit checked
+  // out in every candidate repository are identical; anything else asks the agent, as before.
+  const reuse = discoveryReuse(prompt, manifest);
+  let result = reuse.read();
+  if (result) {
+    log(`Reusing the discovery answer given to this exact question before (${reuse.file})`);
+  } else {
   const { retryUntilParsed } = require('./content-retry.js');
-  const result = retryUntilParsed({
+  result = retryUntilParsed({
     what: 'codeline-discovery',
     attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
     log,
@@ -653,6 +704,9 @@ if (require.main !== module) return;
       return { ok: true, value: answer };
     },
   });
+
+  reuse.write(result);
+  }
 
   // Everything the contract requires was checked by the parser above, and a reply that still
   // broke it exhausted its corrections — retryUntilParsed threw rather than returning. So what

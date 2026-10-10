@@ -778,11 +778,6 @@ if (require.main !== module) return;
       const implementerNames = Object.entries(storedRoster.agents || {})
         .filter(([, a]) => a && a.kind === 'implementer')
         .map(([name]) => name);
-      // THE KEPT ROSTER'S OWN ROLES, so the prompts keyed by them are found: a skipped mint left _mintedDetail empty, the
-      // builder keyed its cache on a placeholder that names no role, and every prompt that names a minted agent missed
-      // (13 of run 6's 20 reviewed prompts, 2026-10-09). Read back from what the mint wrote — never typed here.
-      _mintedDetail = require('./lib/project-roster.js').mintedFromRegistries(process.env.EPAM_PROJECT_CONFIG_DIR || '');
-      _mintedNames = _mintedDetail.map((m) => m.name);
       if (implementerNames.length > 0) {
         rosterLib.registerProjectRoles(AGENTS_DIR, implementerNames);
         process.stderr.write(
@@ -1266,11 +1261,13 @@ if (require.main !== module) return;
             + `(${_installed.length} on disk) — not rebuilt; `
             + 'EPAM_REGENERATE_CODELINE_ASSETS=1 forces regeneration\n');
         _skipProvisioning = true;
+      } else {
+        // Empty is NOT silently accepted: something cleared them, and continuing without saying so
+        // would look identical to a run that never provisioned any. Only when empty: this printed after every
+        // skip too, saying the opposite of what had just been decided (2026-10-09).
+        process.stderr.write(
+          '[mint-step] the prompt set is marked complete, but no prompts are installed — provisioning them now\n');
       }
-      // Empty is NOT silently accepted: something cleared them, and continuing without saying so
-      // would look identical to a run that never provisioned any.
-      process.stderr.write(
-        '[mint-step] resuming, but no prompts are installed — provisioning them now\n');
     }
 
     // THE PROVISIONING MODE IS THE PROJECT'S DECISION, and no mode was being passed at all —
@@ -1285,6 +1282,14 @@ if (require.main !== module) return;
         + "'generate' (specialise each one for this project). There is no engine default: "
         + 'picking one silently is how a project ends up running prompts nobody chose.');
     }
+
+    // THE PROJECT'S ROLES, as the prompts are specialised for them and the prompt cache is keyed by them: what this run
+    // minted, or — when the mint did not run (a resume, agents kept from the run before) — the agents the mint recorded,
+    // read back from its registries. Kept apart from _mintedDetail, which means "minted THIS run" and is what the roster
+    // review examines: filling it for a kept roster re-reviewed and replaced a kept agent (AMSD-2974 run 7, 2026-10-09).
+    const _projectRoles = _mintedDetail.length
+      ? _mintedDetail
+      : require('./lib/project-roster.js').mintedFromRegistries(projectConfigDir || '');
 
     process.env.EPAM_AGENT_NAME = 'prompt-builder';
     // Opt-in per project; the registry's prompt-review.enabledBy names this variable.
@@ -1345,8 +1350,8 @@ if (require.main !== module) return;
       ].join('\n'),
       // The same text the reviewer is handed, so the generator and its judge see one context.
       codelineContext: _codelineContext,
-      mintedRoles: _mintedDetail.length
-        ? _mintedDetail.map((m) => `- ${m.name} [${m.kind}] — ${m.rationale || ''}`).join('\n')
+      mintedRoles: _projectRoles.length
+        ? _projectRoles.map((m) => `- ${m.name} [${m.kind}] — ${m.rationale || ''}`).join('\n')
         : '(none minted this run)',
       // THE BUILDER RUNS AT ITS OWN SEAM, with the grants that seam declares.
       //
@@ -1362,7 +1367,7 @@ if (require.main !== module) return;
       // The generator and its reviewer — one definition, shared with the live-token harness.
       ...require('./lib/prompt-build-calls.js').promptBuildCalls({
         engineRoot, logDir: LOG_DIR, runClaude: spec.runClaude, promptExec, projectConfigDir,
-        codelineContext: _codelineContext, stories, mintedDetail: _mintedDetail, toolGrant,
+        codelineContext: _codelineContext, stories, mintedDetail: _projectRoles, toolGrant,
         reviewEnabled: _promptReviewEnabled,
       }),
       log: (m) => process.stderr.write(`${m}\n`),

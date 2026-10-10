@@ -3992,7 +3992,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
               . "$SCRIPT_DIR/lib/story-outputs.sh" 2>/dev/null || true
               story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" > "$_lf_outputs_file" 2>/dev/null || true
             fi
-            python3 -c "import json,sys; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); active=[s for s in d.get('stories',[]) if not s.get('completed')]; print(json.dumps([{k:s.get(k) for k in ('id','title','agentRole')} for s in active], indent=2))" > "$_lf_stories_file" 2>/dev/null || echo "[]" > "$_lf_stories_file"
+            python3 -c "import json,sys; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); _ph=set((d.get('implementationOrder') or {}).get('${PHASE:-}',[]) or []); active=[s for s in d.get('stories',[]) if not s.get('completed') or s.get('id') in _ph]; print(json.dumps([{k:s.get(k) for k in ('id','title','agentRole')} for s in active], indent=2))" > "$_lf_stories_file" 2>/dev/null || echo "[]" > "$_lf_stories_file"
             _lp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-vals-XXXXXX.json")
             _lp_role_file=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-role-XXXXXX.txt")
             jq -r --arg r "gate-finding-analyst" '.[$r] // ""' "$_profiles_file" > "$_lp_role_file" 2>/dev/null || : > "$_lp_role_file"
@@ -4058,7 +4058,7 @@ import sys,json,re
 raw=sys.stdin.read()
 m=re.search(r'\{[^{}]*\"story_id\"[^{}]*\}', raw, re.DOTALL)
 if m:
-    try: print(json.loads(m.group(0)).get('story_id',''))
+    try: print(json.loads(m.group(0)).get('story_id') or '')
     except: pass
 " 2>/dev/null || echo "")"
 

@@ -1951,7 +1951,7 @@ run_healing_recorder() {
             # The class is the coordinator's classification of this attempt; "unknown" is not a
             # class, and an episode with no derivable signature stays unkeyed, honestly.
             local _kb_role _kb_class
-            _kb_role="${STORY_ROLE:-$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .agentRole // ""' "${PRD_FILE:-}" 2>/dev/null || echo "")}"
+            _kb_role="$(kb_story_role "$story_id")"
             _kb_class="${COORDINATOR_FAILURE_CLASS:-}"; [ "$_kb_class" = "unknown" ] && _kb_class=""
             kb_record_episode "$story_id" "$_kb_role" "$diagnosis" "$_kb_class" \
                 <<< "${VERIFICATION_FAILURE:-}" || true

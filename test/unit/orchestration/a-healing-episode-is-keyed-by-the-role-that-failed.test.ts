@@ -33,7 +33,9 @@ describe("the writer path's healing recorder hands the KB the story's own role a
     const prd = join(d, 'prd.json'); writeFileSync(prd, JSON.stringify({ stories: [{ id: 'S-1', agentRole: 'stand-in-engineer' }] }));
     const seen = join(d, 'seen.txt');
     // The KB library as the recorder sources it — recording what it is handed.
-    writeFileSync(join(lib, 'kb-apply.sh'), `kb_record_episode() { printf 'record role=%s class=%s\\n' "$2" "$4" >> "${seen}"; cat >/dev/null; }\nkb_maybe_synthesize() { printf 'synth role=%s\\n' "$1" >> "${seen}"; }\n`);
+    writeFileSync(join(lib, 'kb-apply.sh'), `kb_record_episode() { printf 'record role=%s class=%s\\n' "$2" "$4" >> "${seen}"; cat >/dev/null; }\nkb_maybe_synthesize() { printf 'synth role=%s\\n' "$1" >> "${seen}"; }\n`
+      // The REAL role resolution, so the role recorded is the one the engine derives — not a stand-in's.
+      + `${extractFn(join(ROOT, 'orchestrations/scripts/lib/kb-apply.sh'), 'kb_story_role')}\n`);
     const script = [
       'set -u', 'log() { :; }',
       `SCRIPT_DIR="${d}"`, `LOG_DIR="${join(d, 'logs')}"`, `PRD_FILE="${prd}"`, 'COORDINATOR_FAILURE_CLASS=env', 'VERIFICATION_FAILURE=""',

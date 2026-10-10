@@ -1056,16 +1056,23 @@ function mintedFromRegistries(projectConfigDir) {
  * investigators it minted cover exactly the codelines this run's PRD names — no more, no fewer. Anything else is
  * another context's roster, and the clean slate applies.
  */
-function keptRosterFor(projectConfigDir, prdFile, registryFile) {
+function keptRosterFor(projectConfigDir, prdFile, registryFile, discoveryFile) {
   const rosterFile = projectRosterPath(projectConfigDir);
   if (!rosterFile || !fs.existsSync(rosterFile)) return { ok: false, reason: 'no roster on disk' };
   const cur = rosterIsCurrent(rosterFile, registryFile);
   if (!cur.ok) return { ok: false, reason: `not current: ${cur.reason}` };
+  // THE RUN'S CODELINES ARE DISCOVERY'S ANSWER when it gave one. At mint time the PRD's outputDirs names only the first
+  // lane — the rest are added later — so compared with it, the agents minted for this very run's codelines were cleared
+  // and minted again (AMSD-2974 run 9, 2026-10-10). The PRD speaks only for a run with no discovery (a declared scope).
   let runCls = [];
   try {
-    const prd = JSON.parse(fs.readFileSync(prdFile, 'utf8'));
-    runCls = ((prd.project && prd.project.outputDirs) || []).map((o) => o && o.codeline).filter(Boolean);
-  } catch { return { ok: false, reason: 'the run\'s PRD is unreadable' }; }
+    if (discoveryFile && fs.existsSync(discoveryFile)) {
+      runCls = (JSON.parse(fs.readFileSync(discoveryFile, 'utf8')).codelines || []).map((c) => c && c.name).filter(Boolean);
+    } else {
+      const prd = JSON.parse(fs.readFileSync(prdFile, 'utf8'));
+      runCls = ((prd.project && prd.project.outputDirs) || []).map((o) => o && o.codeline).filter(Boolean);
+    }
+  } catch { return { ok: false, reason: 'the run\'s codelines are unreadable' }; }
   let byCl = {};
   try { byCl = JSON.parse(fs.readFileSync(path.join(projectConfigDir, 'project-investigators.json'), 'utf8')).byCodeline || {}; }
   catch { return { ok: false, reason: 'no investigators recorded by codeline' }; }
@@ -1109,10 +1116,10 @@ if (require.main === module && process.argv[2] === '--is-current') {
   process.exit(v.ok ? 0 : 1);
 }
 
-// node project-roster.js --kept-for <prd.json> <projectConfigDir>   exit 0 when the roster on disk is this run's
+// node project-roster.js --kept-for <prd.json> <projectConfigDir> [codeline-discovery.json]   exit 0 when the roster on disk is this run's
 if (require.main === module && process.argv[2] === '--kept-for') {
   const { registryPath } = require('./seam-invocation.js');
-  const v = keptRosterFor(process.argv[4], process.argv[3], registryPath());
+  const v = keptRosterFor(process.argv[4], process.argv[3], registryPath(), process.argv[5]);
   process.stderr.write(`${v.reason}\n`);
   process.exit(v.ok ? 0 : 1);
 }

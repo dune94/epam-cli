@@ -31,6 +31,17 @@ KB_LAST_FIRED=""
 KB_LAST_GATES=""
 KB_LAST_SIGNATURE=""
 
+# kb_story_role <story_id> — the agent a story's self-heal is recorded and applied under: STORY_ROLE when a caller
+# set it, else the story's own agentRole from the PRD; empty when neither names one (nothing is guessed). ONE
+# definition for both sides: the writer recorded under the PRD's agentRole and loaded under STORY_ROLE, which no writer
+# caller sets, so every lesson was learned and never received (AMSD-2974 run 9, 2026-10-10).
+kb_story_role() {
+    local _story="${1:-}"
+    if [ -n "${STORY_ROLE:-}" ]; then printf '%s' "$STORY_ROLE"; return 0; fi
+    [ -n "$_story" ] && [ -f "${PRD_FILE:-}" ] && command -v jq >/dev/null 2>&1 || return 0
+    jq -r --arg id "$_story" '[.stories[]? | select(.id == $id) | .agentRole // empty][0] // ""' "$PRD_FILE" 2>/dev/null || true
+}
+
 kb_apply_constraints() {
     local _role="${1:-}" _sigs="${2:-}"
     KB_LAST_FIRED=""; KB_LAST_GATES=""

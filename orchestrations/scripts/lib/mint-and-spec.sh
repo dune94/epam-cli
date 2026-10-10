@@ -221,7 +221,7 @@ _run_agent_mint() {
       log "[mint] deferred decision settled: resuming ${EPAM_RESUME_RUN} — no completion marker (an earlier prompt build did not finish); keeping this run's roster, agents and prompts, completing the missing prompts"
       EPAM_SKIP_AGENT_MINT=1
     elif [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
-       && "$NODE_BIN" "$SCRIPT_DIR/lib/project-roster.js" --kept-for "$1" "$EPAM_PROJECT_CONFIG_DIR" 2>/dev/null; then
+       && "$NODE_BIN" "$SCRIPT_DIR/lib/project-roster.js" --kept-for "$1" "$EPAM_PROJECT_CONFIG_DIR" "${LOG_DIR:-}/codeline-discovery.json" 2>/dev/null; then
       # THE PREVIOUS RUN'S AGENTS ARE THIS RUN'S. A run that died before its prompt set completed wrote no completion
       # marker, and every fresh launch over the same codelines threw its reviewed roster away and paid to mint it again
       # (AMSD-2974 run 6 -> 7, 2026-10-09). The roster is kept when it is current for today's seam bases and the

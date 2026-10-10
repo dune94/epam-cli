@@ -111,8 +111,11 @@ describe('the kept agents\' identity is read back from what the mint wrote', () 
 });
 
 describe('the mint\'s settle step keeps them and mints nothing', () => {
-  function settle(prdCodelines: string[]) {
+  function settle(prdCodelines: string[], discovered?: string[]) {
     const c = copy(prdCodelines);
+    // What discovery persisted for this run, beside its logs (LOG_DIR), as the ingest leaves it.
+    if (discovered) writeFileSync(join(c.d, 'codeline-discovery.json'), JSON.stringify({
+      codelines: discovered.map((n) => ({ name: n, path: `/codelines/${n}` })) }));
     mkdirSync(join(c.proj, '.prompt-cache'), { recursive: true });
     writeFileSync(join(c.proj, '.prompt-cache', '.reset-pending'), '');
     mkdirSync(join(c.proj, 'prompts'), { recursive: true });
@@ -141,6 +144,22 @@ describe('the mint\'s settle step keeps them and mints nothing', () => {
     expect(existsSync(join(s.proj, 'roster.json')), `the roster was cleared:\n${s.out.slice(-1200)}`).toBe(true);
     expect(s.mints, 'the mint ran for agents this run already has').toBe(0);
     expect(readdirSync(join(s.proj, 'prompts')), 'installed copies would be re-reviewed (paid)').toEqual([]);
+  });
+
+  it('AT MINT TIME the PRD names only the first lane — the run\'s codelines are discovery\'s answer: kept', () => {
+    // AMSD-2974 run 9 (2026-10-10): the PRD the mint receives lists outputDirs [cxshared] only; the other lanes are added
+    // later. Compared with the four codelines the agents were minted for, it re-minted a roster made for this very run.
+    const [first] = CODELINES;
+    const s = settle([first], CODELINES);
+    expect(s.out, s.out.slice(-1200)).toMatch(/minted for exactly this run's codelines — kept/);
+    expect(s.mints, 'the mint ran for agents this run already has').toBe(0);
+  });
+
+  it('and discovery naming ANOTHER set still clears, even with the PRD\'s first lane matching', () => {
+    const [first] = CODELINES;
+    const s = settle([first], [...CODELINES, 'metrolinx']);
+    expect(existsSync(join(s.proj, 'roster.json')), 'another run\'s roster survived').toBe(false);
+    expect(s.mints).toBe(1);
   });
 
   it('another set of codelines: the clean slate, and the mint runs', () => {

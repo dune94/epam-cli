@@ -1007,7 +1007,7 @@ implement_story() {
         if [ -f "$_kb_lib" ]; then
             # shellcheck disable=SC1090
             . "$_kb_lib"
-            kb_apply_constraints "${STORY_ROLE:-}" "story:${story_id:-}" || true
+            kb_apply_constraints "$(kb_story_role "${story_id:-}")" "story:${story_id:-}" || true
             # Pillar 2: rules that fired stay alive, rules that did not age toward
             # their TTL and are archived for re-validation instead of trusted forever.
             kb_tick "${KB_LAST_FIRED:-}" || true

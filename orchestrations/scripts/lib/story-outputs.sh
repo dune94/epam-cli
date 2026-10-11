@@ -210,6 +210,37 @@ story_outputs_tests_for() {
         | grep -E "$_STORY_OUTPUTS_TEST_RE" 2>/dev/null | sort -u || true
 }
 
+# story_resume_completed_by_commit <project_root> <lane_log_dir> <lane_prd>
+#
+# A RESUME DOES NOT REWRITE COMMITTED WORK. A lane resumes from its pre-writer checkpoint, whose PRD predates the
+# writer, so every story reads "not completed" and the writer is invoked again — AMSD-2974 run 9, resume 3: "I didn't
+# need to change any code this turn: the earlier commit d429022 … already contains all three fixes", a paid call that
+# changed nothing, then a full review. A story whose work is committed in THIS run (the "<story>:" convention, scoped
+# to the lane's phase baseline) with no review rejection NEWER than that commit is marked completed in the lane PRD:
+# the writer skips it and the review judges the committed change. A newer rejection leaves it for the writer.
+story_resume_completed_by_commit() {
+    local project_root="$1" log_dir="$2" prd="$3"
+    [ -n "$project_root" ] && [ -e "$project_root/.git" ] && [ -f "$prd" ] || return 0
+    [ -f "$log_dir/phase-baseline-sha.txt" ] || return 0
+    local _base; _base=$(tr -d '[:space:]' < "$log_dir/phase-baseline-sha.txt" 2>/dev/null)
+    [ -n "$_base" ] && git -C "$project_root" rev-parse --verify --quiet "$_base" >/dev/null 2>&1 || return 0
+    local _id _ct _fb _fbt
+    for _id in $(jq -r '.stories[]? | select(.completed != true) | .id' "$prd" 2>/dev/null); do
+        _ct=$(git -C "$project_root" log "${_base}..HEAD" --grep="^${_id}:" -1 --format=%ct 2>/dev/null)
+        [ -n "$_ct" ] || continue
+        _fb="$log_dir/review-feedback-${_id}.json"
+        if [ -f "$_fb" ]; then
+            _fbt=$(stat -c %Y "$_fb" 2>/dev/null || echo 0)
+            [ "${_fbt:-0}" -gt "$_ct" ] && continue
+        fi
+        local _tmp; _tmp=$(mktemp)
+        jq --arg id "$_id" '(.stories[] | select(.id == $id)) |= (. + {completed: true})' "$prd" > "$_tmp" \
+            && mv "$_tmp" "$prd" || rm -f "$_tmp"
+        echo "[resume] ${_id}: its work is committed in this run ($(git -C "$project_root" log "${_base}..HEAD" --grep="^${_id}:" -1 --format=%h 2>/dev/null)) and no review rejection is newer — the writer is not invoked again; the review judges the committed change"
+    done
+    return 0
+}
+
 # story_outputs_sources <project_root> <log_dir> — everything that is not a test
 story_outputs_sources() {
     story_outputs_files "$1" "$2" | grep -v -E "$_STORY_OUTPUTS_TEST_RE" || true

@@ -93,6 +93,6 @@ describe('the reviewer proceeds on the derived rung', () => {
     });
     const out = (r.stdout || '') + (r.stderr || '');
     expect(out, `the reviewer still refused:\n${out.slice(-1200)}`).not.toMatch(/no rung on record for FX-1/);
-    expect(out).toMatch(/takes the writer's rung for FX-1: model=MiniMax-M3 provider=minimax/);
+    expect(out).toMatch(/follows the writer's model for FX-1: model=MiniMax-M3 provider=minimax/);
   });
 });

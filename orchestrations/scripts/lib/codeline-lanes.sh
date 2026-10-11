@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One more pass per release line a shared codeline's story plan names (_run_release_lines, called by the lane loops below).
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/release-lines.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/story-outputs.sh"
 # lane_declared_passed <codeline> — the operator declared this lane already passed in this run
 # (EPAM_PASSED_LANES, space/comma separated). AMSD-2974, 2026-10-04: cx-shared reached GO before
 # lanes recorded it; a resume re-ran it (--reset) and was OOM-killed. Operator-chosen.
@@ -1097,6 +1098,7 @@ _run_codeline_loop() {
       _cl_prds+=("$_cl_prd")
       local _n_stories
       if _lane_resume_prd "$_cl" "$_cl_prd"; then
+        story_resume_completed_by_commit "$_wt" "${LOG_DIR:-/tmp}/lanes/${_cl}" "$_cl_prd"
         _n_stories=$(jq '(.stories // []) | length' "$_cl_prd" 2>/dev/null || echo 0)
       else
         _n_stories=$(_filtered_prd "$_cl" "$_cl_prd" "$_prd_path")
@@ -1357,6 +1359,7 @@ _run_codeline_loop() {
 
     local _n_stories _lane_spec_mode=""
     if _lane_resume_prd "$_cl" "$_cl_prd"; then
+      story_resume_completed_by_commit "$_wt" "${LOG_DIR:-/tmp}/lanes/${_cl}" "$_cl_prd"
       _n_stories=$(jq '(.stories // []) | length' "$_cl_prd" 2>/dev/null || echo 0)
     else
       _n_stories=$(_filtered_prd "$_cl" "$_cl_prd" "$_prd_path")

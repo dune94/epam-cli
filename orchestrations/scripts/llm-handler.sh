@@ -219,7 +219,15 @@ if [ -n "${LOG_DIR:-}" ] && [ -z "${EPAM_STREAM_CAPTURE_DIR:-}" ]; then
   EPAM_STREAM_CAPTURE_DIR="${LOG_DIR}/stream-captures"
   mkdir -p "$EPAM_STREAM_CAPTURE_DIR" 2>/dev/null && export EPAM_STREAM_CAPTURE_DIR || unset EPAM_STREAM_CAPTURE_DIR
 fi
-trap 'rm -f "$PROMPT_FILE"; [ -n "$_SI_OWNED" ] && rm -f "$EPAM_SI_FILE"' EXIT
+# EVERY CALL IS PRICED. A caller that names no result document (repro-test-writer, tc-writer, vc-coverage — 40 calls in
+# AMSD-2974 run 9) made the runner answer in text mode, so the recorder below could only write "usage unknown", $0.
+# The hub owns a result document for such a call: the runner answers in JSON, the caller still gets the plain reply on
+# stdout, and the ledger gets the call's real usage. A caller that names its own is unaffected.
+_HUB_RESULT_OWNED=""
+if [ -z "${ORCH_JSON_RESULT:-}" ]; then
+  ORCH_JSON_RESULT="$(mktemp "${TMPDIR:-/tmp}/hub-result-XXXXXX")" && export ORCH_JSON_RESULT && _HUB_RESULT_OWNED=1
+fi
+trap 'rm -f "$PROMPT_FILE"; [ -n "$_SI_OWNED" ] && rm -f "$EPAM_SI_FILE"; [ -n "$_HUB_RESULT_OWNED" ] && rm -f "$ORCH_JSON_RESULT" "$ORCH_JSON_RESULT.cost-emitted.json"' EXIT
 cat > "$PROMPT_FILE"
 # RELATIVE PATHS ONLY (operator, 2026-10-01). Every call passes here, however its prompt was built —
 # filled from a template, or assembled inline — so here the prompt and the SI have the run's local

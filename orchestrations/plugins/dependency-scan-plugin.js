@@ -251,8 +251,11 @@ function declaredInManifestText(text, cfg) {
     const { allManifests } = require('../scripts/lib/ecosystem-registry.js');
     const base = String(cfg.manifestFile).split('/').pop();
     const eco = allManifests().find((e) => e.file === base || (Array.isArray(e.alsoMatches) && e.alsoMatches.includes(base)));
-    if (eco && typeof eco.deps === 'function') {
-      for (const n of eco.deps(text) || []) if (n) out.add(String(n));
+    // WHAT MAY BE IMPORTED, where the ecosystem distinguishes it from what is installed (package.json: peer and optional
+    // dependencies are declared too). Otherwise what the manifest installs.
+    const declared = eco && (typeof eco.importableDeps === 'function' ? eco.importableDeps : eco.deps);
+    if (typeof declared === 'function') {
+      for (const n of declared(text) || []) if (n) out.add(String(n));
       return out;
     }
   } catch { /* no provider claims it: the JSON keys below */ }

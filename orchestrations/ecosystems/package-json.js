@@ -321,6 +321,15 @@ module.exports = {
       const pkg = JSON.parse(text);
       return Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) });
     },
+    // WHAT CODE MAY IMPORT — a different question from what this manifest INSTALLS (deps above, which the lockfile
+    // check relies on). A library declares what its host provides under peerDependencies, and optional packages under
+    // optionalDependencies; both are declared. The import scan read deps() and reported cx-shared's own react as
+    // "imported but NOT DECLARED", aborting the writer (AMSD-2974 run 9, 2026-10-11).
+    importableDeps: (text) => {
+      const pkg = JSON.parse(text);
+      return Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}),
+        ...(pkg.peerDependencies || {}), ...(pkg.optionalDependencies || {}) });
+    },
     // The repo scan also reads a display name and a description out of this one. Kept with the
     // ecosystem that defines the fields rather than in the scanner that happens to want them.
     describe: (text) => {

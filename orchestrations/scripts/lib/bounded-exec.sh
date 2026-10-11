@@ -119,6 +119,23 @@ _affinity_works() {
     taskset -c 0 true >/dev/null 2>&1
 }
 
+# bound_self_affinity <workers> — restrict THIS shell's CPU affinity, so everything it starts inherits the bound.
+#
+# For a caller whose work is a shell FUNCTION (an agent call: invoke_agent), which taskset cannot run. Called inside a
+# subshell — `$( bound_self_affinity N; invoke_agent … )` — so only that call is bounded. The agent's own tool commands
+# (a test suite it decides to run) are its children and size their pools from the same affinity. The team-lead reviewer
+# ran the codeline's whole jest suite on all 16 cores in AMSD-2974 run 9 (~4.1 GB, scope throttled, 30–100 min reviews).
+bound_self_affinity() {
+    local workers="${1:-1}"
+    case "$workers" in ''|*[!0-9]*) workers=1 ;; esac
+    [ "$workers" -lt 1 ] && workers=1
+    if _affinity_works; then
+        taskset -p -c "0-$(( workers - 1 ))" "$BASHPID" >/dev/null 2>&1 && return 0
+    fi
+    printf '[bounded-exec] WARNING: CPU affinity is unavailable on this host — this agent call and its tools run UNBOUNDED (requested %s workers).\n' "$workers" >&2
+    return 0
+}
+
 # run_test_bounded <workers> <command...>
 #
 # Runs the command with its visible parallelism restricted to <workers>. Passes stdout, stderr and

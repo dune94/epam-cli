@@ -69,6 +69,8 @@ REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 . "$SCRIPT_DIR/lib/story-acs-block.sh"
 # shellcheck source=lib/render-engine-prompt.sh
 . "$SCRIPT_DIR/lib/render-engine-prompt.sh"
+# shellcheck source=lib/bounded-exec.sh
+. "$SCRIPT_DIR/lib/bounded-exec.sh"
 # shellcheck source=lib/review-scope.sh
 . "$SCRIPT_DIR/lib/review-scope.sh"
 # shellcheck source=lib/provider-map.sh
@@ -319,7 +321,9 @@ run_review_prompt() {
     # Model and provider stay here: routing is per-site and dynamic, which the gateway says is the
     # caller's to own.
     export PROJECT_ROOT
-    _review_out=$(echo "$prompt_text" | invoke_agent team-lead-review \
+    # BOUNDED: the reviewer runs the codeline's tests itself; its tools inherit this call's CPU affinity, derived from
+    # the tightest cgroup memory limit (lib/bounded-exec.sh). Run 9: 15 jest workers, scope throttled, 30–100 min reviews.
+    _review_out=$(declare -F bound_self_affinity >/dev/null && bound_self_affinity "$(resolve_test_workers)"; echo "$prompt_text" | invoke_agent team-lead-review \
         --model "$_model" --provider "$_provider" \
         --json-result "$_review_json_result" \
         --codeline "$PROJECT_ROOT" \

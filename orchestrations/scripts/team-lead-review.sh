@@ -852,7 +852,8 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
     # reviews inherited Opus 5.5 at effort max / temp 0.8 — 7 reviews, $42.99 of $83.51. Effort is the reviewer's
     # own rung-0 effort (rung_reasoning_effort, lib/model-ladders.sh); temperature stays its seam's
     # (seam_ladder_export above). The writer's values are still logged, so the difference is visible.
-    export EPAM_REASONING_EFFORT="$(rung_reasoning_effort 0)"
+    EPAM_REASONING_EFFORT="$(rung_reasoning_effort 0)"
+    export EPAM_REASONING_EFFORT
     log "  review-agent follows the writer's model for $story_id: model=$_rung_model provider=$_rung_provider effort=${EPAM_REASONING_EFFORT} temp=${EPAM_TEMPERATURE:-unset} (writer's rung: effort=${_rung_effort:-unset} temp=${_rung_temperature:-unset})"
 
     log "  Invoking review-agent for $story_id... (model=$_rung_model provider=$_rung_provider)"

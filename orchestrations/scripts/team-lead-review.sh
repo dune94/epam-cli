@@ -842,11 +842,14 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
         continue
     fi
 
-    # Applied, not merely logged. Effort and temperature are exported because that is how the
-    # writer's own ladder sets them and how ai-run.sh reads them.
-    export EPAM_REASONING_EFFORT="$_rung_effort"
-    export EPAM_TEMPERATURE="$_rung_temperature"
-    log "  review-agent takes the writer's rung for $story_id: model=$_rung_model provider=$_rung_provider effort=${_rung_effort:-unset} temp=${_rung_temperature:-unset}"
+    # THE WRITER'S MODEL, THE REVIEWER'S OWN EFFORT AND TEMPERATURE. Operator, 2026-10-11 (supersedes the
+    # 2026-08-22 rule above for effort and temperature): the reviewer still climbs with the writer's MODEL, but at
+    # the top of the chain next_ladder_step raises the writer's effort as "the only lever left", and run 9's
+    # reviews inherited Opus 5.5 at effort max / temp 0.8 — 7 reviews, $42.99 of $83.51. Effort is the reviewer's
+    # own rung-0 effort (rung_reasoning_effort, lib/model-ladders.sh); temperature stays its seam's
+    # (seam_ladder_export above). The writer's values are still logged, so the difference is visible.
+    export EPAM_REASONING_EFFORT="$(rung_reasoning_effort 0)"
+    log "  review-agent follows the writer's model for $story_id: model=$_rung_model provider=$_rung_provider effort=${EPAM_REASONING_EFFORT} temp=${EPAM_TEMPERATURE:-unset} (writer's rung: effort=${_rung_effort:-unset} temp=${_rung_temperature:-unset})"
 
     log "  Invoking review-agent for $story_id... (model=$_rung_model provider=$_rung_provider)"
     REVIEW_OUTPUT_FILE="${LOG_DIR:-$AUTOMATION_DIR/logs}/review-agent-${story_id}.log"

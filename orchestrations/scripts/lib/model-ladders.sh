@@ -40,6 +40,17 @@
 #
 # A caller that genuinely does not care still writes `|| true`, and all eight already do. What it
 # can no longer do is mistake "no project" for "no ladders declared".
+# rung_reasoning_effort <rung> — the reasoning effort the ladder configures for a rung. ONE definition, read by the
+# writer's ladder (next_ladder_step, lib/model-ladder.sh) and by the reviewer for its own effort (team-lead-review.sh).
+rung_reasoning_effort() {
+    case "${1:-0}" in
+        0) printf '%s' "${EPAM_RUNG0_REASONING_EFFORT:-medium}" ;;
+        1) printf '%s' "${EPAM_RUNG1_REASONING_EFFORT:-medium}" ;;
+        2) printf '%s' "${EPAM_RUNG2_REASONING_EFFORT:-high}" ;;
+        *) printf '%s' "${EPAM_RUNG3_REASONING_EFFORT:-high}" ;;
+    esac
+}
+
 export_model_ladders() {
     local _settings="${1:-${EPAM_LLM_SETTINGS_FILE:-}}"
     # A PATH BUILT FROM AN UNSET VARIABLE IS NOT A MISSING FILE. Callers resolve this as

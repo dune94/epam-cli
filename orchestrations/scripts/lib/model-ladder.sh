@@ -999,12 +999,8 @@ next_ladder_step() {
 
     # Effort: the rung's configured level is a floor, never a downgrade.
     local _rung_effort
-    case "$_rung" in
-        0) _rung_effort="${EPAM_RUNG0_REASONING_EFFORT:-medium}" ;;
-        1) _rung_effort="${EPAM_RUNG1_REASONING_EFFORT:-medium}" ;;
-        2) _rung_effort="${EPAM_RUNG2_REASONING_EFFORT:-high}" ;;
-        *) _rung_effort="${EPAM_RUNG3_REASONING_EFFORT:-high}" ;;
-    esac
+    declare -F rung_reasoning_effort >/dev/null || . "$(dirname "${BASH_SOURCE[0]}")/model-ladders.sh"
+    _rung_effort="$(rung_reasoning_effort "$_rung")"
     # THE RUNG DECIDES. This was max_effort("$_effort", "$_rung_effort") — the rung's level was a
     # FLOOR, so whatever effort arrived could only ever be raised. What arrived was the SEAM's flat
     # declaration, and 33 of 41 seams declare "high", so the ladder's rung-0 "medium" never applied

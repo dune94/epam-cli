@@ -77,7 +77,10 @@ describe('claude.sh — Rung 3 escalation logic', () => {
     // The per-rung effort floor moved into next_ladder_step with the rest of the ladder
     // decision, so assert it where it now lives. The behaviour is unchanged and is also
     // covered by executed tests in next-ladder-step.test.ts.
-    expect(extractFunctionBody('next_ladder_step'))
+    // Since 2026-10-11 the per-rung effort defaults have ONE definition, rung_reasoning_effort in
+    // lib/model-ladders.sh, which next_ladder_step reads.
+    expect(extractFunctionBody('next_ladder_step')).toMatch(/rung_reasoning_effort "\$_rung"/);
+    expect(readFileSync(join(__dirname, '../../../orchestrations/scripts/lib/model-ladders.sh'), 'utf8'))
       .toMatch(/EPAM_RUNG3_REASONING_EFFORT:-high/);
   });
 });

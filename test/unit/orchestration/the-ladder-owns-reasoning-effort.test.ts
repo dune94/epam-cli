@@ -53,8 +53,16 @@ function ladderStep(
 ): { model: string; effort: string; temp: string } {
   const dir = mkdtempSync(join(tmpdir(), 'ladder-effort-'));
   const script = join(dir, 'run.sh');
-  const fns = ['effort_rank', 'max_effort', 'next_effort', 'get_model_ladder_step', 'next_ladder_step']
-    .map(extractFunctionBody).join('\n\n');
+  // rung_reasoning_effort is the ONE definition of each rung's configured effort (lib/model-ladders.sh), shared with
+  // the reviewer since 2026-10-11 — next_ladder_step reads it, so it is lifted with the rest.
+  const rungEffort = (() => {
+    const src = engineSource(join(REPO, 'orchestrations/scripts/lib/model-ladders.sh'));
+    const at = src.indexOf('rung_reasoning_effort() {');
+    if (at < 0) throw new Error('rung_reasoning_effort not found in lib/model-ladders.sh');
+    return src.slice(at, src.indexOf('\n}\n', at) + 2);
+  })();
+  const fns = [rungEffort, ...['effort_rank', 'max_effort', 'next_effort', 'get_model_ladder_step', 'next_ladder_step']
+    .map(extractFunctionBody)].join('\n\n');
   writeFileSync(script, `#!/usr/bin/env bash\nset -uo pipefail\n${fns}\n`
     + `next_ladder_step "${rung}" "${model}" "${effort}" "${tier}"\n`);
   const r = spawnSync('bash', [script], {

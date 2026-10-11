@@ -936,6 +936,19 @@ _write_reviewed_dynamic_tool() {
     fi
 }
 
+# analyst_ruled_environmental — 0 when the current deterministic-check failure is EXACTLY the finding the failure
+# analyst already ruled environmental (not the writer's) for this story; the analyst judges, the check does not
+# overrule it. EXACT, not same_root_cause_diagnoses: that fuzzy match calls "react undeclared in AboutPresto.tsx" and
+# "lodash-es undeclared in Toast.tsx" the same (shared boilerplate), and a ruling must not excuse a finding the analyst
+# never saw. Whitespace is normalised; any other difference fails as before.
+analyst_ruled_environmental() {
+    [ -n "${ANALYST_RULED_ENVIRONMENTAL:-}" ] && [ "${DETERMINISTIC_CHECK_FAILURE:-0}" -eq 1 ] && [ -n "${VERIFICATION_FAILURE:-}" ] || return 1
+    local _ruled _cur
+    _ruled=$(printf '%s' "$ANALYST_RULED_ENVIRONMENTAL" | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//')
+    _cur=$(printf '%s' "$VERIFICATION_FAILURE" | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//')
+    [ -n "$_cur" ] && [ "$_ruled" = "$_cur" ]
+}
+
 run_failure_analyst() {
     local story_id="$1"
     local output_file="${2:-/dev/null}"
@@ -1809,6 +1822,13 @@ ${_kb_target_role_profile}"
                     COORDINATOR_ESCALATE="no"
                     export COORDINATOR_FAILURE_CLASS COORDINATOR_ESCALATE
                     log "  [FailureAnalyst] target=environment — the failure is environmental, not the writer's; no rung is spent on it"
+                    # THE ANALYST'S RULING ON A DETERMINISTIC CHECK IS RECORDED, so it decides the next verification
+                    # (analyst_ruled_environmental). AMSD-2974 run 9: the analyst ruled the dependency scan's finding
+                    # "unrelated to this story's diff and already satisfied", and the writer was aborted at max rung anyway.
+                    if [ "${DETERMINISTIC_CHECK_FAILURE:-0}" -eq 1 ] && [ -n "${VERIFICATION_FAILURE:-}" ]; then
+                        ANALYST_RULED_ENVIRONMENTAL="$VERIFICATION_FAILURE"; export ANALYST_RULED_ENVIRONMENTAL
+                        log "  [FailureAnalyst] this ruling stands for the deterministic check's finding — the same finding will not fail the writer again"
+                    fi
                     if [ -n "$tool_name" ] || [ -n "$tool_recipe" ]; then
                         _write_reviewed_dynamic_tool "$story_id" "$tool_name" "$tool_purpose" "$tool_recipe"
                     else

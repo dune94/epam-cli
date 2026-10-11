@@ -2523,8 +2523,14 @@ $_kb_section"
         # External test verification — runs tests outside the agent loop so the
         # agent only needs to write files (keeping iterations low).
         if [ "$invoke_success" = true ] && ! run_external_verification "$story_id" "$output_file"; then
-            warning "$story_cli deliverables written but external tests failed"
-            invoke_success=false
+            if analyst_ruled_environmental; then
+                # The failure analyst already ruled this exact finding environmental — not the writer's. Agents judge.
+                warning "  [DeterministicCheck] overruled by the failure analyst's ruling (environmental, not this story's) — the attempt stands"
+                DETERMINISTIC_CHECK_FAILURE=0; export DETERMINISTIC_CHECK_FAILURE
+            else
+                warning "$story_cli deliverables written but external tests failed"
+                invoke_success=false
+            fi
         fi
 
         if [ "$invoke_success" = true ]; then
@@ -2762,6 +2768,11 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
                         if [ "$retry_count" -lt "$MAX_RETRIES" ]; then
                             log "  [DeterministicCheck] the remedy was applied and the same violation returned — invoking the failure analyst to diagnose WHY"
                             run_failure_analyst "$story_id" "$output_file" "$retry_count"
+                            # The analyst judged it environmental: not a writer that cannot converge, so no abort for it.
+                            if [ "${COORDINATOR_FAILURE_CLASS:-}" = "env" ]; then
+                                HEALING_BROKEN=0; export HEALING_BROKEN
+                                log "  [DeterministicCheck] the analyst ruled the repeat environmental — not a healing failure; the writer is not aborted for it"
+                            fi
                         fi
                     fi
                 fi

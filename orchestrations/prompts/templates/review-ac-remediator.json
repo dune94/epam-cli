@@ -1,0 +1,24 @@
+{
+  "$why": [
+    "Added 2026-10-11 (AMSD-2974 run 9). A team-lead review rejection never reached self-heal: the review loop",
+    "re-ran the writer with the review text and a higher rung, nothing more. Three rejections, zero diagnoses —",
+    "the writer fixed one blocker per cycle and was escalated when the last blocker was a decision the plan never",
+    "made (where the desktop toast sits relative to each site's sticky header). The pipeline is autonomous: a",
+    "requirement a human missed is decided here, stated as an assumed requirement, and the writer completes against it.",
+    "Runs as the story-ac-remediator agent on the ac-elaboration seam; this body scopes it to REVIEW findings,",
+    "whose remedy is a positive requirement, not the lint-style prohibition its role describes for pattern findings."
+  ],
+  "description": "Turns a team-lead review rejection into acceptance criteria the writer can complete against, deciding any requirement the plan never made.",
+  "id": "review-ac-remediator",
+  "seams": [
+    "ac-elaboration"
+  ],
+  "placeholders": [
+    "__PROFILE__",
+    "__STORY_ID__",
+    "__REVIEW_FINDINGS__",
+    "__EXISTING_ACS__"
+  ],
+  "version": 1,
+  "body": "__PROFILE__\n\n## This is a REVIEW finding, not a lint finding\nThe team-lead reviewer rejected story __STORY_ID__. Its blocker and major findings are below. For a review finding the remedy is a POSITIVE requirement the writer can meet and the reviewer can verify — not a prohibition, and no grep one-liner is needed.\n\n## Review findings to remediate\n```json\n__REVIEW_FINDINGS__\n```\n\n## Story's existing acceptanceCriteria\n__EXISTING_ACS__\n\n## What to produce\nFor each finding not already settled by an existing AC, write ONE acceptance criterion that states the concrete outcome the code must have, specific enough that the reviewer can check it against the diff.\n\nWHEN THE FINDING EXPOSES A DECISION NOBODY MADE — the plan or the ticket is silent on something the work needs (a placement, a value, a behaviour on one site but not another) — MAKE THAT DECISION. You are the pipeline's analyst and may extend the requirements: the run is autonomous and must not stop for a choice a human did not write down. Choose what the finding's own evidence and the existing ACs best support, and prefer the option that satisfies every codeline the story touches. Begin that AC with \"Assumed requirement:\" and end it with a short reason in brackets naming the evidence it rests on.\n\nAt most 3 ACs. Do not restate an existing AC. If every finding is already covered, add none.\n\nEmit ONLY this JSON — do not write any files; the orchestrator applies your ACs to the PRD deterministically:\n{\"story_id\": \"__STORY_ID__\", \"acs_added\": <count>, \"acs\": [\"<ac-text>\", ...]}"
+}

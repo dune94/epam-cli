@@ -12,6 +12,61 @@
 # run_story_with_watchdog (the writer), the review_feedback_* partition and the story ladder
 # state (lib/phase-assessment.sh, lib/story-retry-state.sh), PHASE, LOG_DIR, PRD_FILE.
 
+# _remediate_review_rejection <review-feedback-file> <story_id>
+#
+# SELF-HEAL FOR A REVIEW REJECTION. The loop below re-ran the writer with the review text and a higher rung and
+# nothing more: no analyst, no episode, no requirement — AMSD-2974 run 9 fixed one blocker per cycle and was escalated
+# when the last blocker was a decision the plan never made. The analyst (story-ac-remediator, review-ac-remediator
+# template) turns the blocker/major findings into acceptance criteria, deciding any requirement nobody wrote down
+# ("Assumed requirement: …"); they are applied to the PRD deterministically (ac-apply.py, as the gates do), so the next
+# writer attempt and the next review both read them; and the remediation is recorded as a self-heal episode under the
+# story's own agent. Sets REVIEW_REMEDIATION_ADDED to the number of ACs added. Never fails the loop.
+_remediate_review_rejection() {
+    local _fb="$1" _sid="$2" _prd="${MAIN_PRD_FILE:-$PRD_FILE}"
+    REVIEW_REMEDIATION_ADDED=0
+    [ -f "$_fb" ] && [ -f "$_prd" ] || return 0
+    local _findings
+    _findings=$(jq -c '[(.issues // .findings // [])[] | select((.severity // "") | test("^(blocker|critical|major)$"; "i"))]' "$_fb" 2>/dev/null || echo "[]")
+    [ "$_findings" != "[]" ] && [ -n "$_findings" ] || { log "  [review-remediation] ${_sid}: no blocker/major finding — nothing to remediate"; return 0; }
+    local _profiles_file="${EPAM_AGENTS_DIR:-${AUTOMATION_DIR}/agents}/profiles.json"
+    local _vals; _vals=$(mktemp "${TMPDIR:-/tmp}/review-ac-remediator-vals-XXXXXX.json")
+    jq -n --arg profile "$(jq -r '."story-ac-remediator" // ""' "$_profiles_file" 2>/dev/null || echo "")" \
+          --arg story_id "$_sid" --arg findings "$_findings" \
+          --arg existing "$(jq -c --arg id "$_sid" '.stories[] | select(.id == $id) | (.acceptanceCriteria // [])' "$_prd" 2>/dev/null || echo "[]")" \
+          '{"__PROFILE__":$profile,"__STORY_ID__":$story_id,"__REVIEW_FINDINGS__":$findings,"__EXISTING_ACS__":$existing}' > "$_vals"
+    local _prompt; _prompt="$(render_engine_prompt review-ac-remediator "$_vals")"; rm -f "$_vals"
+    [ -n "$_prompt" ] || { warning "  [review-remediation] ${_sid}: the remediator's prompt did not render — the writer retries with the review text only"; return 0; }
+    local _model; _model="$(seam_model_or_fail "story-ac-remediator")" || return 0
+    log "  [review-remediation] ${_sid}: the analyst turns the review's blocker/major findings into requirements (model ${_model})..."
+    local _raw
+    _raw=$(printf '%s' "$_prompt" | AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" AI_MODEL="$_model" \
+        EPAM_AGENT_NAME="story-ac-remediator" "${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}" \
+        ${ORCH_GATE_PROVIDER:+--provider "$ORCH_GATE_PROVIDER"} --model "$_model" 2>>"$LOG_DIR/review-remediation-${_sid}.log" || true)
+    [ -n "$_raw" ] || { warning "  [review-remediation] ${_sid}: the analyst returned nothing — the writer retries with the review text only"; return 0; }
+    printf '%s\n' "$_raw" > "$LOG_DIR/review-remediation-${_sid}-cycle${_review_cycle:-0}.txt"
+    local _tmp; _tmp=$(mktemp); printf '%s' "$_raw" > "$_tmp"
+    local _added
+    _added=$( ( flock -w 10 200 || exit 0
+        python3 "$SCRIPT_DIR/lib/handlers/ac-apply.py" "$_prd" "$_sid" "$_tmp" 2>/dev/null || echo 0
+    ) 200>"${_prd}.lock" )
+    rm -f "$_tmp"
+    REVIEW_REMEDIATION_ADDED="${_added:-0}"
+    if [ "${REVIEW_REMEDIATION_ADDED:-0}" -gt 0 ] 2>/dev/null; then
+        success "  [review-remediation] ${_sid}: ${REVIEW_REMEDIATION_ADDED} acceptance criteria added from the review (assumed requirements included where the plan was silent)"
+    else
+        REVIEW_REMEDIATION_ADDED=0
+        info "  [review-remediation] ${_sid}: no new acceptance criteria (already covered)"
+    fi
+    # THE EPISODE, under the story's own agent — the self-heal ledger records what was learned from the rejection.
+    if [ -f "$SCRIPT_DIR/lib/kb-apply.sh" ]; then
+        . "$SCRIPT_DIR/lib/kb-apply.sh"
+        local _role; _role="$(kb_story_role "$_sid")"
+        kb_record_episode "$_sid" "$_role" "review rejection remediated: ${REVIEW_REMEDIATION_ADDED} AC(s) added" "review-rejected" <<< "$_findings" || true
+        kb_maybe_synthesize "$_role" || true
+    fi
+    return 0
+}
+
 run_review_cycle() {
 log "Step 3.6: Running Team Lead code review for phase..."
 _emit_agent start "review-agent" "Team Lead Code Review"
@@ -143,6 +198,7 @@ while true; do
     # "Retries MUST proceed up the rungs — nothing is allowed to intercede" —
     # a fixed cycle cap must never cut a climbable story off early.
     _review_climbable_stories=()
+    declare -A _review_remediated=()
     # ONLY A STORY WITH A REAL VERDICT IS RE-IMPLEMENTED OR ESCALATED. A story whose review was never
     # parsed (reviewIncomplete) is left for the next cycle's review to judge — see
     # review_feedback_to_reimplement in lib/phase-assessment.sh (regintel 140717Z, 2026-09-21).
@@ -150,7 +206,17 @@ while true; do
         _fb="$LOG_DIR/review-feedback-${_fb_story}.json"
         [ -f "$_fb" ] || continue
         if story_ladder_exhausted "$LOG_DIR" "$_fb_story" "$_review_max_retries"; then
-            warning "Step 3.6: $_fb_story's ladder is exhausted (already tried its top rung) — escalating"
+            # A HUMAN-SHAPED GAP IS NOT A REASON TO STOP. Before escalating, the analyst turns the rejection into
+            # requirements; when it adds any, the story has new information and is attempted again (still bounded
+            # by the cycle safety valve below). Only a rejection the analyst cannot add anything to escalates.
+            _remediate_review_rejection "$_fb" "$_fb_story"
+            if [ "${REVIEW_REMEDIATION_ADDED:-0}" -gt 0 ] 2>/dev/null; then
+                warning "Step 3.6: $_fb_story's ladder is exhausted, but the review was remediated with ${REVIEW_REMEDIATION_ADDED} new requirement(s) — attempting again on the top rung"
+                _review_climbable_stories+=("$_fb_story:$_fb")
+                _review_remediated["$_fb_story"]=1
+                continue
+            fi
+            warning "Step 3.6: $_fb_story's ladder is exhausted (already tried its top rung) and the review added no requirement — escalating"
             _review_escalated=1
             _escalate_review_story "$_fb" "$_fb_story"
         else
@@ -193,7 +259,7 @@ while true; do
     _review_prev_fp="$_review_fp_now"
     warning "Step 3.6: review requested changes — re-implementing (cycle $_review_cycle → $((_review_cycle + 1)))"
     for _entry in "${_review_climbable_stories[@]}"; do
-        _fb_story="${_entry%%:*}"
+        _fb_story="${_entry%%:*}"; _entry_fb="${_entry#*:}"
         # A review rejection is itself evidence this attempt did not succeed,
         # even when the code built/tested fine internally — advance the
         # story's persisted rung BEFORE re-invoking, or the next claude.sh
@@ -201,6 +267,9 @@ while true; do
         # resumes at the SAME rung, and the ladder never climbs on a
         # review-rejection-only failure. This is the exact live bug fixed
         # this session: two review cycles both logged Rung0/R1.
+        # Self-heal first: the rejection becomes requirements the writer and the next review both read.
+        [ "${_review_remediated[$_fb_story]:-0}" = "1" ] || _remediate_review_rejection "$_entry_fb" "$_fb_story"
+        unset "_review_remediated[$_fb_story]"
         advance_story_retry_rung "$LOG_DIR" "$_fb_story" "$_review_max_retries"
         # Without this reset, the retry below is a guaranteed no-op. Step 8 marks a
         # story `completed` the moment the agent's turn ends — regardless of

@@ -89,7 +89,9 @@ _review_max_retries="${EPAM_MAX_RETRIES:-7}"
 # incomplete). Ladder exhaustion is what actually stops the loop — this only
 # has to be large enough never to fire first. An explicit REVIEW_MAX_CYCLES
 # still wins for an operator who wants a hard ceiling.
-_review_max_cycles="${REVIEW_MAX_CYCLES:-$(( _review_max_retries / 2 + 3 ))}"
+# One cycle per ATTEMPT now (advance_story_retry_on_review_rejection), so the ladder needs up to _review_max_retries
+# rejections to run out; the valve sits above that, never inside it.
+_review_max_cycles="${REVIEW_MAX_CYCLES:-$(( _review_max_retries + 3 ))}"
 _review_cycle=1
 # Direct escalation flag. The hard-block below USED to rely solely on stories
 # being tagged reviewStatus=escalated by iterating review-feedback-*.json files —
@@ -270,7 +272,7 @@ while true; do
         # Self-heal first: the rejection becomes requirements the writer and the next review both read.
         [ "${_review_remediated[$_fb_story]:-0}" = "1" ] || _remediate_review_rejection "$_entry_fb" "$_fb_story"
         unset "_review_remediated[$_fb_story]"
-        advance_story_retry_rung "$LOG_DIR" "$_fb_story" "$_review_max_retries"
+        advance_story_retry_on_review_rejection "$LOG_DIR" "$_fb_story" "$_review_max_retries"
         # Without this reset, the retry below is a guaranteed no-op. Step 8 marks a
         # story `completed` the moment the agent's turn ends — regardless of
         # whether the reviewer will accept it — and run_story_with_watchdog

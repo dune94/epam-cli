@@ -265,6 +265,20 @@ advance_story_retry_rung() {
     write_story_retry_count "$log_dir" "$story_id" "$next"
 }
 
+# advance_story_retry_on_review_rejection <log_dir> <story_id> <max_retries>
+#
+# A REVIEW REJECTION RETRIES THE SAME MODEL BEFORE CLIMBING. One attempt, not one rung: each rung allows two attempts,
+# and a rejection on a rung's first attempt is retried on that rung — with the requirements the review remediation
+# derived from it — before the ladder climbs. AMSD-2974 run 9 (2026-10-10): the writer's first attempt on Sonnet 5 was
+# rejected and the next ran on Opus 5.5; the run never came back down. Operator, 2026-10-11 ("Option 2").
+advance_story_retry_on_review_rejection() {
+    local log_dir="$1" story_id="$2" max_retries="$3"
+    local next
+    next=$(( $(read_story_retry_count "$log_dir" "$story_id") + 1 ))
+    [ "$next" -gt "$max_retries" ] && next="$max_retries"
+    write_story_retry_count "$log_dir" "$story_id" "$next"
+}
+
 # ai-run.sh's ladder is flat (one escalation per attempt, no 2-attempts-per-
 # rung grouping — that grouping is specific to claude.sh's writer loop). ANY
 # caller that re-invokes an ai-run.sh-based agent after an explicit

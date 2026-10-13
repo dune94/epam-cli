@@ -6,7 +6,8 @@
     "back-port carried a fraction of the change and its reviewer approved it, because nothing put the two lines' code",
     "side by side. Operator: 'to have two shared changes with different code and reviewer passed without comparing",
     "two code lines is insane.' Rendered by the fix-plan producer, for the writer and the diff reviewers alike, only",
-    "on a release-line pass whose codeline's own line has a committed change."
+    "on a release-line pass whose codeline's own line has a committed change.",
+    "2026-10-13 live harness round 2: the reviewer saw the 7.x line was 'materially weaker than the already-approved main-line fix', called it major because the line's root-cause analysis named fewer fixes, and approved. What was written before the change existed does not narrow it."
   ],
   "description": "Appended to a release line's plan, for its writer and its diff reviewers: the change the codeline's own line committed for this story, verbatim, and what porting it means.",
   "id": "release-line-port",
@@ -16,6 +17,6 @@
     "__MAIN_LINE__",
     "__MAIN_LINE_CHANGE__"
   ],
-  "version": 1,
-  "body": "\n\nTHE CHANGE THIS RELEASE LINE PORTS. This pass works release line __RELEASE_LINE__. The same story was changed, reviewed and approved on this codeline's own line (__MAIN_LINE__); this is that change exactly as committed there:\n```diff\n__MAIN_LINE_CHANGE__\n```\nThe change on this release line is that change, ported: every hunk above is present here, or adapted where this line's source differs — and each adaptation names the difference in this line's source that requires it. What the change above delivers — what a user sees and can do, and what its tests assert — is delivered on this line too. The plan's summary of what this line carries is a summary; where it says less than the change above, the change above is what ships. When writing: port it hunk by hunk with its tests, and say in your final message, per hunk, ported or adapted (and why). When reviewing: put this line's diff beside the change above, hunk by hunk; a hunk missing or weakened with no reason in this line's source is a BLOCKER finding.\n"
+  "version": 2,
+  "body": "\n\nTHE CHANGE THIS RELEASE LINE PORTS. This pass works release line __RELEASE_LINE__. The same story was changed, reviewed and approved on this codeline's own line (__MAIN_LINE__); this is that change exactly as committed there:\n```diff\n__MAIN_LINE_CHANGE__\n```\nThe change on this release line is that change, ported: every hunk above is present here, or adapted where this line's source differs — and each adaptation names the difference in this line's source that requires it. What the change above delivers — what a user sees and can do, and what its tests assert — is delivered on this line too. Everything else this line was given — the plan's summary of what it carries, the root-cause analysis, the fix sites and what they mark as needing no edit — was written before the change above existed; where any of it prescribes less than the change above, the change above is what ships on this line. When writing: port it hunk by hunk with its tests, and say in your final message, per hunk, ported or adapted (and why). When reviewing: put this line's diff beside the change above, hunk by hunk. A hunk missing or weakened with no reason in this line's source is a BLOCKER finding — not major, whatever the plan or the root-cause analysis prescribes — and a line carrying one is not approved.\n"
 }

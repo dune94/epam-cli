@@ -683,6 +683,21 @@ record_lanes_pause() {
     return 0
 }
 
+# _lane_phase_args — the argument a lane's FIRST phase call passes run-agent-orchestration.sh.
+# A RESUMED LANE DOES NOT RESET ITS STORIES. --reset sets every completed story of the phase back to pending
+# (run-agent-orchestration.sh:964), and the orchestrator's own rule is that "a resume runs without --reset"
+# (:1026). The lane passed --reset unconditionally, so the story story_resume_completed_by_commit had just
+# marked completed was un-marked 33 s later and a paid writer re-wrote approved work on every resume
+# (AMSD-2974 run 9, resumes 9-12). A lane resumed from its checkpoint (_lane_spec_mode=0 under EPAM_RESUME_RUN)
+# passes nothing; every other lane, and every retry after gate remediation, still resets.
+_lane_phase_args() {
+  if [ -n "${EPAM_RESUME_RUN:-}" ] && [ "${_lane_spec_mode:-}" = "0" ]; then
+    printf ''
+  else
+    printf '%s' '--reset'
+  fi
+}
+
 _run_codeline_loop() {
   local _prd_path="$1"
   local _log_file="${2:-/tmp/orch-$(date +%Y%m%dT%H%M%S).log}"
@@ -1169,6 +1184,7 @@ _run_codeline_loop() {
         continue
       fi
       log "[orch] Phase '${_phase}' — codeline '${_cl}'..."
+      local _lane_reset; _lane_reset="$(_lane_phase_args)"
       local _pex=0
       JIRA_CODELINE_RUN=1 \
       EPAM_CODELINE="$_cl" \
@@ -1180,7 +1196,7 @@ _run_codeline_loop() {
       OUTPUT_DIR="$_wt" \
       PHASE="$_phase" \
       CROSS_CODELINE_PRD="${CROSS_CODELINE_PRD:-}" \
-      bash "$0" --reset 2>&1 | tee -a "$_log_file"
+      bash "$0" ${_lane_reset:+"$_lane_reset"} 2>&1 | tee -a "$_log_file"
       # No pipefail in this script, so `| tee || _pex=` tests tee's exit (0) and never
       # fires — a phase exit-2 (gate block) was masked to _pex=0 → "done" → PASSED
       # (live AMSD-1820 run #3). Capture the inner orch's real exit; tee exits 0 so set -e is fine.
@@ -1406,6 +1422,7 @@ _run_codeline_loop() {
         continue
       fi
       log "[orch] Phase '${_phase}' — codeline '${_cl}'..."
+      local _lane_reset; _lane_reset="$(_lane_phase_args)"
       local _pex=0
       JIRA_CODELINE_RUN=1 \
       EPAM_CODELINE="$_cl" \
@@ -1417,7 +1434,7 @@ _run_codeline_loop() {
       OUTPUT_DIR="$_wt" \
       PHASE="$_phase" \
       CROSS_CODELINE_PRD="${CROSS_CODELINE_PRD:-}" \
-      bash "$0" --reset 2>&1 | tee -a "$_log_file"
+      bash "$0" ${_lane_reset:+"$_lane_reset"} 2>&1 | tee -a "$_log_file"
       # No pipefail in this script, so `| tee || _pex=` tests tee's exit (0) and never
       # fires — a phase exit-2 (gate block) was masked to _pex=0 → "done" → PASSED
       # (live AMSD-1820 run #3). Capture the inner orch's real exit; tee exits 0 so set -e is fine.

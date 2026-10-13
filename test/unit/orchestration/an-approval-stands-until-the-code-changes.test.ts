@@ -120,3 +120,36 @@ describe('what makes an approval stop standing', () => {
     expect(stands(['REGI-001A'])['REGI-001A']).toBe(false);
   });
 });
+
+// AMSD-2974 run 9 iteration 3 (2026-10-13): the 7.x back-port, approved before its reviewer was ever given the 8.x change
+// to compare with, "stood, not re-reviewed" and went on to GO with a fraction of the change. On a release line the change
+// the line ports (EPAM_MAIN_LINE_CHANGE, lib/release-lines.sh) is part of what the reviewer judged.
+describe('on a release line, the change it ports is part of what the reviewer judged', () => {
+  const run = (recordHash: string | null, onLine: boolean) => {
+    const d = mkdtempSync(join(tmpdir(), 'review-stands-line-'));
+    try {
+      copyFileSync(join(LOGS, 'story-changes.jsonl'), join(d, 'story-changes.jsonl'));
+      copyFileSync(join(LOGS, 'code-reviews.jsonl'), join(d, 'code-reviews.jsonl'));
+      writeFileSync(join(d, 'main.diff'), 'diff --git a/T.tsx b/T.tsx\n+position: TOP_RIGHT\n');
+      const hash = spawnSync('bash', ['-c', `. ${JSON.stringify(SCOPE)}; main_line_change_hash`], { encoding: 'utf8', env: { ...process.env, EPAM_MAIN_LINE_CHANGE: join(d, 'main.diff') } }).stdout.trim();
+      expect(hash, 'the change was not hashed — the cases below would be vacuous').toMatch(/^[0-9a-f]{32}$/);
+      appendFileSync(join(d, 'code-reviews.jsonl'), JSON.stringify({ phase_id: 'core', timestamp: '2026-09-26T21:00:00-04:00', story: 'REGI-008', verdict: 'approved', issues: [],
+        ...(recordHash === null ? {} : { mainLineHash: recordHash === 'SAME' ? hash : recordHash }) }) + '\n');
+      const r = spawnSync('bash', ['-c', `. ${JSON.stringify(SCOPE)}; review_stands REGI-008 core && echo yes || echo no`], { encoding: 'utf8',
+        env: { ...process.env, LOG_DIR: d, REVIEW_LOG: join(d, 'code-reviews.jsonl'), EPAM_MAIN_LINE_CHANGE: onLine ? join(d, 'main.diff') : '' } });
+      return r.stdout.trim();
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  };
+  it('an approval given before the line was compared with its own line\'s change does not stand', () => {
+    expect(run(null, true)).toBe('no');
+  });
+  it('an approval given with a different change to compare does not stand', () => {
+    expect(run('0'.repeat(32), true)).toBe('no');
+  });
+  it('NEGATIVE: an approval given with this same change stands', () => {
+    expect(run('SAME', true)).toBe('yes');
+  });
+  it('NEGATIVE: off a release line, an approval with no such record stands as before', () => {
+    expect(run(null, false)).toBe('yes');
+  });
+});

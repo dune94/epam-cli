@@ -113,6 +113,13 @@ story_plan_hash() {
     return 0
 }
 
+# main_line_change_hash — the change a release line's reviewer is given to compare with (EPAM_MAIN_LINE_CHANGE, written
+# by lib/release-lines.sh), hashed; empty off a release line.
+main_line_change_hash() {
+    [ -n "${EPAM_MAIN_LINE_CHANGE:-}" ] && [ -s "${EPAM_MAIN_LINE_CHANGE:-}" ] || return 0
+    md5sum < "$EPAM_MAIN_LINE_CHANGE" | cut -c1-32
+}
+
 review_stands() {
     local _id="${1:-}" _phase="${2:-}" _changes="${LOG_DIR:-}/story-changes.jsonl" _log="${REVIEW_LOG:-}"
     [ -n "$_id" ] && [ -f "$_changes" ] && [ -f "$_log" ] || return 1
@@ -129,6 +136,10 @@ review_stands() {
     if [ -n "${PRD_FILE:-}" ] && [ -f "${PRD_FILE:-}" ]; then
         [ "$(story_plan_hash "$PRD_FILE" "$_id")" = "$(printf '%s' "$_review" | jq -r '.planHash // empty')" ] || return 1
     fi
+    # ON A RELEASE LINE IT INCLUDES THE CHANGE THE LINE PORTS (AMSD-2974 run 9 iteration 3, 2026-10-13): the 7.x back-port,
+    # approved before its reviewer was ever given the 8.x change to compare with, "stood, not re-reviewed" — and the
+    # weaker port went on to GO. An approval stands on a line only if it was given this same change.
+    [ "$(main_line_change_hash)" = "$(printf '%s' "$_review" | jq -r '.mainLineHash // empty')" ] || return 1
     local _c _r
     _c=$(date -d "$_committed" +%s 2>/dev/null) && _r=$(date -d "$_reviewed" +%s 2>/dev/null) || return 1
     [ "$_r" -gt "$_c" ]

@@ -42,7 +42,10 @@ case_run() {
     local name="$1" round="$2" d="$W/$1-$2"; mkdir -p "$d"
     git clone -q --shared "$SRC" "$d/cx-shared" 2>/dev/null
     git -C "$d/cx-shared" checkout -q -B "AI-${STORY}-7.x" "origin/$LINE_BR"
-    cp -a "$LINE" "$d/logs"; rm -f "$d/logs/code-reviews.jsonl" "$d/logs"/review-feedback-*.json
+    # THE LINE'S REVIEW LOG STAYS (KEEP_APPROVAL=1, the default): a resume meets the line's earlier approval, and whether
+    # it stands is part of what is proven (2026-10-13: it stood, "not re-reviewed", and the weak port went to GO).
+    cp -a "$LINE" "$d/logs"; rm -f "$d/logs"/review-feedback-*.json
+    [ "${KEEP_APPROVAL:-1}" = 1 ] || rm -f "$d/logs/code-reviews.jsonl"
     cp "$W/main-line-change.diff" "$d/main-line-change.diff"
     if [ "$name" = green ]; then
         # The 8.x change ported as-is onto the line's base, committed as the pipeline commits a story.
@@ -57,6 +60,7 @@ case_run() {
       "$NODE" "$SCRIPT_DIR/lib/producers/fix-plan.js" --publish "$PRD_FILE" 2>/dev/null
       bash "$SCRIPT_DIR/team-lead-review.sh" core ) > "$d/review.out" 2>&1
     local verdict issues port
+    grep -q "approval stands, not re-reviewed" "$d/review.out" && echo "RESULT $name-$round STOOD_NOT_REVIEWED"
     verdict=$(jq -r 'select(.phase_id=="core") | .verdict // .review_status' "$d/logs/code-reviews.jsonl" 2>/dev/null | tail -1)
     issues=$(jq -r 'select(.phase_id=="core") | .issues_found // 0' "$d/logs/code-reviews.jsonl" 2>/dev/null | tail -1)
     port=$(cat "$d/logs"/review-feedback-*.json 2>/dev/null | grep -oiE "TOP_RIGHT|pointer-?events|stopPropagation|header|8\.x|port" | sort -u | tr '\n' ' ')

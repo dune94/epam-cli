@@ -847,7 +847,7 @@ $spec_prompt"
             warning "  Spec validator: WARN — some criteria partially met (non-blocking)"
         elif grep -q '"overallVerdict"[[:space:]]*:[[:space:]]*"fail"' "$spec_log" 2>/dev/null; then
             step_emit "22b" "warn" "Step 22b: Spec validator" "ungrounded findings downgraded"
-            warning "  Spec validator: FAIL verdict downgraded to WARN — every criterion in every failing story was self-reported as 'untestable' (agent had no real evidence, likely didn't use its tools; re-check manually)"
+            warning "  Spec validator: FAIL verdict downgraded to WARN — no criterion was found UNMET; the partial / untestable ones are listed in the spec log for human follow-up and do not stop the story"
         else
             step_emit "22b" "pass" "Step 22b: Spec validator"
             success "  Spec validator: PASS"

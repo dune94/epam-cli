@@ -15,26 +15,19 @@ try:
         print('no-data')
         sys.exit(0)
 
-    # Grounding check (same principle already applied to fuzz-weaver/perf-sentinel):
-    # a story's "fail" verdict is only trustworthy if the agent actually verified
-    # SOMETHING about it. When every one of a story's criteria is self-reported
-    # as "untestable" (the agent had no real evidence — e.g. it never actually
-    # used its Read tool despite having access), that "fail" is a hallucinated
-    # conclusion with nothing behind it, not a real finding. Slice the text by
-    # story boundary (storyId occurrence) so each story's own verdict/criteria
-    # are only matched against its OWN slice, not the whole document.
+    # A STORY FAILS IF AND ONLY IF THE VALIDATOR FOUND A CRITERION UNMET. The free-form per-story verdict is not
+    # read: on identical evidence it said "warn" for AMSD-2974's main line and "fail" for its 7.x back-port (both 0
+    # unmet), and the "fail" halted the run. partial / untestable are the criteria only a person can confirm (screen
+    # readers, zoom, devices, axe) — recorded for human follow-up, never a reason to stop the story (operator,
+    # 2026-10-13: "human checks should not pause the completion of the user story"). The validator still judges every
+    # criterion. Each story is matched only against its own slice (storyId boundary to the next).
     story_starts = [m.start() for m in re.finditer(r'"storyId"\s*:\s*"[^"]*"', text)]
     grounded_failing = 0
     for i, start in enumerate(story_starts):
         end = story_starts[i + 1] if i + 1 < len(story_starts) else len(text)
-        story_slice = text[start:end]
-        if not re.search(r'"verdict"\s*:\s*"fail"', story_slice):
-            continue
-        statuses = re.findall(r'"status"\s*:\s*"(met|partial|unmet|untestable)"', story_slice)
-        has_grounded_criterion = any(s != 'untestable' for s in statuses)
-        if has_grounded_criterion:
+        statuses = re.findall(r'"status"\s*:\s*"(met|partial|unmet|untestable)"', text[start:end])
+        if 'unmet' in statuses:
             grounded_failing += 1
-        # else: every criterion is untestable — ungrounded fail, don't count it
 
     # The overallVerdict line is a top-level field — distinct from per-story verdict
     overall_m = re.search(r'"overallVerdict"\s*:\s*"(\w+)"', text)

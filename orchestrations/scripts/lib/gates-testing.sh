@@ -301,6 +301,20 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
         return 0
     fi
 
+    # NOTHING TO JUDGE, NO AGENT CALLED (operator, 2026-10-13: "Every LLM call must be for a reason"). AMSD-2974 run 9:
+    # on site lanes whose plan gives them no change, spec validator, mutant hunter, fuzz, perf and runtime boundary were
+    # each paid to judge an empty diff ("there are no changed source files to analyze"). A phase that changed nothing
+    # against its recorded baseline gives none of them anything to judge; the codeline's own suite, run against what it
+    # receives, is its test (lib/pre-review-gate.sh). Without a recorded baseline nothing is skipped.
+    local _gates_base=""
+    [ -f "$LOG_DIR/phase-baseline-sha.txt" ] && _gates_base=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
+    if [ -n "$_gates_base" ] && phase_changed_nothing "$PROJECT_ROOT" "${_gates_base}..HEAD"; then
+        local _sid
+        for _sid in 22a 22b 22c 22d 22e 22f 23; do step_emit "$_sid" "skip" "Step ${_sid}: testing gate" "the phase changed nothing"; done
+        info "Step 4.2: the phase changed nothing against its baseline (${_gates_base:0:9}) — no testing-gate agent has anything to judge; none is called"
+        return 0
+    fi
+
     cd "$PROJECT_ROOT"
     log "Step 4.2: Running testing gates for phase '$phase_id'..."
     info "  E2E routing overrides: FORCE_LIGHTPANDA=$force_lightpanda FORCE_PLAYWRIGHT=$force_playwright (decision=$routing_decision)"

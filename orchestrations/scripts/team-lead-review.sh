@@ -576,12 +576,14 @@ while IFS= read -r story_id; do
         # (2026-09-21): every core story was reviewed on the phase's whole diff — REGI-007, approved
         # a cycle earlier, was rejected for REGI-010-A's rewrite of scripts/run_pipeline.py, and
         # REGI-003a was told it "did not implement dedup.py" while its dedup.py sat in its own commit.
-        _rev_head="HEAD"; _story_sha=""
-        _story_sha=$(_story_commit_sha "$story_id" 2>/dev/null || true)
-        if [ -n "$_story_sha" ] && git -C "$PROJECT_ROOT" rev-parse --verify --quiet "${_story_sha}^{commit}" >/dev/null 2>&1 \
-           && git -C "$PROJECT_ROOT" rev-parse --verify --quiet "${_story_sha}^{commit}^" >/dev/null 2>&1; then
-            _rev_base="${_story_sha}^"; _rev_head="$_story_sha"
-            log "  Reviewing $story_id on its own commit ${_story_sha:0:8} (the story-changes record)"
+        # The story's WHOLE change, its own files only (lib/review-scope.sh story_review_range): the latest commit alone
+        # was a rework delta — AMSD-2974 run 9 approved a back-port on one line of one file.
+        _rev_head="HEAD"; _story_range=""; _story_paths=()
+        _story_range=$(story_review_range "$story_id" 2>/dev/null || true)
+        if [ -n "$_story_range" ]; then
+            _rev_base="${_story_range%% *}"; _rev_head="${_story_range##* }"
+            mapfile -t _story_paths < <(story_review_paths "$story_id" "$_rev_base" "$_rev_head")
+            log "  Reviewing $story_id on its whole change ${_rev_base:0:9}..${_rev_head:0:8}, ${#_story_paths[@]} file(s) of its own commits (the story-changes record)"
         fi
         # Also review the story's TEST files (the test-writer's output). They live at
         # co-located paths NOT in technicalNotes.files, so scoping to STORY_FILES alone never
@@ -623,7 +625,8 @@ while IFS= read -r story_id; do
         # bumps. The reviewer's whole window was machine output and none of the source it was asked
         # to judge. Lockfiles have their own gate (lockfile-sync); they are not review material.
         _diff_excludes+=(":(exclude)*.lock" ":(exclude)*-lock.json" ":(exclude)go.sum" ":(exclude)*.snap")
-        _diff_full=$(git -C "$PROJECT_ROOT" diff "$_rev_base" "$_rev_head" -- . \
+        [ "${#_story_paths[@]}" -gt 0 ] || _story_paths=(.)
+        _diff_full=$(git -C "$PROJECT_ROOT" diff "$_rev_base" "$_rev_head" -- "${_story_paths[@]}" \
             "${_diff_excludes[@]+"${_diff_excludes[@]}"}" 2>/dev/null || true)
         if [ -z "$_diff_full" ]; then
             _diff_full=$(git -C "$PROJECT_ROOT" diff "$_rev_base" "$_rev_head" 2>/dev/null || true)
@@ -642,7 +645,7 @@ while IFS= read -r story_id; do
                 # per-file summary -- whole units, nothing severed -- and an instruction to read
                 # what it needs. The execute grant includes bash, read_file and search precisely so
                 # it can, and asking is better evidence than a window someone else chose.
-                _diff_stat=$(git -C "$PROJECT_ROOT" diff --stat "$_rev_base" "$_rev_head" -- . \
+                _diff_stat=$(git -C "$PROJECT_ROOT" diff --stat "$_rev_base" "$_rev_head" -- "${_story_paths[@]}" \
                     "${_diff_excludes[@]+"${_diff_excludes[@]}"}" 2>/dev/null || true)
                 # THE WORDS LIVE IN THE TEMPLATE LAYER. This block used to be written here and
                 # substituted into __STORY_DIFF__ — model-facing instruction inside a shell

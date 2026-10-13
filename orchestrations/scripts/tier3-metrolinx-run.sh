@@ -91,7 +91,9 @@ error()   { echo -e "${RED}[tier3-metrolinx] ✗${NC} $*" >&2; }
 # original exit status is preserved.
 # shellcheck source=lib/run-artifacts.sh
 . "$SCRIPT_DIR/lib/run-artifacts.sh"
-_archive_run_artifacts() { info "$(archive_run_artifacts metrolinx "$1" "$LOG_FILE")"; }
+_archive_run_artifacts() {
+  info "$(archive_run_artifacts metrolinx "$1" "$LOG_FILE")"
+}
 
 fail()    {
   echo -e "${RED}[tier3-metrolinx] ✗${NC} $*"

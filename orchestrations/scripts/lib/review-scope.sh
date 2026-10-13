@@ -18,28 +18,54 @@ _story_commit_sha() {
     jq -r --arg id "$_id" 'select(.storyId == $id) | .sha // empty' "$_f" 2>/dev/null | tail -1
 }
 
-# story_review_diff <story_id> — the diff of the story's own commit (all files). Falls back to
-# recent history when the story has no record, as the review did before.
+# story_review_range <story_id> — "<base> <head>": the story's WHOLE change, from before its earliest recorded commit
+# still in the history of its latest, to its latest. Nothing when the story has no record.
+#
+# AMSD-2974 run 9 (2026-10-13): this was the latest commit alone. The 7.x back-port was approved on 6cff178 — one line
+# of one file, the last rework — and the 8.x line on 0620da2, its last rework; neither reviewer saw the change it
+# approved. A record from an attempt later reset away is not in the latest's history, and is passed over.
+story_review_range() {
+    local _id="${1:-}" _f="${LOG_DIR:-}/story-changes.jsonl" _last _first _s
+    [ -n "$_id" ] && [ -f "$_f" ] && [ -e "${PROJECT_ROOT:-}/.git" ] || return 0
+    _last=$(_story_commit_sha "$_id")
+    [ -n "$_last" ] && git -C "$PROJECT_ROOT" rev-parse -q --verify "${_last}^{commit}" >/dev/null 2>&1 || return 0
+    _first="$_last"
+    while IFS= read -r _s; do
+        [ -n "$_s" ] && git -C "$PROJECT_ROOT" merge-base --is-ancestor "$_s" "$_last" 2>/dev/null && { _first="$_s"; break; }
+    done < <(jq -r --arg id "$_id" 'select(.storyId == $id) | .sha // empty' "$_f" 2>/dev/null)
+    git -C "$PROJECT_ROOT" rev-parse -q --verify "${_first}^{commit}^" >/dev/null 2>&1 || return 0
+    printf '%s %s\n' "${_first}^" "$_last"
+}
+
+# story_review_paths <story_id> <base> <head> — the files the story's OWN commits in that range touched (the pipeline
+# commits a story's work as "<story id>: ..."), so another story's commit between them stays out of its review
+# (regintel 20260919T224649Z: a story was rejected for another's rewrite). Nothing when none is found.
+story_review_paths() {
+    git -C "$PROJECT_ROOT" log --format= --name-only -F --grep="${1}:" "${2}..${3}" 2>/dev/null | sed '/^$/d' | sort -u
+}
+
+# story_review_diff <story_id> — the diff of the story's whole change (story_review_range, its own files). Falls back
+# to recent history when the story has no record, as the review did before.
 story_review_diff() {
-    local _id="${1:-}" _sha
+    local _id="${1:-}" _range _paths=()
     [ -e "${PROJECT_ROOT:-}/.git" ] || return 0
-    _sha=$(_story_commit_sha "$_id")
-    if [ -n "$_sha" ] && git -C "$PROJECT_ROOT" rev-parse --verify "${_sha}^{commit}" >/dev/null 2>&1; then
-        git -C "$PROJECT_ROOT" diff "${_sha}^" "$_sha" 2>/dev/null \
-            || git -C "$PROJECT_ROOT" show --pretty=format: "$_sha" 2>/dev/null
+    _range=$(story_review_range "$_id")
+    if [ -n "$_range" ]; then
+        mapfile -t _paths < <(story_review_paths "$_id" ${_range})
+        git -C "$PROJECT_ROOT" diff ${_range} -- "${_paths[@]+"${_paths[@]}"}" 2>/dev/null
         return 0
     fi
     git -C "$PROJECT_ROOT" diff HEAD~3 HEAD 2>/dev/null || git -C "$PROJECT_ROOT" show --pretty=format: HEAD 2>/dev/null
 }
 
-# story_changed_files <story_id> — the files the story's commit touched.
+# story_changed_files <story_id> — the files the story's whole change touched.
 story_changed_files() {
-    local _id="${1:-}" _sha
+    local _id="${1:-}" _range _paths=()
     [ -e "${PROJECT_ROOT:-}/.git" ] || return 0
-    _sha=$(_story_commit_sha "$_id")
-    if [ -n "$_sha" ] && git -C "$PROJECT_ROOT" rev-parse --verify "${_sha}^{commit}" >/dev/null 2>&1; then
-        git -C "$PROJECT_ROOT" diff --name-only "${_sha}^" "$_sha" 2>/dev/null \
-            || git -C "$PROJECT_ROOT" show --pretty=format: --name-only "$_sha" 2>/dev/null
+    _range=$(story_review_range "$_id")
+    if [ -n "$_range" ]; then
+        mapfile -t _paths < <(story_review_paths "$_id" ${_range})
+        git -C "$PROJECT_ROOT" diff --name-only ${_range} -- "${_paths[@]+"${_paths[@]}"}" 2>/dev/null
         return 0
     fi
     git -C "$PROJECT_ROOT" diff --name-only HEAD~3 HEAD 2>/dev/null

@@ -26,6 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { shellFunction } from '../../lib/engine-source';
 
 const SCRIPT = join(__dirname, '../../../orchestrations/scripts/archive-run-artifacts.sh');
 
@@ -166,46 +167,44 @@ describe('a successful run archives what explains it', () => {
 });
 
 describe('the pipeline archives on every outcome, not just success', () => {
-  const runner = readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/tier3-metrolinx-run.sh'), 'utf8');
+  // EXECUTED: tier3-metrolinx-run.sh's own fail() and _archive_run_artifacts (the shared lib/run-artifacts.sh behind
+  // them), on a project config folder and a launch log. These read the launcher's source text until 2026-10-13, which
+  // passed on a comment and failed on a refactor that changed nothing a run does.
+  const S = join(__dirname, '../../../orchestrations/scripts');
+  const T3 = join(S, 'tier3-metrolinx-run.sh');
+  const RUN_ID = '20261013T182439Z';
+  function launcher(script: string) {
+    const d = mkdtempSync(join(tmpdir(), 'archive-launcher-'));
+    const cfg = join(d, 'projects/metrolinx'); mkdirSync(cfg, { recursive: true }); mkdirSync(join(d, 'orchestrations/logs'), { recursive: true });
+    const log = join(d, 'launch.log'); writeFileSync(log, '[18:43:20] [orch] Pipeline complete.\n');
+    const r = spawnSync('bash', ['-c', [
+      `SCRIPT_DIR=${JSON.stringify(S)}; REPO_ROOT=${JSON.stringify(d)}; LOG_FILE=${JSON.stringify(log)}`,
+      `export EPAM_PROJECT_CONFIG_DIR=${JSON.stringify(cfg)} ORCH_RUN_ID=${RUN_ID}`, 'RED=; NC=; YELLOW=',
+      `. "${S}/lib/project-config.sh"; . "${S}/lib/run-artifacts.sh"`, 'info(){ :; }',
+      shellFunction(T3, '_archive_run_artifacts'), shellFunction(T3, 'fail'), script].join('\n')], { encoding: 'utf8' });
+    const dir = join(cfg, 'runs', RUN_ID);
+    const read = (f: string) => (existsSync(join(dir, f)) ? readFileSync(join(dir, f), 'utf8') : '');
+    return { code: r.status, dir, read };
+  }
 
-  it('archives when the run FAILS — the case evidence is most needed', () => {
-    // Every failure investigated on 2026-07-26 had to be reconstructed from a
-    // log after the fact, because the working PRD, profiles.json and the KB
-    // scratchpad were already gone by the time anyone looked.
-    const failFn = runner.slice(runner.indexOf('fail()    {'), runner.indexOf('fail()    {') + 400);
-    expect(failFn, 'a failed run still leaves nothing behind')
-      .toMatch(/_archive_run_artifacts/);
+  it('archives when the run FAILS — outcome, reports — and the run still exits 1', () => {
+    const l = launcher('fail "stories not completed: S-1"');
+    expect(l.code).toBe(1);
+    expect(l.read('outcome.txt').trim()).toBe('FAILED: stories not completed: S-1');
+    expect(l.read('qa-summary.html').length).toBeGreaterThan(0);
+    expect(l.read('narrative.html').length).toBeGreaterThan(0);
   });
 
-  it('archives when the run PASSES', () => {
-    const i = runner.indexOf('PASSED — all');
-    expect(runner.slice(i, i + 300)).toMatch(/_archive_run_artifacts/);
+  it('archives when the run PASSES, in the folder named after the shared run id', () => {
+    const l = launcher('_archive_run_artifacts "PASSED: 1 stories complete"; echo done');
+    expect(l.code).toBe(0);
+    expect(l.dir.endsWith(`runs/${RUN_ID}`)).toBe(true);
+    expect(l.read('outcome.txt').trim()).toBe('PASSED: 1 stories complete');
+    expect(l.read('run.log')).toContain('Pipeline complete');
   });
 
-  it('records which outcome it was', () => {
-    expect(runner).toMatch(/outcome\.txt/);
-  });
-
-  it('generates the narrative and QA summary from what it captured', () => {
-    expect(runner, 'the deliverables are still only produced by hand')
-      .toMatch(/generate-run-report\.py/);
-  });
-
-  it('cannot change the run result', () => {
-    // A post-run convenience must never turn a green run red, nor mask a red one.
-    const fn = runner.slice(runner.indexOf('_archive_run_artifacts() {'),
-                            runner.indexOf('_archive_run_artifacts() {') + 1600);
-    expect((fn.match(/\|\| true/g) || []).length,
-      'archiving steps are not individually guarded').toBeGreaterThanOrEqual(3);
-    const failFn = runner.slice(runner.indexOf('fail()    {'), runner.indexOf('fail()    {') + 400);
-    expect(failFn, 'the failure path no longer exits non-zero').toMatch(/exit 1/);
-  });
-
-  it('names the run folder after the shared run id', () => {
-    // The same id must reach the Langfuse session and pre-run-reset's archive,
-    // or a run folder cannot be matched to its traces.
-    expect(runner).toMatch(/export ORCH_RUN_ID=/);
-    expect(runner).toMatch(/runs\/\$\{ORCH_RUN_ID/);
+  it('cannot change the run result: archiving with nothing to archive still returns 0', () => {
+    const l = launcher('LOG_FILE=/nonexistent; _archive_run_artifacts "PASSED: 1 stories complete"; echo "rc=$?"');
+    expect(l.code).toBe(0);
   });
 });

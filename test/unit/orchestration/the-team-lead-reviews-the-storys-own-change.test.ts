@@ -11,8 +11,8 @@
  * review cycle and never into this reviewer.
  *
  * Drives the REAL team-lead-review.sh with a stub runner that records the prompt it is handed.
- * Two stories, two commits; the reviewer's prompt for the first must carry its own change and not
- * the second's. The baseline→HEAD diff remains the fallback for a story with no recorded commit.
+ * Two stories, three commits (FX-7, FX-10, FX-7's rework); FX-7's reviewer must see its whole change — both of its
+ * commits (AMSD-2974 run 9, 2026-10-13: the latest commit alone was a rework delta) — and not FX-10's. The baseline→HEAD diff remains the fallback for a story with no recorded commit.
  */
 import { describe, it, expect, afterAll } from 'vitest';
 import { spawnSync, execFileSync } from 'node:child_process';
@@ -33,13 +33,19 @@ function review() {
   writeFileSync(join(proj, 'README.md'), 'base\n');
   git('init', '-q', '-b', 'develop'); git('add', '.'); git('commit', '-q', '-m', 'base');
   const base = git('rev-parse', 'HEAD');
+  // The phase's story branch, off the baseline — as a run commits stories (the baseline branch itself stays put).
+  git('checkout', '-q', '-b', 'AI-FX-7');
   writeFileSync(join(proj, 'regintel/api.py'), 'API_MARKER_SEVEN = 1\n');
   git('add', '.'); git('commit', '-q', '-m', 'FX-7: story complete (1 file(s))');
   const sha7 = git('rev-parse', 'HEAD');
   writeFileSync(join(proj, 'scripts/run_pipeline.py'), 'PIPELINE_MARKER_TEN = 1\n');
   git('add', '.'); git('commit', '-q', '-m', 'FX-10: story complete (1 file(s))');
+  // FX-7's rework after review: its LATEST commit is only this delta (AMSD-2974 run 9: a back-port approved on it).
+  writeFileSync(join(proj, 'regintel/api.py'), 'API_MARKER_SEVEN = 1\nAPI_REWORK_SEVEN = 2\n');
+  git('add', '.'); git('commit', '-q', '-m', 'FX-7: story complete (1 file(s))');
+  const sha7b = git('rev-parse', 'HEAD');
   writeFileSync(join(logDir, 'phase-baseline-sha.txt'), base + '\n');
-  writeFileSync(join(logDir, 'story-changes.jsonl'), JSON.stringify({ storyId: 'FX-7', sha: sha7 }) + '\n');
+  writeFileSync(join(logDir, 'story-changes.jsonl'), [sha7, sha7b].map((sha) => JSON.stringify({ storyId: 'FX-7', sha })).join('\n') + '\n');
   // The run's own ledgers, so the reviewer derives FX-7's rung and proceeds to the model.
   writeFileSync(join(logDir, 'phase-cost.jsonl'), JSON.stringify({ story_id: 'FX-7', status: 'completed', resolvedModel: 'MiniMax-M3', effort: 'medium' }) + '\n');
   writeFileSync(join(logDir, 'agent-activity.jsonl'), JSON.stringify({ event: 'story_start', storyId: 'FX-7', provider: 'minimax', model: 'MiniMax-M3' }) + '\n');
@@ -70,6 +76,11 @@ describe("the team lead reviews the story's own change", () => {
   it('the reviewer was actually invoked with a prompt — otherwise nothing below is tested', () => {
     expect(r.prompt.length, r.out.slice(-1500)).toBeGreaterThan(0);
     expect(r.prompt).toContain('API_MARKER_SEVEN');
+  });
+
+  it("the story's WHOLE change is reviewed — its first commit and its rework, not the rework delta alone", () => {
+    expect(r.prompt).toContain('+API_MARKER_SEVEN = 1');
+    expect(r.prompt).toContain('+API_REWORK_SEVEN = 2');
   });
 
   it("another story's change is not in this story's review", () => {

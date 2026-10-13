@@ -62,6 +62,24 @@ _run_release_lines_each() {
     local _lines=()
     mapfile -t _lines < <("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/release-lines.js" "$_cl_prd" "$_cl" "$_canonical")
     [ "${#_lines[@]}" -gt 0 ] || return 0
+    # THE CHANGE EVERY LINE PORTS: what the codeline's own line committed for this story — from the lane's phase baseline
+    # to the branch the codeline was on when the lines began (recorded by _run_release_lines). Given verbatim to each
+    # line's writer and diff reviewers (lib/producers/fix-plan.js, template release-line-port): AMSD-2974 run 9 gave
+    # them only the plan's summary, and a 7.x back-port carrying a fraction of the 8.x change was approved.
+    local _main_branch="" _main_base="" _main_change="${_lane_log}/main-line-change.diff" _gdir
+    _gdir=$(git -C "$_wt" rev-parse --absolute-git-dir 2>/dev/null || true)
+    [ -n "$_gdir" ] && [ -f "$_gdir/epam-release-home" ] && _main_branch=$(cat "$_gdir/epam-release-home")
+    _main_base=$(tr -d '[:space:]' < "${_lane_log}/phase-baseline-sha.txt" 2>/dev/null || true)
+    rm -f "$_main_change"
+    if [ -n "$_main_branch" ] && [ -n "$_main_base" ]; then
+        git -C "$_wt" diff "$_main_base" "$_main_branch" > "$_main_change" 2>/dev/null || rm -f "$_main_change"
+    fi
+    [ -s "$_main_change" ] || { rm -f "$_main_change"; _main_change=""; }
+    if [ -n "$_main_change" ]; then
+        log "[orch] Codeline '${_cl}': each release line ports ${_main_branch}'s change ($(grep -c '^diff --git' "$_main_change") file(s), from ${_main_base:0:9})"
+    else
+        warning "[orch] Codeline '${_cl}': no committed change on its own line to port — release lines are worked from the plan alone"
+    fi
     local _entry _line _base _slug _line_log _line_prd _phase _pex _ledger
     for _entry in "${_lines[@]}"; do
         [ -n "$_entry" ] || continue
@@ -103,6 +121,8 @@ _run_release_lines_each() {
                 JIRA_CODELINE_RUN=1 \
                 EPAM_CODELINE="$_cl" \
                 EPAM_RELEASE_LINE="$_line" \
+                EPAM_MAIN_LINE_CHANGE="$_main_change" \
+                EPAM_MAIN_LINE_BRANCH="$_main_branch" \
                 EPAM_SPEC_MODE="$_line_spec" \
                 EPAM_BRANCH_SUFFIX="-${_slug}" \
                 JIRA_BASELINE_BRANCH="$_base" \

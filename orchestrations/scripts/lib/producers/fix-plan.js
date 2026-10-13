@@ -230,7 +230,8 @@ function renderShared(templateId, story, prd, sites) {
   }
   // THE STORY'S PLAN COMES FIRST, when there is one: it is what this codeline is worked from.
   const plan = story && story.overallPlan ? overallPlanText(story.overallPlan, here) : '';
-  if (shared.length === 0 && !plan) return '';
+  const port = releaseLinePort();
+  if (shared.length === 0 && !plan) return port;
 
   const dirs = (prd && prd.project && Array.isArray(prd.project.outputDirs)) ? prd.project.outputDirs : [];
   const dirOf = (cl) => (dirs.find((d) => d && d.codeline === cl) || {}).path;
@@ -245,6 +246,28 @@ function renderShared(templateId, story, prd, sites) {
   return renderEngineTemplate(templateId, {
     __SHARED_SITES__: [plan, ...shared].filter(Boolean).join('\n'),
     __SIBLING_LOCATIONS__: locations.join('\n') || '- none recorded',
+  }) + port;
+}
+
+/**
+ * ON A RELEASE LINE, THE CHANGE IT PORTS: what the codeline's own line committed for this story, verbatim
+ * (lib/release-lines.sh writes it and names it in EPAM_MAIN_LINE_CHANGE). Part of renderShared, so the line's writer
+ * and its diff reviewers are given the same change to port and to compare against (AMSD-2974 run 9: both were given
+ * only the plan's summary, and a back-port carrying a fraction of the change was approved). '' off a release line,
+ * or when the own line committed nothing. A named change that cannot be read is an error, never an empty section.
+ */
+function releaseLinePort(env = process.env) {
+  const file = env.EPAM_MAIN_LINE_CHANGE || '';
+  const line = env.EPAM_RELEASE_LINE || '';
+  if (!file || !line) return '';
+  const change = require('fs').readFileSync(file, 'utf8');
+  if (!change.trim()) return '';
+  // eslint-disable-next-line global-require
+  const { renderEngineTemplate } = require('../engine-prompt.js');
+  return renderEngineTemplate('release-line-port', {
+    __RELEASE_LINE__: line,
+    __MAIN_LINE__: env.EPAM_MAIN_LINE_BRANCH || 'its own line',
+    __MAIN_LINE_CHANGE__: change.replace(/\n$/, ''),
   });
 }
 
@@ -272,7 +295,7 @@ function publishFixPlans(prd, env) {
 }
 
 module.exports = {
-  overallPlanText, renderFixPlan, renderStoryPlan, renderShared, publishFixPlans, sharedFact, KIND, PRODUCER };
+  overallPlanText, renderFixPlan, renderStoryPlan, renderShared, releaseLinePort, publishFixPlans, sharedFact, KIND, PRODUCER };
 
 // CLI: node fix-plan.js <prd.json> <story-id>   — emits the rendered plan on stdout.
 // The shell consumers call it this way; it is the same function either way, never a second copy.

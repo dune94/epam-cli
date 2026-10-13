@@ -684,6 +684,11 @@ async function buildProjectPrompts({
 
   // ── Generated: specialise, check, then install ──────────────────────────
   const built = [];
+  // WHAT WROTE AND JUDGED A GENERATED PROMPT: the generator's and the reviewer's installed copies, by the template
+  // digest each records. A kept prompt is judged again only when this differs from what it recorded.
+  const _judges = () => [genId, 'prompt-review'].map((j) => {
+    try { return readJson(path.join(outDir, `${j}.json`)).derivedFromSha256 || ''; } catch { return ''; }
+  }).join(':');
   // WHERE THE TEMPLATES ARE BEING READ FROM, said once.
   //
   // Run 20260817T211517Z installed a copy whose seams did not match its template and whose
@@ -824,6 +829,16 @@ async function buildProjectPrompts({
     if (_alreadyInstalled(id, 'generated')) {
       if (typeof reviewPrompt !== 'function') { built.push(id); log(`[prompt-builder] kept ${id} (installed for this run)`); continue; }
       const _kept = readJson(path.join(outDir, `${id}.json`));
+      // JUDGED AGAIN ONLY WHEN WHAT JUDGED IT CHANGED (operator, 2026-10-13: "I don't want a full review"). The rule
+      // above exists so a corrected generator or reviewer reaches a resumed run; a copy whose template, generator and
+      // reviewer are the ones that approved it has nothing new to be judged by. A copy that predates the record is
+      // kept as built — re-judging it is the full review this replaced.
+      if (!_kept.judgedWith || _kept.judgedWith === _judges()) {
+        built.push(id);
+        log(`[prompt-builder] kept ${id} (installed for this run) — ${_kept.judgedWith
+          ? 'its template, generator and reviewer are the ones that approved it' : 'no record of what judged it; kept as built'}`);
+        continue;
+      }
       const _v = await reviewPrompt({ id, template: readJson(_tplPath(id)), generated: _kept });
       if (!_v || _v.ok !== false) {
         built.push(id);
@@ -992,6 +1007,7 @@ async function buildProjectPrompts({
 
         // Written only once the contract passes AND the review found nothing false — never a
         // partial, a refused, or an unreviewed-but-rejected prompt.
+        doc.judgedWith = _judges();
         fs.writeFileSync(path.join(outDir, `${id}.json`), JSON.stringify(doc, null, 2) + '\n');
         built.push(id);
         installed = true;
@@ -1084,17 +1100,44 @@ async function buildProjectPrompts({
 function promptInputsDigest({ templatesDir, registryFile } = {}) {
   const h = crypto.createHash('sha256');
   const dir = templatesDir || path.join(__dirname, '..', '..', 'prompts', 'templates');
+  const reg = registryFile || path.join(__dirname, '..', '..', 'agents', 'invocation-profiles.json');
   let names = [];
   try { names = fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort(); } catch { names = []; }
+  // ONLY THE TEMPLATES THIS BUILDER READS (AMSD-2974 run 9 iteration 3, 2026-10-13): the digest covered every file in
+  // the layer, so adding release-line-port — an engine template no project prompt is built from — made every kept
+  // prompt of the run "changed" and sent all 44 back to the reviewer, paid, mid-run. The inputs are the ones the build
+  // itself provisions (bootstrap.copyVerbatim, provisioningList) and the variant each resolves to; a bootstrap that
+  // cannot be read leaves the whole layer in, as before.
+  const _inputs = promptInputIds({ dir, registryFile: reg });
+  if (_inputs) names = names.filter((n) => _inputs.has(n.replace(/\.json$/, '')));
   for (const n of names) {
     h.update(n); h.update('\0');
     try { h.update(fs.readFileSync(path.join(dir, n))); } catch { /* absent counts as absent */ }
     h.update('\0');
   }
-  const reg = registryFile || path.join(__dirname, '..', '..', 'agents', 'invocation-profiles.json');
   try { h.update('registry\0'); h.update(fs.readFileSync(reg)); } catch { /* none */ }
   try { h.update('builder\0'); h.update(fs.readFileSync(__filename)); } catch { /* none */ }
   return h.digest('hex');
+}
+
+/**
+ * promptInputIds({ dir, registryFile }) — the template ids a build reads: bootstrap.copyVerbatim, the provisioning list
+ * (the same provisioningList the build uses) and the variant each resolves to for this run. null when the bootstrap
+ * beside the templates cannot be read.
+ */
+function promptInputIds({ dir, registryFile }) {
+  let boot;
+  try { boot = readJson(path.join(dir, '..', 'bootstrap.json')); } catch { return null; }
+  let registry = {};
+  try { registry = readJson(registryFile); } catch { registry = {}; }
+  const exists = (id) => fs.existsSync(path.join(dir, `${id}.json`));
+  const ids = new Set();
+  const copy = Array.isArray(boot.copyVerbatim) ? boot.copyVerbatim : [];
+  for (const id of [...copy, ...provisioningList({ bootstrap: boot, registry, templateExists: exists })]) {
+    ids.add(id);
+    ids.add(variantIdFor(id, exists));
+  }
+  return ids;
 }
 
 /**

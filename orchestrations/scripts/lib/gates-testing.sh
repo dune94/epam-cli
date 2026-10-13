@@ -209,6 +209,31 @@ _gate_diff_excludes() {
     "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/repo-exclude-patterns.js" diff 2>/dev/null || true
 }
 
+# _oracle_summary_from_plain <runner-output> <exit-code> <log-dir>
+#
+# THE VALIDATOR IS TOLD WHAT THE TESTS DID. A runner with no JSON report (jest here) left its plain output in
+# <oracle>.txt and the summary said only "vitest ran but produced no JSON output — exit code 1", so AMSD-2974's 7.x
+# back-port was scored as unverified while jest had passed 724 tests and failed only the two files the phase baseline
+# already records. Failing files come from _parse_failing_test_files (any runner's FAIL/✕/× lines); each is classed
+# against this lane's baseline-failures-test-*.txt, so a pre-existing failure is named as such and a new one as NEW.
+_oracle_summary_from_plain() {
+    local _out="$1" _rc="${2:-?}" _logd="${3:-${LOG_DIR:-}}"
+    local _failing _base _pre="" _new="" _f
+    _failing="$(_parse_failing_test_files "$(cat "$_out" 2>/dev/null)")"
+    _base="$(cat "$_logd"/baseline-failures-test-*.txt 2>/dev/null | sort -u)"
+    while IFS= read -r _f; do
+        [ -n "$_f" ] || continue
+        if printf '%s\n' "$_base" | grep -qxF "$_f"; then _pre="${_pre}  - ${_f}"$'\n'; else _new="${_new}  - ${_f}"$'\n'; fi
+    done <<< "$_failing"
+    printf 'Test command exit code %s (plain runner output; no machine-readable report).\n' "$_rc"
+    if [ -z "$_failing" ]; then
+        printf 'No failing test files.\n'
+        return 0
+    fi
+    printf 'New failing test files: %s\n%s' "$(printf '%s' "$_new" | grep -c .)" "$_new"
+    printf 'Pre-existing failing test files (already failing at the phase baseline, before any story work): %s\n%s' "$(printf '%s' "$_pre" | grep -c .)" "$_pre"
+}
+
 run_testing_gates() {
     local phase_id="$1"
     local gate_log="$LOG_DIR/testing-gates-${phase_id}.log"
@@ -683,6 +708,8 @@ $_spec_file_excerpts"
             set -e
             if [ -f "$oracle_json" ]; then
                 oracle_summary=$(python3 "$SCRIPT_DIR/lib/handlers/vitest-oracle-summary.py" "$oracle_json" 2>/dev/null || echo "(oracle unavailable)")
+            elif [ -s "${oracle_json}.txt" ]; then
+                oracle_summary="$(_oracle_summary_from_plain "${oracle_json}.txt" "$_oracle_rc" "$LOG_DIR")"
             else
                 oracle_summary="(vitest ran but produced no JSON output — exit code $_oracle_rc)"
             fi

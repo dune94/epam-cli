@@ -728,14 +728,25 @@ ${_fb_blockers}"
 #
 # Records a fingerprint of the working tree per cycle. Cheap, and it cannot be fooled by a
 # reworded blocker or a reworded approval.
+#
+# THE LANE'S OWN CODELINE, COMMITTED WORK INCLUDED. This hashed only `git diff HEAD` (uncommitted edits) of the repos
+# under JIRA_CODELINE_ROOT. The writer COMMITS its work, and a lane can live outside that root (AMSD-2974 resume 10,
+# 2026-10-13: ~/projects/metrolinx/cx-shared vs ~/projects/tests/codelines), so a fix the reviewer verified line by line
+# read as "unchanged" and was escalated. HEAD + the uncommitted diff of PROJECT_ROOT (the lane's codeline) is the
+# state the reviewer judged; the root's repos are still covered for a caller with no PROJECT_ROOT.
 _review_tree_fingerprint() {
-    local _root="${JIRA_CODELINE_ROOT:-}" _sum=""
-    [ -n "$_root" ] && [ -d "$_root" ] || { echo "no-codeline-root"; return 0; }
-    local _cl
-    for _cl in "$_root"/*/; do
-        [ -e "${_cl}.git" ] || continue
-        _sum="${_sum}$(git -C "${_cl%/}" diff HEAD 2>/dev/null | sha1sum 2>/dev/null | cut -d' ' -f1)"
-    done
+    local _root="${JIRA_CODELINE_ROOT:-}" _sum="" _cl
+    _review_repo_state() { printf '%s %s' "$(git -C "$1" rev-parse HEAD 2>/dev/null)" "$(git -C "$1" diff HEAD 2>/dev/null | sha1sum 2>/dev/null | cut -d' ' -f1)"; }
+    if [ -n "${PROJECT_ROOT:-}" ] && git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+        _sum="$(_review_repo_state "$PROJECT_ROOT")"
+    fi
+    if [ -n "$_root" ] && [ -d "$_root" ]; then
+        for _cl in "$_root"/*/; do
+            [ -e "${_cl}.git" ] || continue
+            _sum="${_sum}$(_review_repo_state "${_cl%/}")"
+        done
+    fi
+    [ -n "$_sum" ] || { echo "no-codeline-root"; return 0; }
     printf '%s' "$_sum" | sha1sum 2>/dev/null | cut -d' ' -f1
 }
 

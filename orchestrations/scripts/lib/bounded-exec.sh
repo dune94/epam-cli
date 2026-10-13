@@ -115,6 +115,16 @@ resolve_test_workers() {
 }
 
 # _affinity_works — can this host actually restrict CPU affinity? Answered by DOING it.
+# _node_cpu_bound_options — NODE_OPTIONS with lib/node-cpu-bound.js preloaded, so a Node runner that sizes its pool from
+# os.cpus() (jest 29.3.1) sees the CPUs it was bound to, not the host's. Any NODE_OPTIONS already set (a heap ceiling)
+# is kept; the preload is added once.
+_BOUNDED_EXEC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_node_cpu_bound_options() {
+    local _pre="--require \"${_BOUNDED_EXEC_DIR}/node-cpu-bound.js\""
+    case " ${NODE_OPTIONS:-} " in *"node-cpu-bound.js"*) printf '%s' "${NODE_OPTIONS:-}"; return 0 ;; esac
+    printf '%s' "${NODE_OPTIONS:+$NODE_OPTIONS }${_pre}"
+}
+
 _affinity_works() {
     taskset -c 0 true >/dev/null 2>&1
 }
@@ -130,7 +140,10 @@ bound_self_affinity() {
     case "$workers" in ''|*[!0-9]*) workers=1 ;; esac
     [ "$workers" -lt 1 ] && workers=1
     if _affinity_works; then
-        taskset -p -c "0-$(( workers - 1 ))" "$BASHPID" >/dev/null 2>&1 && return 0
+        if taskset -p -c "0-$(( workers - 1 ))" "$BASHPID" >/dev/null 2>&1; then
+            NODE_OPTIONS="$(_node_cpu_bound_options)"; export NODE_OPTIONS
+            return 0
+        fi
     fi
     printf '[bounded-exec] WARNING: CPU affinity is unavailable on this host — this agent call and its tools run UNBOUNDED (requested %s workers).\n' "$workers" >&2
     return 0
@@ -147,7 +160,7 @@ run_test_bounded() {
     [ "$workers" -lt 1 ] && workers=1
 
     if _affinity_works; then
-        taskset -c "0-$(( workers - 1 ))" "$@"
+        NODE_OPTIONS="$(_node_cpu_bound_options)" taskset -c "0-$(( workers - 1 ))" "$@"
         return $?
     fi
 

@@ -1559,7 +1559,16 @@ _bounded_test_command() {
     case "$_w" in ''|*[!0-9]*) _w="" ;; esac
     if [ -n "$_w" ] && [ "$_w" -ge 1 ] 2>/dev/null && command -v taskset >/dev/null 2>&1 \
        && taskset -c 0 true >/dev/null 2>&1; then
-        printf 'taskset -c 0-%d sh -c %s' "$(( _w - 1 ))" "$(printf '%q' "$_cmd")"
+        # The preload makes the bound visible to a runner that counts os.cpus() (lib/node-cpu-bound.js).
+        # Only the preload is added, expanded when the command RUNS — the emitting shell's own NODE_OPTIONS is
+        # inherited as before, never copied in (copying it invented a heap ceiling the project never declared).
+        if [ -n "${_BOUNDED_EXEC_DIR:-}" ] && [ -f "${_BOUNDED_EXEC_DIR}/node-cpu-bound.js" ]; then
+            local _pre; _pre="$(printf '%s' "${_BOUNDED_EXEC_DIR}/node-cpu-bound.js" | sed 's/[\\"$`]/\\&/g')"
+            printf 'NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require \\"%s\\"" taskset -c 0-%d sh -c %s' \
+                "$_pre" "$(( _w - 1 ))" "$(printf '%q' "$_cmd")"
+        else
+            printf 'taskset -c 0-%d sh -c %s' "$(( _w - 1 ))" "$(printf '%q' "$_cmd")"
+        fi
     else
         # No affinity available: today's behaviour, and the memory ceiling above still applies.
         printf '%s' "$_cmd"

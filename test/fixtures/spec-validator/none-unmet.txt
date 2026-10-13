@@ -1,0 +1,34 @@
+[spec-validator] report
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [
+    {
+      "storyId": "S-1",
+      "title": "t",
+      "criteria": [
+        {
+          "text": "criterion 1",
+          "status": "met",
+          "evidence": "evidence 1",
+          "gaps": "gaps 1"
+        },
+        {
+          "text": "criterion 2",
+          "status": "partial",
+          "evidence": "evidence 2",
+          "gaps": "gaps 2"
+        },
+        {
+          "text": "criterion 3",
+          "status": "untestable",
+          "evidence": "evidence 3",
+          "gaps": "gaps 3"
+        }
+      ],
+      "overallCompliance": 35,
+      "verdict": "warn"
+    }
+  ],
+  "overallVerdict": "warn"
+}

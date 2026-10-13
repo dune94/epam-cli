@@ -234,6 +234,21 @@ _oracle_summary_from_plain() {
     printf 'Pre-existing failing test files (already failing at the phase baseline, before any story work): %s\n%s' "$(printf '%s' "$_pre" | grep -c .)" "$_pre"
 }
 
+# _gate_attribute_from_log <gate-label> <gate-log> — "<story_id>\t<finding-json>" when the gate's own log grounds the
+# failure the analyst could not; nothing otherwise. A spec-validator log is a criteria report naming its story (storyId)
+# and what is unmet; gate-finding-analyst expects BLOCKER findings with files and grounds nothing in it, and the git
+# fallback needs a "file". AMSD-2974 run 9 resumes 10 and 11: the spec gate failed, remediation was skipped, the lane
+# halted. The story id is read with jq: the finding holds nested objects, which story-id.py's regex does not match.
+_gate_attribute_from_log() {
+    local _label="$1" _log="$2" _f _sid
+    [ "$_label" = "spec-validator" ] && [ -f "$_log" ] || return 0
+    _f="$(python3 "$SCRIPT_DIR/lib/handlers/spec-unmet-finding.py" "$_log" 2>/dev/null || true)"
+    [ -n "$_f" ] || return 0
+    _sid="$(printf '%s' "$_f" | jq -r '.story_id // empty' 2>/dev/null)"
+    [ -n "$_sid" ] || return 0
+    printf '%s\t%s' "$_sid" "$_f"
+}
+
 run_testing_gates() {
     local phase_id="$1"
     local gate_log="$LOG_DIR/testing-gates-${phase_id}.log"
@@ -1568,6 +1583,14 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 local _story_id
                 _story_id=$(echo "$_finding_json" | python3 "$SCRIPT_DIR/lib/handlers/story-id.py" 2>/dev/null || true)
 
+                if [ -z "$_story_id" ] || [ "$_story_id" = "null" ]; then
+                    local _attr; _attr="$(_gate_attribute_from_log "$_glabel" "$_glog")"
+                    if [ -n "$_attr" ]; then
+                        _story_id="${_attr%%$'\t'*}"; _finding_json="${_attr#*$'\t'}"
+                        info "  [gate-finding-analyst] the ${_glabel} log itself names the story and its unmet criteria: ${_story_id}"
+                        printf '%s\n' "$_finding_json" >> "$_rem_log"
+                    fi
+                fi
                 if [ -z "$_story_id" ] || [ "$_story_id" = "null" ]; then
                     # Deterministic fallback (found live 2026-07-08): the analyst
                     # can't ground a finding into a story_id when the finding's

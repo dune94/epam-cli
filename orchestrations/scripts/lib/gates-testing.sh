@@ -1710,6 +1710,9 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 if [ "${_acs_added:-0}" -gt 0 ]; then
                     success "  [story-ac-remediator] ${_acs_added} AC(s) added to ${_story_id}"
                     _remediation_applied=1
+                    # The retry must be able to act on them: an exhausted story gets one top-rung attempt.
+                    declare -F grant_remediated_attempt >/dev/null 2>&1 || . "$SCRIPT_DIR/lib/story-retry-state.sh"
+                    grant_remediated_attempt "$LOG_DIR" "$_story_id" "${EPAM_MAX_RETRIES:-7}"
                 else
                     info "  [story-ac-remediator] No new ACs added (already covered or agent skipped)"
                 fi

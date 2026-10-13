@@ -265,6 +265,21 @@ advance_story_retry_rung() {
     write_story_retry_count "$log_dir" "$story_id" "$next"
 }
 
+# grant_remediated_attempt <log_dir> <story_id> <max_retries>
+#
+# A REMEDIATED GATE GIVES THE WRITER AN ATTEMPT. When a gate's self-heal adds requirements to a story whose ladder is
+# already spent, the story gets one attempt on its top rung to act on them — as review remediation already does
+# (lib/review-cycle.sh). AMSD-2974 run 9 resume 13: the mutant-hunter remediation added 2 ACs, the lane retried, and
+# the writer stopped at "retry_count=12 … Failed after 12 attempts" without calling the model. A story with attempts
+# left is not touched.
+grant_remediated_attempt() {
+    local log_dir="$1" story_id="$2" max_retries="$3" cur
+    cur="$(read_story_retry_count "$log_dir" "$story_id")"
+    case "$cur$max_retries" in *[!0-9]*|'') return 0 ;; esac
+    [ "$cur" -gt "$max_retries" ] && write_story_retry_count "$log_dir" "$story_id" "$max_retries"
+    return 0
+}
+
 # advance_story_retry_on_review_rejection <log_dir> <story_id> <max_retries>
 #
 # A REVIEW REJECTION RETRIES THE SAME MODEL BEFORE CLIMBING. One attempt, not one rung: each rung allows two attempts,

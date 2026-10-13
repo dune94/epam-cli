@@ -8,6 +8,10 @@
  * could ever reach that run. Operator, 2026-10-06: a resume re-reviews its kept prompts with the current
  * reviewer and regenerates only those it rejects; every rejection reaches the self-heal analyst.
  *
+ * 2026-10-13 (operator: "I don't want a full review"): judged again only when the generator or reviewer that approved
+ * it changed — the copy records which (judgedWith). A copy whose judges are the current ones, or with no record, is kept
+ * without a call.
+ *
  * EXECUTED: the real buildProjectPrompts on the real generator, repro-test-writer and prompt-review
  * templates. The kept prompt is the real defective copy, frozen unchanged from the install
  * (test/fixtures/frozen-prompts). The model is a stand-in that answers from its input; the reviewer is a
@@ -31,7 +35,10 @@ const selfHealMod = require(join(LIB, 'self-heal.js'));
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const enginePrompt = require(join(LIB, 'engine-prompt.js'));
 
-const FROZEN = JSON.parse(readFileSync(join(REPO, 'test/fixtures/frozen-prompts/repro-test-writer.narrowed-metrolinx-20261006.json'), 'utf8'));
+// The frozen copy as judged by the generator and reviewer of its day — older than the current ones, which is what makes
+// a resume judge it again (operator, 2026-10-13: only a kept prompt whose judges changed is judged again).
+const FROZEN = { ...JSON.parse(readFileSync(join(REPO, 'test/fixtures/frozen-prompts/repro-test-writer.narrowed-metrolinx-20261006.json'), 'utf8')),
+  judgedWith: 'an-older-generator:an-older-reviewer' };
 const ID = 'repro-test-writer';
 const tplOf = (id: string) => JSON.parse(readFileSync(join(TEMPLATES, `${id}.json`), 'utf8'));
 
@@ -199,5 +206,28 @@ describe('what the two agents are now told', () => {
     expect(out).toMatch(/narrowed to one (story|call)/i);
     expect(out).toMatch(/slot[^.]*no longer (fits|reads)/i);
     expect(contract.outputFieldsIn(body), 'the reviewer\'s answer shape changed').toEqual(['falseClaims']);
+  });
+});
+
+describe('a kept copy is judged again only when what judged it changed', () => {
+  const genDigest = (cfg: string) => JSON.parse(readFileSync(join(cfg, 'prompts', `${builder.PROJECT_PROMPT_GENERATOR_ID}.json`), 'utf8')).derivedFromSha256;
+  it('the copy records the current generator and reviewer: kept, no reviewer call', async () => {
+    const p = resumedProject();
+    await p.provision(async () => ({ ok: true, reviewed: true }));   // installs the generator copy
+    writeFileSync(join(p.cfg, 'prompts', `${ID}.json`), JSON.stringify({ ...FROZEN, judgedWith: `${genDigest(p.cfg)}:` }, null, 2) + '\n');
+    let calls = 0;
+    await p.provision(async () => { calls += 1; return { ok: false, reviewed: true, reason: 'would reject' }; });
+    expect(calls).toBe(0);
+    expect(p.installed().body).toBe(FROZEN.body);
+  });
+
+  it('the copy has no record of what judged it: kept as built, no reviewer call', async () => {
+    const p = resumedProject();
+    const { judgedWith, ...noRecord } = FROZEN; void judgedWith;
+    writeFileSync(join(p.cfg, 'prompts', `${ID}.json`), JSON.stringify(noRecord, null, 2) + '\n');
+    let calls = 0;
+    await p.provision(async () => { calls += 1; return { ok: false, reviewed: true, reason: 'would reject' }; });
+    expect(calls).toBe(0);
+    expect(p.logs.some((l) => /no record of what judged it; kept as built/.test(l))).toBe(true);
   });
 });

@@ -124,7 +124,16 @@ trap 'rm -f "$TIER3_PID_FILE"' EXIT
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info()    { echo -e "${YELLOW}[orchestrate:${PROJECT}]${NC} $*"; }
 success() { echo -e "${GREEN}[orchestrate:${PROJECT}] ✓${NC} $*"; }
-fail()    { echo -e "${RED}[orchestrate:${PROJECT}] ✗${NC} $*"; exit 1; }
+# A run that has started owes its artefacts and reports on every outcome (lib/run-artifacts.sh);
+# a refusal before the first phase has no run to report.
+# shellcheck source=lib/run-artifacts.sh
+. "$SCRIPT_DIR/lib/run-artifacts.sh"
+_RUN_STARTED=0
+fail()    {
+  echo -e "${RED}[orchestrate:${PROJECT}] ✗${NC} $*"
+  [ "$_RUN_STARTED" = "1" ] && info "$(archive_run_artifacts "$PROJECT" "FAILED: $*" "$LOG_FILE")"
+  exit 1
+}
 
 [[ "${CI:-}" == "true" || "${AUTO_YES_TIER3:-}" == "1" ]] && AUTO_YES=true
 # NOT `[[ ! -t 0 ]] && AUTO_YES=true`.
@@ -405,6 +414,10 @@ run_phase() {
 }
 
 # ── Execute phases ────────────────────────────────────────────────────────────
+# The run id every phase and the run's report folder share — the orchestrator's own resolution
+# (run-agent-orchestration.sh), fixed here so the launcher knows it too.
+export ORCH_RUN_ID="${ORCH_RUN_ID:-${EPAM_RESUME_RUN:-$(date -u +%Y%m%dT%H%M%SZ)}}"
+_RUN_STARTED=1
 RUN_PAUSED_AT=""
 for _phase in $PHASES; do
   run_phase "$_phase"
@@ -444,6 +457,7 @@ if [ -n "${FAIL_LIST:-}" ] || [ "$PIPELINE_EXIT" -ne 0 ]; then
 fi
 
 success "Project '${PROJECT}' PASSED — all ${PASS:-0} stories complete"
+info "$(archive_run_artifacts "$PROJECT" "PASSED: ${PASS:-0} stories complete" "$LOG_FILE")"
 echo ""
 [ -n "${OUTPUT_DIR:-}" ] && echo "  Output: $OUTPUT_DIR"
 echo "  Log:    $LOG_FILE"

@@ -89,32 +89,9 @@ error()   { echo -e "${RED}[tier3-metrolinx] ✗${NC} $*" >&2; }
 #
 # Never allowed to change the run's outcome: `|| true` throughout, and the
 # original exit status is preserved.
-_archive_run_artifacts() {
-  local outcome="$1"
-  # Assigned separately: `local dir="$(...)"` makes the exit status local's, always 0,
-  # which would swallow the resolver's refusal — the very shape this file was fixed for.
-  local _cfg dir
-  _cfg="$(project_config_dir metrolinx "$REPO_ROOT")" || return 1
-  dir="$_cfg/runs/${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
-  mkdir -p "$dir" 2>/dev/null || return 0
-  AUTOMATION_DIR="$REPO_ROOT/orchestrations" \
-  LOG_DIR="$REPO_ROOT/orchestrations/logs" \
-  RUN_ARTIFACT_DIR="$dir" \
-    bash "$SCRIPT_DIR/archive-run-artifacts.sh" >/dev/null 2>&1 || true
-  [ -f "$LOG_FILE" ] && cp "$LOG_FILE" "$dir/run.log" 2>/dev/null || true
-  printf '%s\n' "$outcome" > "$dir/outcome.txt" 2>/dev/null || true
-
-  # The two deliverables a run owes: a narrative and a QA summary, built from
-  # the artefacts just captured.
-  python3 "$SCRIPT_DIR/generate-run-report.py" \
-    --launch-log "$LOG_FILE" \
-    --logs-dir "$REPO_ROOT/orchestrations/logs" \
-    --codeline "$(sed 's/\x1b\[[0-9;]*m//g' "$LOG_FILE" 2>/dev/null | grep -oE "Codeline '\''[^'\'']+'\'' → \S+" | head -1 | awk '{print $NF}')" \
-    --baseline "$(cat "$REPO_ROOT/orchestrations/logs/phase-baseline-sha.txt" 2>/dev/null | tr -d '[:space:]')" \
-    --prd "$dir/working-prd.json" \
-    --out "$dir" >/dev/null 2>&1 || true
-  echo -e "${YELLOW}[tier3-metrolinx]${NC} Run artefacts + reports: $dir"
-}
+# shellcheck source=lib/run-artifacts.sh
+. "$SCRIPT_DIR/lib/run-artifacts.sh"
+_archive_run_artifacts() { info "$(archive_run_artifacts metrolinx "$1" "$LOG_FILE")"; }
 
 fail()    {
   echo -e "${RED}[tier3-metrolinx] ✗${NC} $*"

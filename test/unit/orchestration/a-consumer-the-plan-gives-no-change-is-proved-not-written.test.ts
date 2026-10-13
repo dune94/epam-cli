@@ -32,6 +32,21 @@ const prdFile = (stories: object[], extra: object = {}) => { const d = tmp(); co
 
 describe('the plan says whether a codeline has a change of its own', () => {
   it('exactly none → no change', () => expect(node([H('plan-gives-no-change.js'), prdFile([{ id: 'S-1', overallPlan: planWith('none') }]), 'S-1', 'site']).status).toBe(0));
+  // AMSD-2974 run 9 resume 14 (2026-10-13): the planner wrote consumers[].change "exactly none" — the wording our own
+  // template asks for ("<exactly none, or the change this consumer makes…>") — the handler read it as a change, and
+  // all three site lanes ran a writer that correctly changed nothing and was rejected 7+ times for "deliverables
+  // incomplete". The value is taken from the template itself, so the test follows the template, not a literal.
+  const TEMPLATE_NONE = (() => {
+    const t = readFileSync(join(ROOT, 'orchestrations/prompts/templates/detective-overall-plan.json'), 'utf8');
+    const m = t.match(/\\"change\\":\\"<([^,<>]*none)\b/);
+    if (!m) throw new Error('the planner template no longer states its no-change wording — the harness is stale');
+    return m[1];
+  })();
+  it('the template\'s own no-change wording (as the planner writes it) → no change', () => {
+    expect(TEMPLATE_NONE).toBe('exactly none');
+    expect(node([H('plan-gives-no-change.js'), prdFile([{ id: 'S-1', overallPlan: planWith(TEMPLATE_NONE) }]), 'S-1', 'site']).status).toBe(0);
+  });
+  it('the template\'s wording plus something to do → has one', () => expect(node([H('plan-gives-no-change.js'), prdFile([{ id: 'S-1', overallPlan: planWith(`${TEMPLATE_NONE}; bump the range`) }]), 'S-1', 'site']).status).toBe(1));
   it('a change → has one', () => expect(node([H('plan-gives-no-change.js'), prdFile([{ id: 'S-1', overallPlan: planWith('rename the toast prop') }]), 'S-1', 'site']).status).toBe(1));
   it('none plus something to do → has one', () => expect(node([H('plan-gives-no-change.js'), prdFile([{ id: 'S-1', overallPlan: planWith('none; review own messages') }]), 'S-1', 'site']).status).toBe(1));
   it('no plan → not known, so not "no change"', () => expect(node([H('plan-gives-no-change.js'), prdFile([{ id: 'S-1' }]), 'S-1', 'site']).status).toBe(1));

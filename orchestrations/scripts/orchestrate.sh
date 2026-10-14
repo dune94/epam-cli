@@ -399,11 +399,18 @@ run_phase() {
         echo ""
       fi
       phase_exit=0
+      local _rroot _rmark
+      _rroot=$(jq -r '.project.outputDir // empty' "$PRD_FILE" 2>/dev/null); _rmark=$(phase_retry_mark "${_rroot:-.}")
       bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
         --phase "$phase" \
         --reset \
         2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}
       echo ""
+      # THE PIPELINE NEVER LOOPS (lib/phase-exit.sh): a retry that changed nothing in the codeline is not repeated.
+      if phase_exit_is_retryable "$phase_exit" && ! phase_retry_progressed "${_rroot:-.}" "$_rmark"; then
+        info "  Self-healing: the retry changed nothing in the codeline (still ${_rmark:0:9}) — not retrying again"
+        phase_exit=1
+      fi
     done
     [ "$phase_exit" -ne 0 ] && fail "Phase '$phase' failed after self-healing retry (exit $phase_exit) — aborting"
     success "Self-healing retry succeeded for phase '$phase'"

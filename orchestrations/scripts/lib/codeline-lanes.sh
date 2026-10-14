@@ -1212,7 +1212,7 @@ _run_codeline_loop() {
       # covered, so the loop ends when there is nothing new to fix (or the story's own budget does).
       while phase_exit_is_retryable "$_pex"; do
         log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying the phase with what the gates added"
-        _pex=0
+        _pex=0; _rmark=$(phase_retry_mark "$_wt")
         JIRA_CODELINE_RUN=1 \
       EPAM_CODELINE="$_cl" \
       LOG_DIR="$_lane_log_dir" \
@@ -1229,6 +1229,10 @@ _run_codeline_loop() {
           log "[orch] Self-healing retry succeeded for '${_phase}' ('${_cl}')"
         elif ! phase_exit_is_retryable "$_pex"; then
           error "[orch] Phase '${_phase}' for '${_cl}' failed after self-healing retry (exit $_pex)"
+        elif ! phase_retry_progressed "$_wt" "$_rmark"; then
+          # THE PIPELINE NEVER LOOPS (lib/phase-exit.sh): the retry changed nothing in the codeline, so another is no different.
+          error "[orch] Phase '${_phase}' for '${_cl}': the self-healing retry changed nothing in the codeline (still ${_rmark:0:9}) — not retrying again"
+          _pex=1
         fi
       done
 
@@ -1453,7 +1457,7 @@ _run_codeline_loop() {
       # covered, so the loop ends when there is nothing new to fix (or the story's own budget does).
       while phase_exit_is_retryable "$_pex"; do
         log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying the phase with what the gates added"
-        _pex=0
+        _pex=0; _rmark=$(phase_retry_mark "$_wt")
         JIRA_CODELINE_RUN=1 \
         EPAM_CODELINE="$_cl" \
         LOG_DIR="$_lane_log_dir" \
@@ -1470,6 +1474,10 @@ _run_codeline_loop() {
           log "[orch] Self-healing retry succeeded for '${_phase}' ('${_cl}')"
         elif ! phase_exit_is_retryable "$_pex"; then
           error "[orch] Phase '${_phase}' for '${_cl}' failed after self-healing retry (exit $_pex)"
+        elif ! phase_retry_progressed "$_wt" "$_rmark"; then
+          # THE PIPELINE NEVER LOOPS (lib/phase-exit.sh): the retry changed nothing in the codeline, so another is no different.
+          error "[orch] Phase '${_phase}' for '${_cl}': the self-healing retry changed nothing in the codeline (still ${_rmark:0:9}) — not retrying again"
+          _pex=1
         fi
       done
 

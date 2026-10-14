@@ -142,7 +142,13 @@ _run_release_lines_each() {
             # WHILE THE GATES REMEDIATE, THE LINE'S PHASE IS RETRIED with remediation on (lib/codeline-lanes.sh, the same rule).
             while phase_exit_is_retryable "$_pex"; do
                 log "[orch] Gate remediation applied for '${_phase}' ('${_cl}' release line ${_line}) — retrying the phase with what the gates added"
+                local _rmark; _rmark=$(phase_retry_mark "$_wt")
                 _pex=0; _line_phase --reset || _pex=$?
+                # THE PIPELINE NEVER LOOPS (lib/phase-exit.sh): a retry that changed nothing in the codeline is not repeated.
+                if phase_exit_is_retryable "$_pex" && ! phase_retry_progressed "$_wt" "$_rmark"; then
+                    error "[orch] Phase '${_phase}' for '${_cl}' on release line ${_line}: the self-healing retry changed nothing in the codeline (still ${_rmark:0:9}) — not retrying again"
+                    _pex=1
+                fi
             done
             if [ "$_pex" -ne 0 ]; then
                 error "[orch] Phase '${_phase}' for '${_cl}' on release line ${_line} failed (exit $_pex)"

@@ -50,3 +50,23 @@ phase_exit_describe() {
         *)                         echo "failed (exit ${1:-?})" ;;
     esac
 }
+
+# phase_retry_mark <codeline-root> — what the codeline holds before a self-heal retry (its commit), for
+# phase_retry_progressed. Empty when the root is not a repository.
+phase_retry_mark() {
+    git -C "${1:-.}" rev-parse -q --verify HEAD 2>/dev/null || true
+}
+
+# phase_retry_progressed <codeline-root> <mark> — true when the retry changed what the codeline holds.
+#
+# THE PIPELINE NEVER LOOPS (operator, 2026-10-14: "pipeline should NEVER get into a loop!!!"). A retry is repeated
+# while its gates remediate; AMSD-2974 live run L2 retried the 7.x line five times — each time the remediator added
+# criteria, the writer committed nothing, the same code failed the same gate (~$2.50 a round). A retry that changed
+# nothing cannot make the next one different: it is not repeated. With no mark (no repository), progress cannot be
+# told, and the retry is not repeated either.
+phase_retry_progressed() {
+    local _now
+    [ -n "${2:-}" ] || return 1
+    _now=$(phase_retry_mark "${1:-.}")
+    [ -n "$_now" ] && [ "$_now" != "$2" ]
+}

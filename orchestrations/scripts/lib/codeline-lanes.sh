@@ -1035,7 +1035,10 @@ _run_codeline_loop() {
     [ -n "${EPAM_RESUME_RUN:-}" ] || return 1
     local _rck="${EPAM_PROJECT_CONFIG_DIR:-${PROJECT_CONFIG_DIR:-}}/runs/${EPAM_RESUME_RUN}/lanes/${_rcl}/checkpoint"
     [ -f "$_rck/prd.json" ] && [ -f "$_rck/checkpoint.json" ] || return 1
-    local _want; _want=$(_stage_rank pre-writer)
+    # POST-SPEC IS ENOUGH: a lane checkpointed after its spec pass holds its spec. Requiring pre-writer took a specified
+    # lane for one with no checkpoint, and it specified again — gotransit and metrolinx, $22.33, AMSD-2974 run 9
+    # (2026-10-14; operator: "not permitted"). What follows the spec pass still runs, and the pauses still decide.
+    local _want; _want=$(_stage_rank post-spec)
     [ "$(_stage_rank "$(jq -r '.stage // empty' "$_rck/checkpoint.json" 2>/dev/null)")" -ge "$_want" ] || return 1
     if [ -n "${EPAM_RESUME_FROM_STAGE:-}" ] && [ "$(_stage_rank "$EPAM_RESUME_FROM_STAGE")" -lt "$_want" ]; then
       return 1

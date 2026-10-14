@@ -91,4 +91,20 @@ describe('_lane_resume_prd', () => {
     expect(existsSync(fresh.out)).toBe(true);
     expect(run(fresh.cfg, fresh.out, { EPAM_RESUME_RUN: '' }).stdout).toContain('REBUILD');
   });
+
+  // AMSD-2974 run 9 live relaunch (2026-10-14 00:23Z): gotransit's and metrolinx's checkpoints were post-spec — specified,
+  // not yet at the writer — and the lane took them for no checkpoint: both re-ran the Spec phase ($22.33, operator: "not
+  // permitted"). A post-spec checkpoint holds the lane's spec; the lane resumes from it and does not specify again.
+  it('a lane checkpointed post-spec resumes from its own PRD and does NOT run its spec pass again', () => {
+    const { cfg, out } = lane('postspec', 'post-spec');
+    const r = run(cfg, out);
+    expect(r.stdout).toContain('RESUMED spec=0');
+    expect(r.prd.stories[0].approved).toBe(true);
+  });
+
+  it('NEGATIVE: a post-spec lane sent back to post-roster is rebuilt and specified again', () => {
+    const { cfg, out } = lane('postspec-sentback', 'post-spec');
+    expect(run(cfg, out, { EPAM_RESUME_FROM_STAGE: 'post-roster' }).stdout).toContain('REBUILD');
+  });
 });
+

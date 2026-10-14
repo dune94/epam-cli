@@ -370,6 +370,22 @@ git_add_client_outputs() {
     return $_rc
 }
 
+# _story_branch_carries_own_work <root> <branch> <story_id> — true when <branch> exists and this run recorded a commit of
+# <story_id> (LOG_DIR/story-changes.jsonl) that is in the branch's history; never on a resume sent back to an earlier stage.
+_story_branch_carries_own_work() {
+    local _root="$1" _br="$2" _id="$3" _f="${LOG_DIR:-}/story-changes.jsonl" _sha
+    [ -n "$_id" ] && [ -f "$_f" ] || return 1
+    git -C "$_root" rev-parse -q --verify "refs/heads/${_br}" >/dev/null 2>&1 || return 1
+    if [ -n "${EPAM_RESUME_FROM_STAGE:-}" ] && declare -F _stage_rank >/dev/null 2>&1 \
+        && [ "$(_stage_rank "$EPAM_RESUME_FROM_STAGE")" -lt "$(_stage_rank pre-writer)" ]; then
+        return 1
+    fi
+    while IFS= read -r _sha; do
+        [ -n "$_sha" ] && git -C "$_root" merge-base --is-ancestor "$_sha" "refs/heads/${_br}" 2>/dev/null && return 0
+    done < <(jq -r --arg id "$_id" 'select(.storyId == $id) | .sha // empty' "$_f" 2>/dev/null)
+    return 1
+}
+
 ensure_story_branch() {
     local codeline_root="$1"
     local story_id="$2"
@@ -390,6 +406,23 @@ ensure_story_branch() {
     # ONE STORY BRANCH PER RELEASE LINE (lib/release-lines.sh): a line other than the codeline's own carries a
     # suffix, so the codeline's own story branch is never reset by another line's work.
     local _branch="${EPAM_BRANCH_PREFIX:-}AI-${story_id}${EPAM_BRANCH_SUFFIX:-}"
+
+    # A STORY THAT ALREADY HAS ITS OWN WORK ON ITS BRANCH CONTINUES FROM IT (AMSD-2974 run 9, 2026-10-14). A self-heal retry
+    # sets the story pending again and comes back here; the hard reset below moved the 7.x line's branch to v7.11.0 twice
+    # in one run, discarding the approved full port (c25e819), and the writer re-wrote it from nothing — paid twice, weaker.
+    # This run's own record of the story's commits (story-changes.jsonl) is what says the work is its own: a fresh run has
+    # none, and a resume sent back to an earlier stage (EPAM_RESUME_FROM_STAGE) starts over as asked.
+    if _story_branch_carries_own_work "$codeline_root" "$_branch" "$story_id"; then
+        if git -C "$codeline_root" checkout -q "$_branch" 2>/dev/null; then
+            git -C "$codeline_root" reset --hard -q "$_branch" 2>/dev/null || true
+            git -C "$codeline_root" clean -fd -e .epam -q 2>/dev/null || true
+            _provision_epam_plugin_config "$codeline_root"
+            perimeter_apply "$codeline_root"
+            success "  [story-branch] $story_id: on branch '${_branch}', continuing on its own work at $(git -C "$codeline_root" rev-parse --short HEAD) (working tree reset + cleaned)"
+            return 0
+        fi
+        warning "  [story-branch] $story_id: could not check out '${_branch}' to continue its own work — basing it afresh"
+    fi
 
     # THE START POINT IS WHAT VARIES, NOT THE PROCEDURE.
     #
@@ -452,21 +485,29 @@ ensure_story_branch() {
     # deletion. So: before the pointer moves, anything that would stop being
     # reachable is pinned under a real ref and named — recovery must never depend on
     # the reflog. This is a local ref only; it pushes nothing.
-    local _unreachable=0
-    _unreachable=$(git -C "$codeline_root" rev-list --count "${_base_ref}..HEAD" 2>/dev/null || echo 0)
-    case "$_unreachable" in (''|*[!0-9]*) _unreachable=0 ;; esac
-    if [ "$_unreachable" -gt 0 ]; then
+    # THE BRANCH BEING RESET, NOT ONLY HEAD: a release line's branch is not what the codeline has checked out, and its
+    # approved port (c25e819, 2026-10-14) was moved off every ref with no rescue because only HEAD was measured.
+    local _tip _tips=(HEAD)
+    git -C "$codeline_root" rev-parse -q --verify "refs/heads/${_branch}" >/dev/null 2>&1 && _tips+=("refs/heads/${_branch}")
+    for _tip in "${_tips[@]}"; do
+        local _unreachable=0
+        _unreachable=$(git -C "$codeline_root" rev-list --count "${_base_ref}..${_tip}" 2>/dev/null || echo 0)
+        case "$_unreachable" in (''|*[!0-9]*) _unreachable=0 ;; esac
+        [ "$_unreachable" -gt 0 ] || continue
+        # Still reachable from another ref (HEAD's own branch, which checkout -B does not move): nothing is lost.
+        [ "$_tip" = HEAD ] && [ -n "$(git -C "$codeline_root" symbolic-ref -q HEAD 2>/dev/null)" ] \
+            && [ "$(git -C "$codeline_root" symbolic-ref -q --short HEAD)" != "$_branch" ] && continue
         local _rescue_ref _head_short
-        _head_short=$(git -C "$codeline_root" rev-parse --short HEAD 2>/dev/null || echo unknown)
+        _head_short=$(git -C "$codeline_root" rev-parse --short "$_tip" 2>/dev/null || echo unknown)
         _rescue_ref="epam-rescue/${story_id}-${_head_short}"
-        if git -C "$codeline_root" branch -f "$_rescue_ref" HEAD --quiet 2>/dev/null; then
+        if git -C "$codeline_root" branch -f "$_rescue_ref" "$_tip" --quiet 2>/dev/null; then
             warning "  [story-branch] $story_id: ${_unreachable} commit(s) would have been discarded by this reset — preserved on branch '${_rescue_ref}'"
             warning "  [story-branch]   recover with: git -C '${codeline_root}' log ${_rescue_ref}"
         else
             error "  [story-branch] $story_id: ${_unreachable} commit(s) are about to become unreachable and the rescue ref could not be created — refusing to reset"
             return 1
         fi
-    fi
+    done
 
     if git -C "$codeline_root" checkout -B "$_branch" "$_base_ref" --quiet 2>/dev/null; then
         # checkout -B only forces tracked files that DIFFER between the old

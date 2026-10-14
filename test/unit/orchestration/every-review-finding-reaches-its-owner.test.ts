@@ -170,6 +170,24 @@ describe('a reviewer may retire a criterion the remediator added — never one o
     expect(r.testWriter).toHaveLength(0);
   });
 
+  it('a criterion named by the label the reviewer was shown — "AC2" or "AC2: <text>" — is retired too', () => {
+    // rv4 (live, 2026-10-14): the reviewer named AC8/AC9 as "AC8: <text>"; nothing matched and they went to the test-writer.
+    for (const name of ['AC2', `AC2: ${REMEDIATION_AC}`]) {
+      const retire = { severity: 'minor', file: 'pkg/a.spec.ts', line: 1, description: 'cannot be met here', work: 'tests', evidence: 'package.json', retireCriterion: name };
+      const r = runCycle([[retire], []], true);
+      const texts = r.acs().map((a: unknown) => (typeof a === 'string' ? a : (a as { text: string }).text));
+      expect(texts, `${name}: ${r.out.slice(-1500)}`).not.toContain(REMEDIATION_AC);
+      expect(texts).toContain(PLAN_AC);
+    }
+  });
+
+  it('NEGATIVE: a plan criterion named by its label ("AC1") stays', () => {
+    const retire = { ...CODE, retireCriterion: 'AC1' };
+    const r = runCycle([[retire], []], true);
+    const texts = r.acs().map((a: unknown) => (typeof a === 'string' ? a : (a as { text: string }).text));
+    expect(texts).toContain(PLAN_AC);
+  });
+
   it('NEGATIVE: a PLAN criterion named for retirement stays — the finding goes to its owner instead', () => {
     const retire = { ...CODE, retireCriterion: PLAN_AC };
     const r = runCycle([[retire], []], true);

@@ -37,11 +37,27 @@ def by_remediation(ac):
         return True
     return plan_texts is not None and text(ac).strip() not in plan_texts
 
+# THE CRITERIA AS THE REVIEWER WAS SHOWN THEM (argv[6], the criteria block): one line per criterion, "<label>: <text>",
+# in the order of the story's non-empty criteria. A criterion named by its label, or by its whole line, is that one.
+shown_labels = []
+if len(sys.argv) > 6 and os.path.isfile(sys.argv[6]):
+    for line in open(sys.argv[6]).read().splitlines()[1:]:
+        if ': ' in line:
+            shown_labels.append(line.split(': ', 1)[0].strip())
+
+def resolve(name, acs):
+    shown = [a for a in acs if a not in (None, '')]
+    for i, label in enumerate(shown_labels):
+        if i < len(shown) and (name == label or name.startswith(label + ': ')):
+            return shown[i]
+    return next((a for a in acs if text(a).strip() == name), None)
+
 retired, kept = 0, []
 for issue in issues:
     name = named(issue) if isinstance(issue, dict) else ''
     acs = (story or {}).get('acceptanceCriteria') or []
-    hit = next((a for a in acs if name and text(a).strip() == name and by_remediation(a)), None)
+    found = resolve(name, acs) if name else None
+    hit = found if found is not None and by_remediation(found) else None
     if hit is not None:
         acs.remove(hit)
         retired += 1

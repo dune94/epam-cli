@@ -90,7 +90,10 @@ _route_review_findings() {
     local _fb="$1" _sid="$2" _prd="${MAIN_PRD_FILE:-$PRD_FILE}"
     REVIEW_RETIRED=0; REVIEW_CODE_ISSUES=0
     [ -f "$_fb" ] || return 0
-    REVIEW_RETIRED=$(python3 "$SCRIPT_DIR/lib/handlers/retire-criteria.py" "$_prd" "$_sid" "$_fb" "$(story_criterion_mark)" "$(plan_of_record_ensured 2>/dev/null)" 2>/dev/null || echo 0)
+    # The criteria exactly as the reviewer was shown them, so a criterion named by its label resolves to the same one.
+    local _shown; _shown=$(mktemp "${TMPDIR:-/tmp}/criteria-shown-XXXXXX.txt"); story_acs_block "$_prd" "$_sid" > "$_shown" 2>/dev/null || true
+    REVIEW_RETIRED=$(python3 "$SCRIPT_DIR/lib/handlers/retire-criteria.py" "$_prd" "$_sid" "$_fb" "$(story_criterion_mark)" "$(plan_of_record_ensured 2>/dev/null)" "$_shown" 2>/dev/null || echo 0)
+    rm -f "$_shown"
     [ "${REVIEW_RETIRED:-0}" -gt 0 ] 2>/dev/null && log "  [review-routing] ${_sid}: ${REVIEW_RETIRED} criterion(s) the remediator added retired — the reviewer found them impossible here"
     local _tests
     _tests=$(jq -c '[(.issues // [])[] | select((.work // "") == "tests")]' "$_fb" 2>/dev/null || echo '[]')

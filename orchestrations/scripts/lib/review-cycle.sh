@@ -46,9 +46,8 @@ _remediate_review_rejection() {
     printf '%s\n' "$_raw" > "$LOG_DIR/review-remediation-${_sid}-cycle${_review_cycle:-0}.txt"
     local _tmp; _tmp=$(mktemp); printf '%s' "$_raw" > "$_tmp"
     local _added
-    _added=$( ( flock -w 10 200 || exit 0
-        python3 "$SCRIPT_DIR/lib/handlers/ac-apply.py" "$_prd" "$_sid" "$_tmp" 2>/dev/null || echo 0
-    ) 200>"${_prd}.lock" )
+    # Judged by the prd-change-reviewer before it reaches the plan (lib/reviewed-acs.sh).
+    _added=$(apply_reviewed_acs "$_prd" "$_sid" "$_tmp" ac-apply.py)
     rm -f "$_tmp"
     REVIEW_REMEDIATION_ADDED="${_added:-0}"
     if [ "${REVIEW_REMEDIATION_ADDED:-0}" -gt 0 ] 2>/dev/null; then
@@ -73,6 +72,8 @@ _remediate_review_rejection() {
 declare -F phase_retry_mark >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/phase-exit.sh"
 # shellcheck source=story-acs-block.sh
 declare -F story_criterion_mark >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/story-acs-block.sh"
+# shellcheck source=reviewed-acs.sh
+declare -F apply_reviewed_acs >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/reviewed-acs.sh"
 # shellcheck source=repro-baseline.sh
 declare -F repro_writer_baseline >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/repro-baseline.sh"
 

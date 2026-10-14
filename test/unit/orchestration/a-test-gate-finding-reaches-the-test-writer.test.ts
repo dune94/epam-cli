@@ -85,6 +85,7 @@ case "$a" in
   gate-finding-analyst) printf 'Verbatim: "status": "survived"\\n\`\`\`json\\n%s\\n\`\`\`\\n' "$STUB_FINDING" ;;
   story-ac-remediator)  printf '{"story_id":"AMSD-1820","acs_added":1,"acs":["MUST NOT read only the part before #"]}\\n' ;;
   profile-augmentor)    printf '{"profile_updated": false}\\n' ;;
+  prd-change-reviewer)  printf '{"verdict":"pass","issues":[]}\\n' ;;
   repro-test-writer)
     [ -n "\${EPAM_ALLOWED_WRITE_PATHS:-}" ] || { echo "corrective"; exit 0; }
     t="$PROJECT_ROOT/$EPAM_ALLOWED_WRITE_PATHS"
@@ -129,7 +130,7 @@ function remediate(work: string, extra: Record<string, string> = {}, e = makeEst
     // turns the gates' return into the phase's exit, so the block runs under it, in a subshell.
     `SCRIPT_DIR=${JSON.stringify(S)}; AUTOMATION_DIR=${JSON.stringify(join(S, '..'))}; NODE_BIN=${JSON.stringify(process.execPath)}; CLAUDE_CMD=claude; ORCH_GATE_PROVIDER=stub`,
     'info(){ echo "INFO $*"; }; warning(){ echo "WARN $*"; }; error(){ echo "ERR $*"; }; success(){ echo "OK $*"; }; log(){ echo "LOG $*"; }',
-    `. ${JSON.stringify(join(S, 'lib/flags.sh'))}; . ${JSON.stringify(join(S, 'lib/jq-vals.sh'))}; . ${JSON.stringify(join(S, 'lib/render-engine-prompt.sh'))}; . ${JSON.stringify(join(S, 'lib/phase-exit.sh'))}`,
+    `. ${JSON.stringify(join(S, 'lib/flags.sh'))}; . ${JSON.stringify(join(S, 'lib/jq-vals.sh'))}; . ${JSON.stringify(join(S, 'lib/render-engine-prompt.sh'))}; . ${JSON.stringify(join(S, 'lib/phase-exit.sh'))}; . ${JSON.stringify(join(S, 'lib/reviewed-acs.sh'))}`,
     'seam_model_or_fail(){ echo stub-model; }',
     fns,
     // A failing gate (failed=1, its log in _failing_logs) or, with WARN=1, a gate that only warned.

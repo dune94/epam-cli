@@ -4,6 +4,9 @@
 # are in scope exactly as they were. A move, not an edit: every body is byte-identical to
 # the golden recorded at the move (see the identity test).
 
+# A remediator's criteria are judged before they reach the plan.
+# shellcheck source=reviewed-acs.sh
+declare -F apply_reviewed_acs >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/reviewed-acs.sh"
 # What a phase's exit code means (PHASE_EXIT_TESTS_STRENGTHENED is returned below).
 # shellcheck source=phase-exit.sh
 declare -F phase_exit_is_retryable >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/phase-exit.sh"
@@ -1786,9 +1789,8 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 _ac_result_tmp=$(mktemp)
                 echo "$_ac_result" > "$_ac_result_tmp"
                 local _acs_added
-                _acs_added=$( ( flock -w 10 200 || { error "  [story-ac-remediator] Could not acquire lock on ${MAIN_PRD_FILE:-$PRD_FILE}"; return 1; }
-                python3 "$SCRIPT_DIR/lib/handlers/ac-apply.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_story_id" "$_ac_result_tmp" 2>/dev/null || echo 0
-                ) 200>"${MAIN_PRD_FILE:-$PRD_FILE}.lock" )
+                # Judged by the prd-change-reviewer before it reaches the plan (lib/reviewed-acs.sh).
+                _acs_added=$(apply_reviewed_acs "${MAIN_PRD_FILE:-$PRD_FILE}" "$_story_id" "$_ac_result_tmp" ac-apply.py)
                 rm -f "$_ac_result_tmp"
 
                 if [ "${_acs_added:-0}" -gt 0 ]; then

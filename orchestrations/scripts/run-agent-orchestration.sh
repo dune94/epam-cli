@@ -4110,9 +4110,8 @@ if m:
                 done
                 _lint_ac_tmp="$(mktemp)"
                 echo "$_lint_ac_raw" > "$_lint_ac_tmp"
-                _lint_acs_added="$( ( flock -w 10 200 || { error "  [lint-gate:remediator] Could not acquire lock on ${MAIN_PRD_FILE:-$PRD_FILE}"; return 1; }
-                python3 "$SCRIPT_DIR/lib/handlers/lint-ac.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_lint_story_id" "$_lint_ac_tmp" 2>/dev/null || echo "0"
-                ) 200>"${MAIN_PRD_FILE:-$PRD_FILE}.lock" )"
+                # Judged by the prd-change-reviewer before it reaches the plan (lib/reviewed-acs.sh, via gates-testing.sh).
+                _lint_acs_added="$(apply_reviewed_acs "${MAIN_PRD_FILE:-$PRD_FILE}" "$_lint_story_id" "$_lint_ac_tmp" lint-ac.py)"
                 rm -f "$_lint_ac_tmp"
                 if [ "${_lint_acs_added:-0}" -gt 0 ]; then
                     success "  [lint-gate:remediator] ${_lint_acs_added} AC(s) added to $_lint_story_id"

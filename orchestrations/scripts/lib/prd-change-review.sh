@@ -83,7 +83,7 @@ run_prd_change_reviewer() {
         AI_GATE_ALLOW_TOOLS=1 \
         EPAM_ALLOWED_TOOLS="$ORCH_GATE_ALLOWED_TOOLS" \
         EPAM_MAX_TOOL_CALLS="${PRD_CHANGE_REVIEWER_MAX_TOOL_CALLS:-24}" \
-        bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
+        bash "${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}" --provider "$gate_provider" \
         ${gate_model:+--model "$gate_model"} \
         2>/dev/null || echo '{"verdict":"fail","issues":["the reviewer could not be reached — the change was NOT reviewed"],"reason":"reviewer unavailable"}')
 
@@ -213,7 +213,7 @@ run_prd_change_summarizer() {
         EPAM_CLI="$EPAM_CLI" \
         EPAM_REASONING_EFFORT="high" \
         EPAM_TEMPERATURE="0.7" \
-        bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
+        bash "${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}" --provider "$gate_provider" \
         ${gate_model:+--model "$gate_model"} \
         2>/dev/null | head -c "$output_cap" || echo "")
     if [ "$change_type" = "tool_creation" ]; then
@@ -449,7 +449,7 @@ run_pre_phase_assessment() {
             AI_PROVIDER="$_orch_provider" \
             AI_MODEL="$_orch_model" \
             EPAM_CLI="$EPAM_CLI" \
-            bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
+            bash "${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}" --provider "$_orch_provider" \
             ${_orch_model:+--model "$_orch_model"} \
             2>&1 | tee "$assessment_log"; [ "${PIPESTATUS[1]}" -eq 0 ]; }; then
         success "Pre-phase assessment completed for '$phase_id'"

@@ -75,7 +75,7 @@ case_run() {
       cd "$d/cx" && bash -c "
         SCRIPT_DIR='$d/scripts'; CLAUDE_CMD="${CLAUDE_CMD:-claude}"
         info(){ echo \"INFO \$*\"; }; warning(){ echo \"WARN \$*\"; }; error(){ echo \"ERR \$*\"; }; success(){ echo \"OK \$*\"; }; log(){ echo \"LOG \$*\"; }
-        . '$SCRIPT_DIR/lib/flags.sh'; . '$SCRIPT_DIR/lib/jq-vals.sh'; . '$SCRIPT_DIR/lib/render-engine-prompt.sh'; . '$SCRIPT_DIR/lib/phase-exit.sh'
+        . '$SCRIPT_DIR/lib/flags.sh'; . '$SCRIPT_DIR/lib/jq-vals.sh'; . '$SCRIPT_DIR/lib/render-engine-prompt.sh'; . '$SCRIPT_DIR/lib/phase-exit.sh'; . '$SCRIPT_DIR/lib/reviewed-acs.sh'
         . '$SCRIPT_DIR/lib/model-ladders.sh'; export_model_ladders '$C/llm-settings.json' || true; . '$SCRIPT_DIR/lib/seam-ladder.sh'
         $(_fn _gate_attribute_from_log "$GT")
         $(_fn repro_writer_baseline "$SCRIPT_DIR/lib/repro-baseline.sh")

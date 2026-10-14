@@ -158,6 +158,16 @@ describe('a reviewer may retire a criterion the remediator added — never one o
     expect(r.testWriter).toHaveLength(0);
   });
 
+  it('a criterion named exactly as the reviewer was shown it — with its remediation marker — is retired too', () => {
+    // rv3 (live, 2026-10-14): the reviewer copied the criterion as listed, marker included; nothing matched.
+    const retire = { severity: 'minor', file: 'pkg/a.spec.ts', line: 1, description: 'jest-axe is not declared here', work: 'tests',
+      evidence: 'package.json', retireCriterion: `${REMEDIATION_AC}  [added by remediation — not the plan]` };
+    const r = runCycle([[retire], []], true);
+    const texts = r.acs().map((a: unknown) => (typeof a === 'string' ? a : (a as { text: string }).text));
+    expect(texts, r.out.slice(-2000)).not.toContain(REMEDIATION_AC);
+    expect(r.testWriter).toHaveLength(0);
+  });
+
   it('NEGATIVE: a PLAN criterion named for retirement stays — the finding goes to its owner instead', () => {
     const retire = { ...CODE, retireCriterion: PLAN_AC };
     const r = runCycle([[retire], []], true);

@@ -16,16 +16,18 @@
 # A CRITERION THE REMEDIATOR ADDED SAYS SO (operator, 2026-10-14: a reviewer may retire one that cannot be met — never
 # one of the plan's). The remediators (ac-apply.py, lint-ac.py) write {text, status, origin: "remediation"}; before the
 # origin field they wrote exactly {text, status}, which nothing else writes. The plan's criteria are strings.
+# The marker, ONCE: lib/review-cycle.sh hands it to retire-criteria.py, which accepts a criterion named with it.
+STORY_ACS_REMEDIATION_MARK="[added by remediation — not the plan]"
 story_acs_block() {
     local _prd="${1:-}" _id="${2:-}" _heading="${3:-ACCEPTANCE CRITERIA:}"
     [ -n "$_prd" ] && [ -f "$_prd" ] && [ -n "$_id" ] || return 0
     local _list
-    _list=$(jq -r --arg id "$_id" \
+    _list=$(jq -r --arg id "$_id" --arg mark "$STORY_ACS_REMEDIATION_MARK" \
         '.stories[] | select(.id == $id) | .acceptanceCriteria // [] | map(select(. != null and . != "")) | to_entries
          | map("AC\(.key+1): " + (if (.value | type) == "object" then
                    (.value.text // (.value | tostring))
                    + (if ((.value.origin // "") == "remediation") or ((.value | keys) == ["status", "text"])
-                      then "  [added by remediation — not the plan]" else "" end)
+                      then "  " + $mark else "" end)
                  else (.value | tostring) end))
          | join("\n")' \
         "$_prd" 2>/dev/null || true)

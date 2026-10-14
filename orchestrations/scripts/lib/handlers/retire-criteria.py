@@ -8,6 +8,14 @@
 import json, os, sys
 
 prd_path, sid, fb_path = sys.argv[1:4]
+# The marker the reviewer was shown beside a remediation criterion (lib/story-acs-block.sh): a name copied with it matches.
+mark = sys.argv[4] if len(sys.argv) > 4 else ''
+
+def named(issue):
+    n = (issue.get('retireCriterion') or '').strip()
+    if mark and n.endswith(mark):
+        n = n[:-len(mark)].strip()
+    return n
 fb = json.load(open(fb_path))
 issues = fb.get('issues') or []
 prd = json.load(open(prd_path))
@@ -21,7 +29,7 @@ def by_remediation(ac):
 
 retired, kept = 0, []
 for issue in issues:
-    name = (issue.get('retireCriterion') or '').strip() if isinstance(issue, dict) else ''
+    name = named(issue) if isinstance(issue, dict) else ''
     acs = (story or {}).get('acceptanceCriteria') or []
     hit = next((a for a in acs if name and text(a).strip() == name and by_remediation(a)), None)
     if hit is not None:

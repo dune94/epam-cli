@@ -61,10 +61,17 @@ describe('the declared clock', () => {
     expect(m.clockPinnedCommand).toBe('npm run test -- --setupFiles={setupFile}');
   });
 
-  it('WRITES A PIN THAT ACTUALLY FREEZES Date — the artefact, executed', () => {
+  it('SETS THE CLOCK TO THE INSTANT, AND IT TICKS — the artefact, executed', () => {
     /**
-     * Asserting the file exists proves nothing; a pin that does not pin is the whole defect class.
-     * The file is executed in a real node process and the frozen clock is read back.
+     * Asserting the file exists proves nothing; the file is executed in a real node process and the
+     * clock is read back twice.
+     *
+     * IT MUST TICK. The first pin FROZE "now". AMSD-2974 live L3 (2026-10-14): gotransit's
+     * AccessibilityTripSearchResultsContainer test waits for a second request that a timer makes;
+     * under a frozen Date.now() no time ever passes, so on the UNTOUCHED baseline it failed with the
+     * pin and passed without it (twice each, control with an empty setup file) — and the lane halted
+     * at Step 19 for a failure the change never caused. Set to the instant and advancing, both
+     * that test (6/6) and the wall-clock tests this pin exists for (39/39) pass.
      */
     const root = project({ command: 'x' });
     const f = plugin.writeClockPin(root, '2026-01-15T15:00:00Z');
@@ -72,12 +79,16 @@ describe('the declared clock', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { execFileSync } = require('node:child_process');
     const out = execFileSync(process.execPath, ['-e',
-      `require(${JSON.stringify(f)}); console.log(new Date().toISOString() + '|' + Date.now());`],
+      `require(${JSON.stringify(f)}); const a = Date.now(), iso = new Date().toISOString();
+       setTimeout(() => console.log(iso + '|' + a + '|' + Date.now() + '|' + new Date().getTime()), 60);`],
       { encoding: 'utf8' }).trim();
-    const [iso, now] = out.split('|');
-    expect(iso, 'new Date() was not frozen').toBe('2026-01-15T15:00:00.000Z');
-    expect(Number(now), 'Date.now() was not frozen')
-      .toBe(new Date('2026-01-15T15:00:00Z').getTime());
+    const [iso, a, b, c] = out.split('|');
+    const at = new Date('2026-01-15T15:00:00Z').getTime();
+    expect(iso.startsWith('2026-01-15T15:00:0'), `new Date() was not set to the instant: ${iso}`).toBe(true);
+    expect(Number(a) - at, 'Date.now() did not start at the instant').toBeGreaterThanOrEqual(0);
+    expect(Number(a) - at, 'Date.now() did not start at the instant').toBeLessThan(5000);
+    expect(Number(b) - Number(a), 'Date.now() is frozen — time does not pass').toBeGreaterThanOrEqual(50);
+    expect(Number(c) - Number(a), 'new Date() is frozen — time does not pass').toBeGreaterThanOrEqual(50);
   });
 
   it('an EXPLICIT date still works — pinning must not break date arithmetic', () => {

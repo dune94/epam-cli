@@ -267,8 +267,8 @@ describe('a launch returns a codeline a killed line pass left on the line\'s bra
 
 // Live AMSD-2974 run 10 (2026-10-08): the 7.x line's QA gates failed, the remediation added the finding to the story
 // and exited 2 ("remediated — retry the phase"); the lane loop retries on 2 (lib/phase-exit.sh), the release-line loop
-// did not, so the line failed and the finding never reached its writer. A line retries as a lane does: once, with
-// SKIP_GATE_REMEDIATION=1.
+// did not, so the line failed and the finding never reached its writer. A line retries as a lane does — while its gates
+// remediate (2026-10-14: no longer once with remediation off).
 describe('a release line whose gates remediated the story retries its phase, as a lane does', () => {
   const one = () => lanePrd(plan('lib', [{ line: '1.x', base: 'v1.9.0', version: '1.9.1', onCodelineBase: false }]));
   function run(exits: number[]) {
@@ -282,11 +282,18 @@ describe('a release line whose gates remediated the story retries its phase, as 
     const r = spawnSync('bash', ['-c', `${LOGS}\nSCRIPT_DIR=${JSON.stringify(SCRIPTS)}\nNODE_BIN=${JSON.stringify(process.execPath)}\n. ${JSON.stringify(LINES)}\n _run_release_lines lib ${JSON.stringify(prdFile)} /w/lib ${JSON.stringify(laneLog)} /dev/null "" ${JSON.stringify(runner)}`], { encoding: 'utf8', env: { ...process.env, LOG_DIR: d, EPAM_RESUME_RUN: '' } });
     return { r, calls: existsSync(calls) ? readFileSync(calls, 'utf8').trim().split('\n') : [] };
   }
-  it('exit 2, then the retry passes: the line passes; the retry ran with SKIP_GATE_REMEDIATION=1', () => {
+  // 2026-10-14 (AMSD-2974 run 9): the retry ran with remediation OFF, so a second, different finding (mutant-hunter after
+  // spec-validator) could not heal. The retry keeps remediation on, and repeats while the gates remediate.
+  it('exit 2, then the retry passes: the line passes; the retry ran with remediation ON', () => {
     const { r, calls } = run([2, 0]);
     expect(r.status, r.stdout + r.stderr).toBe(0);
     expect(calls).toHaveLength(2);
-    expect(calls[1]).toMatch(/skip=1/);
+    expect(calls[1]).toMatch(/skip=$/);
+  });
+  it('exit 2, the retry remediates a different finding (2), then passes: the line passes after both heal', () => {
+    const { r, calls } = run([2, 2, 0]);
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(calls).toHaveLength(3);
   });
   it('exit 2, then the retry fails: the line fails', () => {
     const { r, calls } = run([2, 1]);

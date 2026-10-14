@@ -386,20 +386,23 @@ run_phase() {
     return 0
   fi
 
-  # exit 2 = gate remediation was applied — reset stories and retry once
+  # exit 2 = a gate remediated the story — the phase is retried with what it added, for as long as the gates add something
+  # new (remediation stays on: AMSD-2974 run 9, 2026-10-14, a second, different finding could not heal on a one-shot retry).
   if phase_exit_is_retryable "$phase_exit"; then
-    info "  Self-healing: gate remediation applied — resetting and retrying phase '$phase'..."
-    if [ "${EPAM_BROWNFIELD:-0}" != "1" ]; then
-      bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" --phase "$phase" --mid-phase-retry \
-        2>&1 | tee -a "$LOG_FILE" || true
+    while phase_exit_is_retryable "$phase_exit"; do
+      info "  Self-healing: gate remediation applied — retrying phase '$phase' with what the gates added..."
+      if [ "${EPAM_BROWNFIELD:-0}" != "1" ]; then
+        bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" --phase "$phase" --mid-phase-retry \
+          2>&1 | tee -a "$LOG_FILE" || true
+        echo ""
+      fi
+      phase_exit=0
+      bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
+        --phase "$phase" \
+        --reset \
+        2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}
       echo ""
-    fi
-    phase_exit=0
-    SKIP_GATE_REMEDIATION=1 bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
-      --phase "$phase" \
-      --reset \
-      2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}
-    echo ""
+    done
     [ "$phase_exit" -ne 0 ] && fail "Phase '$phase' failed after self-healing retry (exit $phase_exit) — aborting"
     success "Self-healing retry succeeded for phase '$phase'"
     return 0

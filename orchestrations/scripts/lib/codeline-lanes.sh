@@ -1206,8 +1206,12 @@ _run_codeline_loop() {
       _pex=${PIPESTATUS[0]}
 
       # exit 2 = gate remediation applied — reset stories and retry once (mirrors tier3 launcher)
-      if phase_exit_is_retryable "$_pex"; then
-        log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying with SKIP_GATE_REMEDIATION=1"
+      # WHILE THE GATES REMEDIATE, THE PHASE IS RETRIED — remediation stays on (AMSD-2974 run 9, 2026-10-14: the one retry
+      # ran with remediation off, so a second, different finding — mutant-hunter after spec-validator — could not heal and
+      # ended the line). Exit 2 means a gate added something new to the story; the remediator adds nothing already
+      # covered, so the loop ends when there is nothing new to fix (or the story's own budget does).
+      while phase_exit_is_retryable "$_pex"; do
+        log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying the phase with what the gates added"
         _pex=0
         JIRA_CODELINE_RUN=1 \
       EPAM_CODELINE="$_cl" \
@@ -1218,16 +1222,15 @@ _run_codeline_loop() {
         PROJECT_ROOT="$_wt" \
         OUTPUT_DIR="$_wt" \
         PHASE="$_phase" \
-        SKIP_GATE_REMEDIATION=1 \
         CROSS_CODELINE_PRD="${CROSS_CODELINE_PRD:-}" \
         bash "$0" --reset 2>&1 | tee -a "$_log_file"
         _pex=${PIPESTATUS[0]}
-        if [ "$_pex" -ne 0 ]; then
-          error "[orch] Phase '${_phase}' for '${_cl}' failed after self-healing retry (exit $_pex)"
-        else
+        if [ "$_pex" -eq 0 ]; then
           log "[orch] Self-healing retry succeeded for '${_phase}' ('${_cl}')"
+        elif ! phase_exit_is_retryable "$_pex"; then
+          error "[orch] Phase '${_phase}' for '${_cl}' failed after self-healing retry (exit $_pex)"
         fi
-      fi
+      done
 
       if [ "$_pex" -ne 0 ]; then
         error "[orch] Phase '${_phase}' for '${_cl}' failed (exit $_pex)"
@@ -1444,8 +1447,12 @@ _run_codeline_loop() {
       _pex=${PIPESTATUS[0]}
 
       # exit 2 = gate remediation applied — reset stories and retry once (mirrors tier3 launcher)
-      if phase_exit_is_retryable "$_pex"; then
-        log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying with SKIP_GATE_REMEDIATION=1"
+      # WHILE THE GATES REMEDIATE, THE PHASE IS RETRIED — remediation stays on (AMSD-2974 run 9, 2026-10-14: the one retry
+      # ran with remediation off, so a second, different finding — mutant-hunter after spec-validator — could not heal and
+      # ended the line). Exit 2 means a gate added something new to the story; the remediator adds nothing already
+      # covered, so the loop ends when there is nothing new to fix (or the story's own budget does).
+      while phase_exit_is_retryable "$_pex"; do
+        log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying the phase with what the gates added"
         _pex=0
         JIRA_CODELINE_RUN=1 \
         EPAM_CODELINE="$_cl" \
@@ -1456,16 +1463,15 @@ _run_codeline_loop() {
         PROJECT_ROOT="$_wt" \
         OUTPUT_DIR="$_wt" \
         PHASE="$_phase" \
-        SKIP_GATE_REMEDIATION=1 \
         CROSS_CODELINE_PRD="${CROSS_CODELINE_PRD:-}" \
         bash "$0" --reset 2>&1 | tee -a "$_log_file"
         _pex=${PIPESTATUS[0]}
-        if [ "$_pex" -ne 0 ]; then
-          error "[orch] Phase '${_phase}' for '${_cl}' failed after self-healing retry (exit $_pex)"
-        else
+        if [ "$_pex" -eq 0 ]; then
           log "[orch] Self-healing retry succeeded for '${_phase}' ('${_cl}')"
+        elif ! phase_exit_is_retryable "$_pex"; then
+          error "[orch] Phase '${_phase}' for '${_cl}' failed after self-healing retry (exit $_pex)"
         fi
-      fi
+      done
 
       if [ "$_pex" -ne 0 ]; then
         error "[orch] Phase '${_phase}' for '${_cl}' failed (exit $_pex)"

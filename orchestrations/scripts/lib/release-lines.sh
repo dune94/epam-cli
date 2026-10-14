@@ -139,10 +139,11 @@ _run_release_lines_each() {
             # A LINE RETRIES AS A LANE DOES (lib/phase-exit.sh): exit 2 is "the gates remediated the story — retry the
             # phase"; once, with SKIP_GATE_REMEDIATION=1 (AMSD-2974 run 10: the line failed on it, the finding never
             # reached its writer).
-            if phase_exit_is_retryable "$_pex"; then
-                log "[orch] Gate remediation applied for '${_phase}' ('${_cl}' release line ${_line}) — retrying with SKIP_GATE_REMEDIATION=1"
-                _pex=0; SKIP_GATE_REMEDIATION=1 _line_phase --reset || _pex=$?
-            fi
+            # WHILE THE GATES REMEDIATE, THE LINE'S PHASE IS RETRIED with remediation on (lib/codeline-lanes.sh, the same rule).
+            while phase_exit_is_retryable "$_pex"; do
+                log "[orch] Gate remediation applied for '${_phase}' ('${_cl}' release line ${_line}) — retrying the phase with what the gates added"
+                _pex=0; _line_phase --reset || _pex=$?
+            done
             if [ "$_pex" -ne 0 ]; then
                 error "[orch] Phase '${_phase}' for '${_cl}' on release line ${_line} failed (exit $_pex)"
                 return 1

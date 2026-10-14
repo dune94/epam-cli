@@ -77,11 +77,11 @@ run_prd_change_reviewer() {
         EPAM_AGENT_NAME="prd-change-reviewer" EPAM_STORY_ID="${story_id}" \
         AI_PROVIDER="$gate_provider" \
         AI_MODEL="$gate_model" \
-        EPAM_CLI="$EPAM_CLI" \
+        EPAM_CLI="${EPAM_CLI:-}" \
         EPAM_REASONING_EFFORT="high" \
         EPAM_TEMPERATURE="0.7" \
         AI_GATE_ALLOW_TOOLS=1 \
-        EPAM_ALLOWED_TOOLS="$ORCH_GATE_ALLOWED_TOOLS" \
+        EPAM_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS:-}" \
         EPAM_MAX_TOOL_CALLS="${PRD_CHANGE_REVIEWER_MAX_TOOL_CALLS:-24}" \
         bash "${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}" --provider "$gate_provider" \
         ${gate_model:+--model "$gate_model"} \
@@ -210,7 +210,7 @@ run_prd_change_summarizer() {
         EPAM_AGENT_NAME="prd-change-summarizer" EPAM_STORY_ID="${story_id}" \
         AI_PROVIDER="$gate_provider" \
         AI_MODEL="$gate_model" \
-        EPAM_CLI="$EPAM_CLI" \
+        EPAM_CLI="${EPAM_CLI:-}" \
         EPAM_REASONING_EFFORT="high" \
         EPAM_TEMPERATURE="0.7" \
         bash "${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}" --provider "$gate_provider" \
@@ -448,7 +448,7 @@ run_pre_phase_assessment() {
             AI_GATE_ALLOW_TOOLS=1 \
             AI_PROVIDER="$_orch_provider" \
             AI_MODEL="$_orch_model" \
-            EPAM_CLI="$EPAM_CLI" \
+            EPAM_CLI="${EPAM_CLI:-}" \
             bash "${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}" --provider "$_orch_provider" \
             ${_orch_model:+--model "$_orch_model"} \
             2>&1 | tee "$assessment_log"; [ "${PIPESTATUS[1]}" -eq 0 ]; }; then

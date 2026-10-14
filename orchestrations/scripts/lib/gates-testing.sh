@@ -1502,17 +1502,6 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
     "$SCRIPT_DIR/update-monitor.sh" event "testing_gate_${verdict}" \
         "Testing gates $verdict for $phase_id (${duration_ms}ms)" "" "main" "test-coordinator-agent" 2>/dev/null || true
 
-    # ONCE PER GATE PER PHASE (the pipeline never loops): a gate that warns on every run — mutant-hunter is
-    # nondeterministic — would send each retry back to remediation. Its warnings are acted on once; after that they stand.
-    if [ $failed -eq 0 ] && [ ${#_warn_logs[@]} -gt 0 ]; then
-        local _wi _wl=() _wb=()
-        for _wi in "${!_warn_logs[@]}"; do
-            [ -f "$LOG_DIR/warn-remediated-${ORCH_RUN_ID:-}-${phase_id}-${_warn_labels[$_wi]}" ] && continue
-            _wl+=("${_warn_logs[$_wi]}"); _wb+=("${_warn_labels[$_wi]}")
-            : > "$LOG_DIR/warn-remediated-${ORCH_RUN_ID:-}-${phase_id}-${_warn_labels[$_wi]}"
-        done
-        _warn_logs=(${_wl[@]+"${_wl[@]}"}); _warn_labels=(${_wb[@]+"${_wb[@]}"})
-    fi
     if [ $failed -eq 0 ] && [ ${#_warn_logs[@]} -gt 0 ] && ! is_truthy "${SKIP_GATE_REMEDIATION:-}"; then
         warning "Step 4.2: Testing gates passed with ${#_warn_logs[@]} warning(s) — their findings go to remediation"
         _failing_logs=("${_warn_logs[@]}"); _log_labels=("${_warn_labels[@]}")

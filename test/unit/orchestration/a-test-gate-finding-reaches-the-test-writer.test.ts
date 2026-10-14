@@ -117,7 +117,9 @@ const promptsOf = (e: ReturnType<typeof makeEstate>, agent: string) =>
 // ── The remediation block of run_testing_gates, executed ─────────────────────────────────────────────────────────
 const GT = readFileSync(join(S, 'lib/gates-testing.sh'), 'utf8');
 const REMEDIATION = (() => {
-  const a = GT.indexOf('    # ONCE PER GATE PER PHASE');
+  // From just after the gates' monitor event — everything that decides what the gates' findings become.
+  const ev = GT.indexOf('"Testing gates $verdict for $phase_id (${duration_ms}ms)"');
+  const a = GT.indexOf('\n', ev) + 1;
   const b = GT.indexOf('\n    success "Step 4.2: Testing gates PASSED"\n    return 0\n}') + 1;
   if (a < 0 || b < 0 || b < a) throw new Error('the remediation block of run_testing_gates was not found — the harness is stale');
   return GT.slice(a, b);
@@ -192,12 +194,13 @@ describe('a gate finding that only a test can resolve reaches the test-writer', 
     expect(r.log).toContain('AMSD-1820: add strengthened test for the mutant-hunter finding');
   });
 
-  it('NEGATIVE: the same gate warning again in the same run is not remediated again — the gates pass', () => {
+  it('a warning raised again in a later round is acted on again — no counter decides, the agents do', () => {
+    // The once-per-gate-per-run marker (4e6b490f6) was a guard the operator never approved: removed 2026-10-14.
     const first = remediate('tests', { WARN: '1', ORCH_RUN_ID: 'run-w' });
     expect(first.rc, first.out).toBe(4);
     const again = remediate('tests', { WARN: '1', ORCH_RUN_ID: 'run-w' }, first.e);
-    expect(again.rc, again.out).toBe(0);
-    expect(promptsOf(first.e, 'gate-finding-analyst')).toHaveLength(1);
+    expect(again.rc, again.out).toBe(4);
+    expect(promptsOf(first.e, 'gate-finding-analyst')).toHaveLength(2);
   });
 
   it('the remediator is told what the codeline declares', () => {

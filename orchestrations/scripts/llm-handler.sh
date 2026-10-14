@@ -33,6 +33,8 @@ INVOKE_PYTHON="${INVOKE_PYTHON:-$_SCRIPT_DIR_AIRUN/.venv/bin/python3}"
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/runner-settings.sh" 2>/dev/null || true
+# The runner the operator's environment names, not whichever this process's PATH puts first (lib/runner-settings.sh).
+declare -F resolve_operator_cli >/dev/null 2>&1 && CLAUDE_CMD="$(resolve_operator_cli "$CLAUDE_CMD")"
 # Providers that are plugins (config/providers.json runnerPlugin) — see lib/provider-plugin.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/provider-plugin.sh"
 . "$_SCRIPT_DIR_AIRUN/lib/story-retry-state.sh"

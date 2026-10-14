@@ -193,6 +193,10 @@ CURRENT_PHASE=""        # Current phase being executed (for cost tracking)
 
 # Configuration
 CLAUDE_CMD="${CLAUDE_CMD:-claude}"  # Allow override via environment
+# The runner the operator launched with, not whichever this process's PATH puts first (lib/runner-settings.sh
+# resolve_operator_cli; AMSD-2974 rehearsal T3, 2026-10-14: the writer's direct call ran a 2.1.84 claude and died on --safe-mode).
+declare -F resolve_operator_cli >/dev/null 2>&1 || . "$SCRIPT_DIR/lib/runner-settings.sh" 2>/dev/null || true
+declare -F resolve_operator_cli >/dev/null 2>&1 && CLAUDE_CMD="$(resolve_operator_cli "$CLAUDE_CMD")"
 EPAM_CLI="${EPAM_CLI:-$SCRIPT_DIR/bin/epam}"        # epam-cli binary; override with mock for testing
 MAX_RETRIES="${EPAM_MAX_RETRIES:-7}"
 RETRY_DELAY=5

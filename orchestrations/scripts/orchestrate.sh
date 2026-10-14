@@ -116,6 +116,8 @@ fi
 # Pass 3: re-load project config so it wins over anything in the secrets file
 load_project_env "$PROJECT_DIR" || exit 1
 
+# The operator's PATH at launch: the environment the run's agent CLIs are resolved in (lib/runner-settings.sh resolve_operator_cli).
+export EPAM_OPERATOR_PATH="${EPAM_OPERATOR_PATH:-$PATH}"
 LOG_FILE="/tmp/tier3-${PROJECT}-$(date +%Y%m%dT%H%M%S).log"
 TIER3_PID_FILE="${TIER3_PID_FILE:-/tmp/tier3-${PROJECT}-run.pid}"
 echo "$$" > "$TIER3_PID_FILE"

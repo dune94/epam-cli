@@ -230,6 +230,21 @@ runner_name_for() {
     printf '%s' "$_fallback"
 }
 
+# resolve_operator_cli <cmd> — a bare runner name resolved against the PATH the operator launched the run with
+# (EPAM_OPERATOR_PATH, snapshotted once at launch), so the binary an agent runs is the one the operator's environment
+# names — not whichever a later process's PATH puts first. A path, or no snapshot, is returned unchanged.
+#
+# AMSD-2974 run 9 rehearsal T3 (2026-10-14): the 7.x line's writer escalated to its top rung and ran /usr/local/bin/claude
+# — a 2.1.84 global npm install — instead of the operator's 2.1.299, and died on "unknown option '--safe-mode'" before
+# sending a token; the run's own processes resolved 2.1.299.
+resolve_operator_cli() {
+    local _cmd="${1:-}" _found
+    case "$_cmd" in ''|*/*) printf '%s' "$_cmd"; return 0 ;; esac
+    [ -n "${EPAM_OPERATOR_PATH:-}" ] || { printf '%s' "$_cmd"; return 0; }
+    _found=$(PATH="$EPAM_OPERATOR_PATH" command -v "$_cmd" 2>/dev/null) || _found=""
+    printf '%s' "${_found:-$_cmd}"
+}
+
 # runner_bin_for <provider> <fallback>
 #
 # THE BINARY THAT WILL ACTUALLY BE INVOKED, for capability probes.

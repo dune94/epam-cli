@@ -607,6 +607,9 @@ CONTROL_PLANE_LOG="$LOG_DIR/control-plane.log"
 # NUMBER, and baked into CHECKPOINT_FILE — so every resume printed a new run number and kept its
 # story checkpoints under it (the "phantom run id", 2026-09-15).
 export ORCH_RUN_ID="${ORCH_RUN_ID:-${EPAM_RESUME_RUN:-$(date -u +%Y%m%dT%H%M%SZ)}}"
+# THE OPERATOR'S PATH, ONCE, AT LAUNCH — the environment the run's agent CLIs are resolved in (lib/runner-settings.sh
+# resolve_operator_cli). Inherited, never re-snapshotted: a lane or retry keeps the launch's value.
+export EPAM_OPERATOR_PATH="${EPAM_OPERATOR_PATH:-$PATH}"
 # This lane's own checkpoint stage, before this process can write one (lib/run-checkpoint.sh _pause_already_passed).
 own_checkpoint_stage_snapshot
 CHECKPOINT_FILE="${LOG_DIR}/checkpoint-${PHASE:-main}-${ORCH_RUN_ID}.jsonl"

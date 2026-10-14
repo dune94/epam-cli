@@ -54,7 +54,9 @@ function runCycle(answers: Issue[][], writerCommits: boolean) {
   writeFileSync(prd, JSON.stringify({ project: { name: 'fixture', outputDir: proj }, implementationOrder: { core: ['S-A'] },
     stories: [{ id: 'S-A', jiraKey: 'S-A', title: 'S-A story', description: 'd', agentRole: 'engineer', status: 'completed', completed: true,
       codelines: ['codeline'], technicalNotes: { files: ['pkg/a.ts'] }, verificationCriteria: ['pkg/a.ts present'],
-      acceptanceCriteria: [PLAN_AC, { text: REMEDIATION_AC, status: 'pending' }] }] }));
+      // The remediator stamps what it adds (ac-apply.py); what the plan is otherwise comes from the plan of record
+      // (the-plan-of-record-decides-what-the-plan-is.test.ts) — never from a criterion's shape.
+      acceptanceCriteria: [PLAN_AC, { text: REMEDIATION_AC, status: 'pending', origin: 'remediation' }] }] }));
 
   const calls = join(d, 'calls'); mkdirSync(calls);
   const answersFile = join(d, 'answers.json');

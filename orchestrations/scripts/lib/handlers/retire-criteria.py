@@ -24,8 +24,18 @@ story = next((s for s in prd.get('stories', []) if s.get('id') == sid), None)
 def text(ac):
     return ac.get('text', '') if isinstance(ac, dict) else str(ac)
 
+# WHAT THE PLAN IS: the plan of record (argv[5], lib/plan-of-record.sh) — never a criterion's shape. A criterion it does
+# not list was added after pause 2; one the remediator stamped is a remediation. With no plan of record, only the stamp.
+plan_path = sys.argv[5] if len(sys.argv) > 5 else ''
+plan_texts = None
+if plan_path and os.path.isfile(plan_path):
+    _ps = next((s for s in json.load(open(plan_path)).get('stories', []) if s.get('id') == sid), {})
+    plan_texts = [text(a).strip() for a in (_ps.get('acceptanceCriteria') or [])]
+
 def by_remediation(ac):
-    return isinstance(ac, dict) and (ac.get('origin') == 'remediation' or sorted(ac.keys()) == ['status', 'text'])
+    if isinstance(ac, dict) and ac.get('origin') == 'remediation':
+        return True
+    return plan_texts is not None and text(ac).strip() not in plan_texts
 
 retired, kept = 0, []
 for issue in issues:

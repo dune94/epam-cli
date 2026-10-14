@@ -14,10 +14,12 @@
 #   stdout: "<heading>\nAC1: ...\nAC2: ...\n\n" when the story declares acceptance criteria,
 #           "" otherwise. Default heading "ACCEPTANCE CRITERIA:".
 # A CRITERION THE REMEDIATOR ADDED SAYS SO (operator, 2026-10-14: a reviewer may retire one that cannot be met — never
-# one of the plan's). The remediators (ac-apply.py, lint-ac.py) write {text, status, origin: "remediation"}; before the
-# origin field they wrote exactly {text, status}, which nothing else writes. The plan's criteria are strings.
+# one of the plan's). What the plan is comes from the plan of record (lib/plan-of-record.sh); the remediators also stamp
+# what they add {origin: "remediation"}.
 # THE MARKER IS TEMPLATE PROSE (prompts/templates/criterion-origin.json) — never a literal here. The criteria block renders
 # it, the reviewer's contract names it (story_criterion_mark_values), and retire-criteria.py accepts a name copied with it.
+# shellcheck source=plan-of-record.sh
+declare -F plan_of_record_ensured >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/plan-of-record.sh"
 # shellcheck source=render-engine-prompt.sh
 declare -F render_engine_prompt >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/render-engine-prompt.sh"
 story_criterion_mark() {
@@ -31,14 +33,18 @@ story_criterion_mark_values() {
 story_acs_block() {
     local _prd="${1:-}" _id="${2:-}" _heading="${3:-ACCEPTANCE CRITERIA:}"
     [ -n "$_prd" ] && [ -f "$_prd" ] && [ -n "$_id" ] || return 0
-    local _list
+    # WHAT THE PLAN IS — the plan of record (lib/plan-of-record.sh), never a criterion's shape. A criterion it does not
+    # list, or one the remediator stamped, is marked. With no plan of record only the stamp marks.
+    local _plan _list
+    _plan=$(plan_of_record_ensured 2>/dev/null || true)
     _list=$(jq -r --arg id "$_id" --arg mark "$(story_criterion_mark)" \
+        --argjson plan "$( [ -n "$_plan" ] && jq -c --arg id "$_id" '[.stories[] | select(.id == $id) | .acceptanceCriteria[]? | if type == "object" then (.text // "") else tostring end]' "$_plan" 2>/dev/null || echo null)" \
         '.stories[] | select(.id == $id) | .acceptanceCriteria // [] | map(select(. != null and . != "")) | to_entries
-         | map("AC\(.key+1): " + (if (.value | type) == "object" then
-                   (.value.text // (.value | tostring))
-                   + (if ((.value.origin // "") == "remediation") or ((.value | keys) == ["status", "text"])
-                      then "  " + $mark else "" end)
-                 else (.value | tostring) end))
+         | map(.value as $v | ($v | if type == "object" then (.text // tostring) else tostring end) as $t
+               | "AC\(.key+1): " + $t
+               + (if (($v | type) == "object" and (($v.origin // "") == "remediation"))
+                     or ($plan != null and (($plan | index($t)) == null))
+                  then "  " + $mark else "" end))
          | join("\n")' \
         "$_prd" 2>/dev/null || true)
     [ -n "$_list" ] || return 0

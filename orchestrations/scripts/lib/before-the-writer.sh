@@ -29,6 +29,9 @@ before_the_writer() {
         # that exists only in memory is a project violation.
         if _ckpt_path=$(save_run_checkpoint "$PHASE" pre-writer 2>&1); then
             info "[orch] pre-writer checkpoint saved: ${_ckpt_path}"
+            # THE PLAN OF RECORD — the plan as it stands at pause 2, written once (lib/plan-of-record.sh).
+            declare -F record_plan_of_record >/dev/null 2>&1 || . "$SCRIPT_DIR/lib/plan-of-record.sh"
+            record_plan_of_record "$PRD_FILE"
         else
             warning "[orch] could not save the pre-writer checkpoint: ${_ckpt_path}"
         fi

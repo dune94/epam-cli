@@ -610,6 +610,15 @@ save_run_checkpoint() {
 
     # WHAT THE SPEC WAS BUILT FROM (config/spec-inputs.json) — a resume compares it, lane_spec_is_current.
     local _sid; _sid=$(_spec_inputs_digest)
+    # A STAGE IS HOW FAR THE LANE GOT, AND A LATER SAVE NEVER LOWERS IT within the same run. The post-spec save after the
+    # spec stage runs in every phase process, spec pass or not, and wrote "post-spec" over a lane's pre-writer — gotransit
+    # after finishing GO, and the 7.x line just before its gate self-heal retry, which then read itself as short of pause 2
+    # and stopped there (AMSD-2974 run 9, 2026-10-14). The contents still refresh; only the stage keeps its furthest value.
+    local _was=""
+    _was=$(jq -r --arg r "$_rid" 'select(.runId == $r) | .stage // empty' "$_dir/checkpoint.json" 2>/dev/null || true)
+    if [ -n "$_was" ] && [ "$(_stage_rank "$_was")" -gt "$(_stage_rank "$_stage")" ]; then
+        _stage="$_was"
+    fi
     # Written last — see above.
     jq -n \
         --arg specInputsDigest "$_sid" \

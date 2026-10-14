@@ -256,3 +256,34 @@ describe('the run number is discoverable', () => {
     expect(r.out.trim()).toBe('');
   });
 });
+
+// AMSD-2974 run 9 (2026-10-14): the post-spec save that follows the spec stage runs in every phase process, spec pass or
+// not, and wrote "post-spec" over a lane's pre-writer — the 7.x line's gate self-heal retry then read itself as short of
+// pause 2 and stopped there; gotransit, finished GO, went back to post-spec. A save never lowers the stage of its own run.
+describe('a later save never lowers the stage this run reached', () => {
+  const stage = (w: ReturnType<typeof workspace>) =>
+    JSON.parse(readFileSync(join(w.projectDir, 'runs', '20260803T120000Z', 'checkpoint', 'checkpoint.json'), 'utf8')).stage;
+
+  it('pre-writer, then the post-spec save of the next phase process: the stage stays pre-writer', () => {
+    const w = workspace();
+    expect(sh('save_run_checkpoint core pre-writer', env(w)).status).toBe(0);
+    expect(sh('save_run_checkpoint core', env(w)).status).toBe(0);
+    expect(stage(w)).toBe('pre-writer');
+  });
+
+  it('NEGATIVE: post-spec, then pre-writer: the stage advances', () => {
+    const w = workspace();
+    sh('save_run_checkpoint core', env(w));
+    sh('save_run_checkpoint core pre-writer', env(w));
+    expect(stage(w)).toBe('pre-writer');
+  });
+
+  it('NEGATIVE: another run\'s checkpoint in the same place does not hold this run\'s stage up', () => {
+    const w = workspace();
+    sh('save_run_checkpoint core pre-writer', env(w, { ORCH_RUN_ID: '20260803T120000Z' }));
+    const p = join(w.projectDir, 'runs', '20260803T120000Z', 'checkpoint', 'checkpoint.json');
+    writeFileSync(p, JSON.stringify({ ...JSON.parse(readFileSync(p, 'utf8')), runId: 'another-run' }));
+    sh('save_run_checkpoint core', env(w));
+    expect(stage(w)).toBe('post-spec');
+  });
+});

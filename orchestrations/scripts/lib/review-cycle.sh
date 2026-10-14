@@ -67,6 +67,45 @@ _remediate_review_rejection() {
     return 0
 }
 
+# What a retry's progress is (phase_retry_mark / phase_retry_progressed) and the test-writer's baseline — loaded here so
+# the loop runs wherever it is sourced.
+# shellcheck source=phase-exit.sh
+declare -F phase_retry_mark >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/phase-exit.sh"
+# shellcheck source=repro-baseline.sh
+declare -F repro_writer_baseline >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/repro-baseline.sh"
+
+# _route_review_findings <review-feedback-file> <story_id> — EVERY FINDING REACHES THE AGENT THAT OWNS IT.
+#
+# Operator, 2026-10-14: every reviewer finding is acted on, by its owner. AMSD-2974 rehearsal rv2: a finding about the
+# TESTS went to the code writer, who may not touch tests; it changed nothing and the unchanged code was reviewed again.
+#   - an issue naming a remediation criterion it cannot meet (retireCriterion) retires that criterion — never a plan one;
+#   - in brownfield, `work: "tests"` goes to the test-writer (brownfield-repro-test-writer.sh, gate-finding mode), which
+#     commits the strengthened test; in greenfield the implementer owns its tests and keeps them;
+#   - what remains is the writer's. The feedback file is rewritten to hold only that.
+# Sets REVIEW_RETIRED (criteria retired) and REVIEW_CODE_ISSUES (issues left for the writer).
+_route_review_findings() {
+    local _fb="$1" _sid="$2" _prd="${MAIN_PRD_FILE:-$PRD_FILE}"
+    REVIEW_RETIRED=0; REVIEW_CODE_ISSUES=0
+    [ -f "$_fb" ] || return 0
+    REVIEW_RETIRED=$(python3 "$SCRIPT_DIR/lib/handlers/retire-criteria.py" "$_prd" "$_sid" "$_fb" 2>/dev/null || echo 0)
+    [ "${REVIEW_RETIRED:-0}" -gt 0 ] 2>/dev/null && log "  [review-routing] ${_sid}: ${REVIEW_RETIRED} criterion(s) the remediator added retired — the reviewer found them impossible here"
+    local _tests
+    _tests=$(jq -c '[(.issues // [])[] | select((.work // "") == "tests")]' "$_fb" 2>/dev/null || echo '[]')
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ "$_tests" != "[]" ] && [ -n "$_tests" ]; then
+        local _ff="$LOG_DIR/review-test-finding-${_sid}.json" _base_src _tw_rc
+        jq -c --arg sid "$_sid" '{gate: "team-lead-review", story_id: $sid, file: (.[0].file // ""), findings: .}' <<< "$_tests" > "$_ff"
+        log "  [review-routing] ${_sid}: $(jq length <<< "$_tests") finding(s) about the tests — to the test-writer, not the implementer"
+        _base_src=$(repro_writer_baseline "$PROJECT_ROOT")
+        PROJECT_ROOT="$PROJECT_ROOT" PRD_FILE="$PRD_FILE" LOG_DIR="$LOG_DIR" JIRA_BASELINE_BRANCH="${_base_src%%$'\t'*}" \
+        EPAM_TEST_FINDING_FILE="$_ff" EPAM_TEST_FINDING_GATE="team-lead-review" EPAM_TEST_FINDING_LOG="$_fb" \
+            bash "$SCRIPT_DIR/brownfield-repro-test-writer.sh" "$_sid" 2>&1 | tee -a "$LOG_DIR/repro-test-writer-review-${_sid}.log"
+        _tw_rc=${PIPESTATUS[0]}
+        [ "${_tw_rc:-1}" -eq 0 ] || warning "  [review-routing] ${_sid}: the test-writer could not act on the review's test findings (exit ${_tw_rc})"
+        jq '.issues = [(.issues // [])[] | select((.work // "") != "tests")]' "$_fb" > "$_fb.tmp" && mv "$_fb.tmp" "$_fb"
+    fi
+    REVIEW_CODE_ISSUES=$(jq '(.issues // []) | length' "$_fb" 2>/dev/null || echo 0)
+}
+
 run_review_cycle() {
 log "Step 3.6: Running Team Lead code review for phase..."
 _emit_agent start "review-agent" "Team Lead Code Review"
@@ -260,6 +299,8 @@ while true; do
     done
     _review_prev_fp="$_review_fp_now"
     warning "Step 3.6: review requested changes — re-implementing (cycle $_review_cycle → $((_review_cycle + 1)))"
+    # THE REVIEW LOOP NEVER RE-REVIEWS UNCHANGED CODE (lib/phase-exit.sh): what this cycle starts from, and whether it retired anything.
+    _review_mark=$(phase_retry_mark "$PROJECT_ROOT"); _review_retired_now=0
     for _entry in "${_review_climbable_stories[@]}"; do
         _fb_story="${_entry%%:*}"; _entry_fb="${_entry#*:}"
         # A review rejection is itself evidence this attempt did not succeed,
@@ -284,6 +325,12 @@ while true; do
         # new code, zero new review evidence, one of REVIEW_MAX_CYCLES's two
         # cycles wasted on every rejection. Scoped to exactly this ONE story:
         # a sibling that already passed review must not be re-run.
+        _route_review_findings "$_entry_fb" "$_fb_story"
+        _review_retired_now=$(( _review_retired_now + ${REVIEW_RETIRED:-0} ))
+        if [ "${REVIEW_CODE_ISSUES:-0}" -eq 0 ] 2>/dev/null; then
+            log "  $_fb_story: nothing in the review is the implementer's — it is not re-implemented"
+            continue
+        fi
         _reset_story_for_reimplementation "$_fb_story"
         log "  Re-implementing $_fb_story to address reviewer feedback (self-heal enabled)..."
         # claude.sh reads review-feedback-<id>.json (injects it into the impl
@@ -299,6 +346,15 @@ while true; do
             warning "  Re-implementation of $_fb_story FAILED (exit ${_rr_rc}) — the reviewer's feedback was not addressed this cycle; see $LOG_DIR/main-${_fb_story}-rereview${_review_cycle}.log"
         fi
     done
+    if [ "${_review_retired_now:-0}" -eq 0 ] && ! phase_retry_progressed "$PROJECT_ROOT" "$_review_mark"; then
+        warning "Step 3.6: this cycle changed nothing in the codeline (still ${_review_mark:0:9}) — the same code is not reviewed again"
+        _review_escalated=1
+        for _entry in "${_review_climbable_stories[@]}"; do
+            _escalate_review_story "${_entry#*:}" "${_entry%%:*}"
+        done
+        _emit_agent complete "review-agent" "Code review escalated (a cycle changed nothing)"
+        break
+    fi
     _review_cycle=$((_review_cycle + 1))
 done
 

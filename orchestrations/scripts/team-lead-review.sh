@@ -796,6 +796,12 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
         exit 1
     fi
     rm -f "$_review_vals"
+    # WHO OWNS EACH FINDING, AND HOW A REMEDIATION CRITERION IS RETIRED — the engine's contract with lib/review-cycle.sh,
+    # appended to the project's review prompt (prompts/templates/review-finding-routing.json).
+    _rfr_vals=$(mktemp "${TMPDIR:-/tmp}/review-finding-routing-XXXXXX.json"); echo '{}' > "$_rfr_vals"
+    _rfr=$(render_engine_prompt review-finding-routing "$_rfr_vals") || { rm -f "$_rfr_vals"; echo "[team-lead-review] FATAL: the finding-routing contract did not render" >&2; exit 1; }
+    rm -f "$_rfr_vals"
+    REVIEW_PROMPT="${REVIEW_PROMPT}${_rfr}"
 
     # JUDGE ON THE RUNG THAT PRODUCED THE WORK.
     #

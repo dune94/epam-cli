@@ -31,7 +31,7 @@ for s in d['stories']:
         existing=[a.get('text','') if isinstance(a,dict) else str(a) for a in s.get('acceptanceCriteria',[])]
         for ac in new_acs:
             if ac and ac not in existing and len(existing)<24:
-                s.setdefault('acceptanceCriteria',[]).append({'text':ac,'status':'pending'})
+                s.setdefault('acceptanceCriteria',[]).append({'text':ac,'status':'pending','origin':'remediation'})
                 added+=1
 _tmp_prd_path=prd_path+'.tmp'
 with open(_tmp_prd_path,'w') as f: json.dump(d,f,indent=2)

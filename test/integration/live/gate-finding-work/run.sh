@@ -78,7 +78,7 @@ case_run() {
         . '$SCRIPT_DIR/lib/flags.sh'; . '$SCRIPT_DIR/lib/jq-vals.sh'; . '$SCRIPT_DIR/lib/render-engine-prompt.sh'; . '$SCRIPT_DIR/lib/phase-exit.sh'
         . '$SCRIPT_DIR/lib/model-ladders.sh'; export_model_ladders '$C/llm-settings.json' || true; . '$SCRIPT_DIR/lib/seam-ladder.sh'
         $(_fn _gate_attribute_from_log "$GT")
-        $(_fn repro_writer_baseline "$SCRIPT_DIR/lib/story-guards.sh")
+        $(_fn repro_writer_baseline "$SCRIPT_DIR/lib/repro-baseline.sh")
         rem() { local phase_id=core; local _failing_logs=(\"\$GATE_LOG\"); local _log_labels=(\"\$GATE_LABEL\"); local _profiles_file=\"\$EPAM_AGENTS_DIR/profiles.json\"; if true; then
         $(_slice)
         return 0; }

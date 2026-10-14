@@ -123,7 +123,7 @@ const REMEDIATION = (() => {
 })();
 
 function remediate(work: string, extra: Record<string, string> = {}, e = makeEstate()) {
-  const fns = [shellFunction(join(S, 'lib/gates-testing.sh'), '_gate_attribute_from_log'), shellFunction(join(S, 'lib/story-guards.sh'), 'repro_writer_baseline')].join('\n');
+  const fns = [shellFunction(join(S, 'lib/gates-testing.sh'), '_gate_attribute_from_log'), shellFunction(join(S, 'lib/repro-baseline.sh'), 'repro_writer_baseline')].join('\n');
   const script = [
     // The orchestrator's own shell options: set -e, no pipefail, no -u (run-agent-orchestration.sh:75). set -e is what
     // turns the gates' return into the phase's exit, so the block runs under it, in a subshell.

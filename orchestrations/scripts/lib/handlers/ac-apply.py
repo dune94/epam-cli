@@ -45,7 +45,7 @@ for s in prd.get('stories', []):
     existing = [a.get('text', '') if isinstance(a, dict) else str(a) for a in s.get('acceptanceCriteria', [])]
     for ac in new_acs:
         if ac and ac not in existing and len(existing) < 24:
-            s.setdefault('acceptanceCriteria', []).append({'text': ac, 'status': 'pending'})
+            s.setdefault('acceptanceCriteria', []).append({'text': ac, 'status': 'pending', 'origin': 'remediation'})
             existing.append(ac)
             added += 1
 

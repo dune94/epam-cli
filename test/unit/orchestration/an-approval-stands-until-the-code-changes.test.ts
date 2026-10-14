@@ -27,13 +27,23 @@ function stands(ids: string[], logDir = LOGS): Record<string, boolean> {
   return Object.fromEntries(r.stdout.trim().split('\n').map((l) => { const [id, v] = l.split(' '); return [id, v === 'yes']; }));
 }
 
-const STANDS = ['REGI-002a', 'REGI-002b', 'REGI-003b', 'REGI-004b', 'REGI-005b', 'REGI-007A', 'REGI-007B', 'REGI-008',
-  'REGI-009-A', 'REGI-009-B', 'REGI-010-A', 'REGI-010-B', 'REGI-011-impl', 'REGI-011-test', 'REGI-014'];
+// Approved after their last commit, with NO finding: these stand.
+const STANDS = ['REGI-002b', 'REGI-009-A', 'REGI-014'];
+// Approved after their last commit WITH findings. Operator, 2026-10-14: "reviewer findings are critical and must be acted
+// on ... until it passes clean" — that run deleted these findings on approval and the writer never saw them. An
+// approval that carried findings does not stand: the story goes back to the reviewer, whose findings now reach the writer.
+const APPROVED_WITH_FINDINGS = ['REGI-002a', 'REGI-003b', 'REGI-004b', 'REGI-005b', 'REGI-007A', 'REGI-007B', 'REGI-008',
+  'REGI-009-B', 'REGI-010-A', 'REGI-010-B', 'REGI-011-impl', 'REGI-011-test'];
 
 describe('on run 20260926T125158Z\'s own review and commit records', () => {
-  it('the 15 stories approved after their last commit are not reviewed again', () => {
+  it('the 3 stories approved cleanly after their last commit are not reviewed again', () => {
     const r = stands(STANDS);
     for (const id of STANDS) expect(r[id], `${id} would be re-reviewed`).toBe(true);
+  });
+
+  it('the 12 approved with findings that were never acted on are reviewed again', () => {
+    const r = stands(APPROVED_WITH_FINDINGS);
+    for (const id of APPROVED_WITH_FINDINGS) expect(r[id], `${id} would be skipped with its findings unacted`).toBe(false);
   });
 
   it('a story whose last review asked for changes is reviewed again (REGI-006, 012, 013, 005a)', () => {
@@ -57,9 +67,9 @@ describe('what makes an approval stop standing', () => {
     try {
       copyFileSync(join(LOGS, 'code-reviews.jsonl'), join(d, 'code-reviews.jsonl'));
       copyFileSync(join(LOGS, 'story-changes.jsonl'), join(d, 'story-changes.jsonl'));
-      expect(stands(['REGI-008'], d)['REGI-008']).toBe(true);
-      appendFileSync(join(d, 'story-changes.jsonl'), JSON.stringify({ storyId: 'REGI-008', sha: 'f'.repeat(40), committedAt: '2026-09-26T20:00:00-04:00', files: ['regintel/api.py'] }) + '\n');
-      expect(stands(['REGI-008'], d)['REGI-008']).toBe(false);
+      expect(stands(['REGI-002b'], d)['REGI-002b']).toBe(true);
+      appendFileSync(join(d, 'story-changes.jsonl'), JSON.stringify({ storyId: 'REGI-002b', sha: 'f'.repeat(40), committedAt: '2026-09-26T23:00:00-04:00', files: ['regintel/api.py'] }) + '\n');
+      expect(stands(['REGI-002b'], d)['REGI-002b']).toBe(false);
     } finally { rmSync(d, { recursive: true, force: true }); }
   });
 

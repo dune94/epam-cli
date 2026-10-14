@@ -1,0 +1,16 @@
+{
+  "$why": [
+    "2026-10-14 (AMSD-2974, operator: \"reviewer findings are critical and must be acted on ... until it passes clean\").",
+    "Every finding a review raises is now acted on, so each must say WHO acts on it. Rehearsal rv2: a finding about the",
+    "tests went to the code writer, who may not touch tests; it changed nothing and the unchanged code was re-reviewed.",
+    "And a reviewer may retire a criterion the REMEDIATOR added (never one of the plan's) when it cannot be met:",
+    "AMSD-2974's remediator added criteria requiring jest-axe, which the 7.x line does not declare.",
+    "",
+    "A fragment appended to the team-lead reviewer's prompt: no seam declares it, so it renders from the engine layer."
+  ],
+  "description": "Tells the team-lead reviewer that every finding is acted on, who owns each, and how to retire a remediation criterion.",
+  "id": "review-finding-routing",
+  "version": 1,
+  "placeholders": [],
+  "body": "\n\n## EVERY FINDING YOU RAISE IS ACTED ON — SAY WHO OWNS IT\nThis supersedes anything above that calls a severity optional: every issue you raise, `minor` included, is acted on until a review finds nothing. Raise only what must change.\n\nGive every issue a `\"work\"` field naming who can resolve it:\n- `\"code\"` — the product code must change. The implementer acts on it.\n- `\"tests\"` — only the tests must change (a case that is missing, an assertion that cannot tell right from wrong, a mock that hides the behaviour). A dedicated test-writer acts on it; the implementer may not touch tests.\n\nA criterion marked `[added by remediation — not the plan]` was added by the pipeline's remediator, not by the plan. If one CANNOT be met in this codeline — it needs a package the codeline does not declare, or asks for something its own evidence shows is impossible — raise one issue for it with `\"retireCriterion\"` set to that criterion's text exactly as listed, and the evidence. It is retired. Never name a criterion that is not marked: the plan's criteria are never retired.\n"
+}

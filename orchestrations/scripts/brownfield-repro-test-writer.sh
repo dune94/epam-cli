@@ -524,6 +524,14 @@ if [ -n "$_FINDING_FILE" ]; then
     rm -f "$_cp_vals"
     _prompt="${_prompt}${_finding_section}"
 fi
+# WHAT THE CODELINE DECLARES — the only packages a test may use (lib/handlers/declared-packages.js).
+_cp_vals=$(mktemp "${TMPDIR:-/tmp}/declared-packages-vals-XXXXXX.json")
+jq_vals --arg declared "$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/declared-packages.js" "$PROJECT_ROOT")" \
+      '{"__DECLARED_PACKAGES__":$declared}' > "$_cp_vals"
+_declared_section="$(render_engine_prompt declared-packages "$_cp_vals")" || {
+    rm -f "$_cp_vals"; log "FATAL: the codeline's declared packages did not render — refusing to invoke a test writer without them"; exit 1; }
+rm -f "$_cp_vals"
+_prompt="${_prompt}${_declared_section}"
 
 # ── HIGH-ladder helpers (glm-5.1 → kimi-k3), same maps the detective/reviewer use ──
 # B31: a ladder that does not escalate must say WHY. Empty previously collapsed

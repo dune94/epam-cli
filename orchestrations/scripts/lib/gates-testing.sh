@@ -1747,10 +1747,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                       --arg finding_json "$_finding_json" \
                       --arg story_id "$_story_id" \
                       --arg existing_acs "$(jq -c --arg id "$_story_id" '.stories[] | select(.id == $id) | (.acceptanceCriteria // []) | map(.)' "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")" \
-                      --arg declared_packages "$("${NODE_BIN:-node}" -e '
-                          const r = require(process.argv[1]).checkPackageAvailability(process.argv[2], []);
-                          process.stdout.write(JSON.stringify({ manifestFile: r.manifestFile, manifestRead: r.manifestRead, declared: r.declared }));
-                      ' "$AUTOMATION_DIR/plugins/dependency-contract-plugin.js" "$PROJECT_ROOT" 2>/dev/null)" \
+                      --arg declared_packages "$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/declared-packages.js" "$PROJECT_ROOT" 2>/dev/null)" \
                       '{"__PROFILE__":$profile,"__FINDING_JSON__":$finding_json,"__STORY_ID__":$story_id,"__EXISTING_ACS__":$existing_acs,"__DECLARED_PACKAGES__":$declared_packages}' > "$_fp_vals"
                 _ac_prompt="$(render_engine_prompt story-ac-remediator "$_fp_vals")"
                 rm -f "$_fp_vals"

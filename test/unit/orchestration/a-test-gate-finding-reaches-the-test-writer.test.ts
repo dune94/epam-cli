@@ -209,8 +209,9 @@ describe('a gate finding that only a test can resolve reaches the test-writer', 
 });
 
 describe('the test-writer, given a gate finding', () => {
-  function write(mode: string, finding: boolean) {
+  function write(mode: string, finding: boolean, pre?: (repo: string) => void) {
     const e = makeEstate();
+    if (pre) pre(e.repo);
     const ff = join(e.logs, 'gate-finding-core-mutant-hunter.json');
     writeFileSync(ff, JSON.stringify({ ...FINDING, work: 'tests' }));
     const extra: Record<string, string> = { STUB_TEST: mode };
@@ -235,6 +236,17 @@ describe('the test-writer, given a gate finding', () => {
     expect(r.rc, r.out).not.toBe(0);
     expect(readFileSync(join(r.e.repo, TEST_REL), 'utf8')).toBe(ORIGINAL_TEST);
     expect(git(r.e.repo, ['status', '--porcelain', '--', TEST_REL]).trim()).toBe('');
+  });
+
+  it('the test-writer is told what the codeline declares — it may use only those packages', () => {
+    // rv3 (live, 2026-10-14): asked for an accessibility scan, it imported a package the codeline does not declare.
+    const r = write('strengthen', true, (repo) => {
+      writeFileSync(join(repo, 'package.json'), JSON.stringify({ name: 'x', devDependencies: { 'declared-test-lib': '1.0.0' } }));
+    });
+    const wp = promptsOf(r.e, 'repro-test-writer').filter((p) => p.includes('A QUALITY GATE FOUND'));
+    expect(wp.length, r.out).toBeGreaterThan(0);
+    expect(wp[0]).toContain('declared-test-lib');
+    expect(wp[0]).toContain('"manifestRead": true');
   });
 
   it('NEGATIVE: with no finding, a change that carries a test is left alone, as before', () => {

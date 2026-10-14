@@ -1,0 +1,14 @@
+{
+  "$why": [
+    "An agent that writes code or tests may use only what the codeline declares. A package present on disk and not",
+    "declared builds locally and fails for every consumer; an agent asked for a capability that needs one has to be",
+    "told the declaration, or it will reach for whatever happens to be installed.",
+    "",
+    "A fragment composed into an agent's prompt: no seam declares it, so it renders from the engine layer."
+  ],
+  "description": "Tells an agent which packages the codeline declares, and that it may use only those.",
+  "id": "declared-packages",
+  "version": 1,
+  "placeholders": ["__DECLARED_PACKAGES__"],
+  "body": "\n\n## PACKAGES THIS CODELINE DECLARES\n```json\n__DECLARED_PACKAGES__\n```\nUse only packages listed in `declared` (when `manifestRead` is false, none is known to be declared). A package present on disk but not listed is not available: never import it, and never add a dependency. If what you were asked needs a package that is not declared, say so in your final message instead of working around it.\n"
+}

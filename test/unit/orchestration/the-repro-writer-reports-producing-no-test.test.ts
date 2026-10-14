@@ -104,10 +104,18 @@ describe('the baseline branch is never guessed', () => {
       .not.toMatch(/JIRA_BASELINE_BRANCH:-(develop|main|master)/);
   });
 
-  it('a detached HEAD is not mistaken for a branch called HEAD', () => {
-    const src = engineSource(ORCH);
-    const i = src.indexOf('_tw_baseline=');
-    expect(src.slice(i, i + 700)).toMatch(/_tw_baseline" = "HEAD" \]/);
+  it('a detached HEAD is not mistaken for a branch called HEAD — executed, on a real detached repository', () => {
+    // The resolution moved into lib/repro-baseline.sh (one definition for Step 3.54 and the review/gate test-writer
+    // routes, 2026-10-14). Executed rather than read: a detached checkout yields no baseline; a branch yields itself.
+    const { mkdtempSync } = require('node:fs'); const { tmpdir } = require('node:os'); const { execFileSync } = require('node:child_process');
+    const repo = mkdtempSync(require('node:path').join(tmpdir(), 'detached-'));
+    const g = (...a: string[]) => execFileSync('git', ['-C', repo, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { encoding: 'utf8' });
+    g('init', '-q', '-b', 'trunk'); g('commit', '-q', '--allow-empty', '-m', 'base');
+    const lib = require('node:path').join(__dirname, '../../../orchestrations/scripts/lib/repro-baseline.sh');
+    const run = () => spawnSync('bash', ['-c', `unset JIRA_BASELINE_BRANCH; . "${lib}"; repro_writer_baseline "${repo}"`], { encoding: 'utf8' }).stdout;
+    expect(run()).toBe('trunk\tchecked-out\n');
+    g('checkout', '-q', '--detach');
+    expect(run(), 'a detached HEAD was returned as a branch').toBe('');
   });
 
   it('an unresolvable baseline skips the writer rather than diffing against nothing', () => {

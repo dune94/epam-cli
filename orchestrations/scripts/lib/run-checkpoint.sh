@@ -172,8 +172,24 @@ _pause_already_passed() {
     # startup and inherited by every lane; a fresh run never sets it, so nothing is ever skipped.
     # Re-deriving here is the trap described above: the run would test state it had just written.
     local _reached="${EPAM_RESUMED_FROM_STAGE:-}"
+    # OR THIS LANE'S OWN STAGE WHEN THIS PROCESS STARTED (EPAM_OWN_STAGE_AT_START, own_checkpoint_stage_snapshot). The run's
+    # stage is its LEAST advanced lane, so one lane short of a pause held every other lane before it: AMSD-2974 run 9
+    # (2026-10-14) — upexpress at post-spec, and the 7.x line's gate self-heal retry, whose own checkpoint was pre-writer,
+    # stopped at pause 2 with the remediation unwritten. A snapshot, taken before this process saves anything.
+    if [ "$(_stage_rank "${EPAM_OWN_STAGE_AT_START:-}")" -gt "$(_stage_rank "${_reached}")" ]; then
+        _reached="$EPAM_OWN_STAGE_AT_START"
+    fi
     [ -n "$_reached" ] || return 1
     [ "$(_stage_rank "${_reached}")" -ge "$(_stage_rank "${_guards}")" ]
+}
+
+# own_checkpoint_stage_snapshot — the stage this lane's (or release line's) own checkpoint records as this process starts,
+# exported as EPAM_OWN_STAGE_AT_START for _pause_already_passed. Inside a lane of a resumed run only; nothing otherwise.
+own_checkpoint_stage_snapshot() {
+    [ -n "${EPAM_RESUME_RUN:-}" ] && [ -n "$(_checkpoint_lane 2>/dev/null)" ] || return 0
+    local _d; _d=$(checkpoint_dir "${ORCH_RUN_ID:-$EPAM_RESUME_RUN}" 2>/dev/null) || return 0
+    [ -f "$_d/checkpoint.json" ] || return 0
+    export EPAM_OWN_STAGE_AT_START="$(jq -r '.stage // empty' "$_d/checkpoint.json" 2>/dev/null)"
 }
 
 # The stage each pause guards is the SAME string it hands save_run_checkpoint at that point, which is

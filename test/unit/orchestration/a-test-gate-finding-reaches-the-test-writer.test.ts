@@ -116,14 +116,13 @@ const promptsOf = (e: ReturnType<typeof makeEstate>, agent: string) =>
 // ── The remediation block of run_testing_gates, executed ─────────────────────────────────────────────────────────
 const GT = readFileSync(join(S, 'lib/gates-testing.sh'), 'utf8');
 const REMEDIATION = (() => {
-  const a = GT.indexOf('        if ! is_truthy "${SKIP_GATE_REMEDIATION:-}" && [ ${#_failing_logs[@]} -gt 0 ]; then');
-  const b = GT.indexOf('    success "Step 4.2: Testing gates PASSED"');
+  const a = GT.indexOf('    # ONCE PER GATE PER PHASE');
+  const b = GT.indexOf('\n    success "Step 4.2: Testing gates PASSED"\n    return 0\n}') + 1;
   if (a < 0 || b < 0 || b < a) throw new Error('the remediation block of run_testing_gates was not found — the harness is stale');
   return GT.slice(a, b);
 })();
 
-function remediate(work: string, extra: Record<string, string> = {}) {
-  const e = makeEstate();
+function remediate(work: string, extra: Record<string, string> = {}, e = makeEstate()) {
   const fns = [shellFunction(join(S, 'lib/gates-testing.sh'), '_gate_attribute_from_log'), shellFunction(join(S, 'lib/story-guards.sh'), 'repro_writer_baseline')].join('\n');
   const script = [
     // The orchestrator's own shell options: set -e, no pipefail, no -u (run-agent-orchestration.sh:75). set -e is what
@@ -133,7 +132,8 @@ function remediate(work: string, extra: Record<string, string> = {}) {
     `. ${JSON.stringify(join(S, 'lib/flags.sh'))}; . ${JSON.stringify(join(S, 'lib/jq-vals.sh'))}; . ${JSON.stringify(join(S, 'lib/render-engine-prompt.sh'))}; . ${JSON.stringify(join(S, 'lib/phase-exit.sh'))}`,
     'seam_model_or_fail(){ echo stub-model; }',
     fns,
-    'rem() { local phase_id=core; local _failing_logs=("$GATE_LOG"); local _log_labels=(mutant-hunter); local _profiles_file="$EPAM_AGENTS_DIR/profiles.json"; if true; then',
+    // A failing gate (failed=1, its log in _failing_logs) or, with WARN=1, a gate that only warned.
+    'rem() { local phase_id=core sast_exit=0 spec_exit=0 review_exit=0 mutant_exit=0 fuzz_exit=0 perf_exit=0; local failed=1 _failing_logs=("$GATE_LOG") _log_labels=(mutant-hunter) _warn_logs=() _warn_labels=(); if [ "${WARN:-0}" = 1 ]; then failed=0; _failing_logs=(); _log_labels=(); _warn_logs=("$GATE_LOG"); _warn_labels=(mutant-hunter); fi; local _profiles_file="$EPAM_AGENTS_DIR/profiles.json";',
     REMEDIATION,
     'return 0; }',
     '( set -e; rem ); echo "RC=$?"',
@@ -183,6 +183,20 @@ describe('a gate finding that only a test can resolve reaches the test-writer', 
     const r = remediate('tests', { EPAM_BROWNFIELD: '0' });
     expect(r.rc, r.out).toBe(2);
     expect(promptsOf(r.e, 'repro-test-writer')).toHaveLength(0);
+  });
+
+  it('a gate that only WARNED: its finding is used — routed to the test-writer, which commits; exit 4', () => {
+    const r = remediate('tests', { WARN: '1', ORCH_RUN_ID: 'run-w' });
+    expect(r.rc, r.out).toBe(4);
+    expect(r.log).toContain('AMSD-1820: add strengthened test for the mutant-hunter finding');
+  });
+
+  it('NEGATIVE: the same gate warning again in the same run is not remediated again — the gates pass', () => {
+    const first = remediate('tests', { WARN: '1', ORCH_RUN_ID: 'run-w' });
+    expect(first.rc, first.out).toBe(4);
+    const again = remediate('tests', { WARN: '1', ORCH_RUN_ID: 'run-w' }, first.e);
+    expect(again.rc, again.out).toBe(0);
+    expect(promptsOf(first.e, 'gate-finding-analyst')).toHaveLength(1);
   });
 
   it('the remediator is told what the codeline declares', () => {

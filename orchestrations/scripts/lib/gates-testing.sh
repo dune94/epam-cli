@@ -264,6 +264,10 @@ run_testing_gates() {
     # AS THEY EVALUATE — declaring them later in the same function would wipe
     # out those earlier appends via `local`'s scope-wide (not block-wide) effect.
     local _failing_logs=()
+    # WARNINGS ARE FINDINGS TOO (operator, 2026-10-14: "all outputs for coordinator/reviewers must be used in
+    # subsequent stages"). A gate's non-blocking findings went nowhere but its log. They take the same route as a
+    # failure's — the analyst, then the writer or the test-writer — and a warning nothing could act on still passes.
+    local _warn_logs=() _warn_labels=()
     local _log_labels=()
     local force_lightpanda="${FORCE_LIGHTPANDA:-0}"
     local force_playwright="${FORCE_PLAYWRIGHT:-0}"
@@ -878,9 +882,11 @@ $spec_prompt"
         elif grep -q '"overallVerdict"[[:space:]]*:[[:space:]]*"warn"' "$spec_log" 2>/dev/null; then
             step_emit "22b" "warn" "Step 22b: Spec validator" "partial"
             warning "  Spec validator: WARN — some criteria partially met (non-blocking)"
+            _warn_logs+=("$spec_log"); _warn_labels+=("spec-validator")   # a warning's findings are used too (below)
         elif grep -q '"overallVerdict"[[:space:]]*:[[:space:]]*"fail"' "$spec_log" 2>/dev/null; then
             step_emit "22b" "warn" "Step 22b: Spec validator" "ungrounded findings downgraded"
             warning "  Spec validator: FAIL verdict downgraded to WARN — no criterion was found UNMET; the partial / untestable ones are listed in the spec log for human follow-up and do not stop the story"
+            _warn_logs+=("$spec_log"); _warn_labels+=("spec-validator")   # a warning's findings are used too (below)
         else
             step_emit "22b" "pass" "Step 22b: Spec validator"
             success "  Spec validator: PASS"
@@ -1130,10 +1136,12 @@ $(qa_gate_excerpt "$PROJECT_ROOT" "$LOG_DIR" "$_tf" mutationTestLines)${_mut_tes
                 else
                     step_emit "22c" "warn" "Step 22c: Review ranger" "unverified findings downgraded"
                     warning "  Review-ranger: FAIL verdict downgraded to WARN — no blocker finding's codeSnippet could be verified against the real file (likely hallucinated; re-check manually)"
+                    _warn_logs+=("$review_log"); _warn_labels+=("review-ranger")   # a warning's findings are used too (below)
                 fi
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$review_log" 2>/dev/null; then
                 step_emit "22c" "warn" "Step 22c: Review ranger" "non-blocking findings"
                 warning "  Review-ranger: WARN — non-blocking findings (continuing)"
+                _warn_logs+=("$review_log"); _warn_labels+=("review-ranger")   # a warning's findings are used too (below)
             else
                 step_emit "22c" "pass" "Step 22c: Review ranger"
                 success "  Review-ranger: PASS"
@@ -1169,10 +1177,12 @@ $(qa_gate_excerpt "$PROJECT_ROOT" "$LOG_DIR" "$_tf" mutationTestLines)${_mut_tes
                 else
                     step_emit "22d" "warn" "Step 22d: Mutant hunter" "unverified findings downgraded"
                     warning "  Mutant-hunter: FAIL verdict downgraded to WARN — survived count disagreed with its own mutations detail, or no surviving mutation's originalCode could be verified against the real file (likely hallucinated; re-check manually)"
+                    _warn_logs+=("$mutant_log"); _warn_labels+=("mutant-hunter")   # a warning's findings are used too (below)
                 fi
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$mutant_log" 2>/dev/null; then
                 step_emit "22d" "warn" "Step 22d: Mutant hunter" "score 50-69%"
                 warning "  Mutant-hunter: WARN — mutation score 50-69% (non-blocking)"
+                _warn_logs+=("$mutant_log"); _warn_labels+=("mutant-hunter")   # a warning's findings are used too (below)
             else
                 step_emit "22d" "pass" "Step 22d: Mutant hunter"
                 success "  Mutant-hunter: PASS"
@@ -1346,6 +1356,7 @@ $(qa_gate_excerpt "$PROJECT_ROOT" "$LOG_DIR" "$_tf" mutationTestLines)${_mut_tes
                 warn)
                     step_emit "22g" "warn" "Step 22g: Runtime boundary" "findings not grounded in real files"
                     warning "  Runtime-boundary: WARN — findings could not be grounded in real files (non-blocking)"
+                    _warn_logs+=("$_rb_log"); _warn_labels+=("runtime-boundary")   # a warning's findings are used too (below)
                     ;;
                 *)
                     step_emit "22g" "pass" "Step 22g: Runtime boundary"
@@ -1398,10 +1409,12 @@ $(qa_gate_excerpt "$PROJECT_ROOT" "$LOG_DIR" "$_tf" mutationTestLines)${_mut_tes
                 else
                     step_emit "22e" "warn" "Step 22e: Fuzz-weaver" "unverified findings downgraded"
                     warning "  Fuzz-weaver: FAIL verdict downgraded to WARN — no vulnerability finding could be verified by executing a real test against the real code (likely hallucinated; re-check manually)"
+                    _warn_logs+=("$fuzz_log"); _warn_labels+=("fuzz-weaver")   # a warning's findings are used too (below)
                 fi
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$fuzz_log" 2>/dev/null; then
                 step_emit "22e" "warn" "Step 22e: Fuzz-weaver" "gaps>30%"
             warning "  Fuzz-weaver: WARN — coverage gaps > 30% (non-blocking)"
+            _warn_logs+=("$fuzz_log"); _warn_labels+=("fuzz-weaver")   # a warning's findings are used too (below)
             else
                 step_emit "22e" "pass" "Step 22e: Fuzz-weaver"
                 success "  Fuzz-weaver: PASS"
@@ -1448,10 +1461,12 @@ $(qa_gate_excerpt "$PROJECT_ROOT" "$LOG_DIR" "$_tf" mutationTestLines)${_mut_tes
                 else
                     step_emit "22f" "warn" "Step 22f: Perf sentinel" "unverified findings downgraded"
                     warning "  Perf-sentinel: FAIL verdict downgraded to WARN — no blocker finding's codeSnippet could be verified against the real file (likely hallucinated; re-check manually)"
+                    _warn_logs+=("$perf_log"); _warn_labels+=("perf-sentinel")   # a warning's findings are used too (below)
                 fi
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$perf_log" 2>/dev/null; then
                 step_emit "22f" "warn" "Step 22f: Perf sentinel" "concerns non-blocking"
                 warning "  Perf-sentinel: WARN — performance concerns (non-blocking)"
+                _warn_logs+=("$perf_log"); _warn_labels+=("perf-sentinel")   # a warning's findings are used too (below)
             else
                 step_emit "22f" "pass" "Step 22f: Perf sentinel"
                 success "  Perf-sentinel: PASS"
@@ -1484,7 +1499,22 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
     "$SCRIPT_DIR/update-monitor.sh" event "testing_gate_${verdict}" \
         "Testing gates $verdict for $phase_id (${duration_ms}ms)" "" "main" "test-coordinator-agent" 2>/dev/null || true
 
-    if [ $failed -ne 0 ]; then
+    # ONCE PER GATE PER PHASE (the pipeline never loops): a gate that warns on every run — mutant-hunter is
+    # nondeterministic — would send each retry back to remediation. Its warnings are acted on once; after that they stand.
+    if [ $failed -eq 0 ] && [ ${#_warn_logs[@]} -gt 0 ]; then
+        local _wi _wl=() _wb=()
+        for _wi in "${!_warn_logs[@]}"; do
+            [ -f "$LOG_DIR/warn-remediated-${ORCH_RUN_ID:-}-${phase_id}-${_warn_labels[$_wi]}" ] && continue
+            _wl+=("${_warn_logs[$_wi]}"); _wb+=("${_warn_labels[$_wi]}")
+            : > "$LOG_DIR/warn-remediated-${ORCH_RUN_ID:-}-${phase_id}-${_warn_labels[$_wi]}"
+        done
+        _warn_logs=(${_wl[@]+"${_wl[@]}"}); _warn_labels=(${_wb[@]+"${_wb[@]}"})
+    fi
+    if [ $failed -eq 0 ] && [ ${#_warn_logs[@]} -gt 0 ] && ! is_truthy "${SKIP_GATE_REMEDIATION:-}"; then
+        warning "Step 4.2: Testing gates passed with ${#_warn_logs[@]} warning(s) — their findings go to remediation"
+        _failing_logs=("${_warn_logs[@]}"); _log_labels=("${_warn_labels[@]}")
+    fi
+    if [ $failed -ne 0 ] || [ ${#_warn_logs[@]} -gt 0 ]; then
         # ── Self-healing: three-agent pipeline feeds gate findings back into PRD + profiles ──
         # Agent 1 (gate-finding-analyst):  extracts grounded structured finding from gate log
         # Agent 2 (story-ac-remediator):   augments the owning story's ACs in PRD
@@ -1963,6 +1993,11 @@ $_prof_prompt"
             fi
         fi
 
+        if [ $failed -eq 0 ]; then
+            warning "Step 4.2: no warning finding could be remediated — the gates pass; the warnings stand in the gate logs"
+            success "Step 4.2: Testing gates PASSED"
+            return 0
+        fi
         error "Step 4.2: Testing gates FAILED — fix findings and re-run"
         error "  SAST log: $sast_log"
         error "  Spec log: $spec_log"

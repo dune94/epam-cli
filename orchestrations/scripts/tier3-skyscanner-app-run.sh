@@ -469,10 +469,12 @@ run_phase() {
       fail "PRD remediation failed during self-healing retry for phase '$phase'"
     fi
     echo ""
+    # A test-only remediation keeps the stories' work (lib/phase-exit.sh phase_exit_retry_args).
+    local _rargs=(); mapfile -t _rargs < <(phase_exit_retry_args "$phase_exit")
     phase_exit=0
     SKIP_GATE_REMEDIATION=1 bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
       --phase "$phase" \
-      --reset \
+      ${_rargs[@]+"${_rargs[@]}"} \
       2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}
     echo ""
     if [ "$phase_exit" -ne 0 ]; then

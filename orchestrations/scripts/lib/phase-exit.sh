@@ -30,6 +30,13 @@
 PHASE_EXIT_OK=0
 PHASE_EXIT_REMEDIATED=2
 PHASE_EXIT_HALT_REVIEW=3
+PHASE_EXIT_TESTS_STRENGTHENED=4
+
+# THE CODE WAS RIGHT; ITS TESTS WERE NOT (AMSD-2974 live L2, 2026-10-14). A gate finding that only tests can
+# resolve — a surviving mutant in correct code — went to the AC remediator and back to the CODE writer, who is
+# forbidden to touch tests, and looped. Such a finding now goes to the test-writer, which commits the
+# strengthened test; the phase is re-run on that commit WITHOUT --reset, so the stories keep their approved
+# work, Step 1 passes them as completed, and the review and the gates judge the new commit.
 
 # phase_exit_is_retryable <code>
 # True (0) ONLY for the code that means "a fix was applied, try again". Everything else
@@ -37,7 +44,17 @@ PHASE_EXIT_HALT_REVIEW=3
 # deliberately NOT retried: re-running an outcome nobody has classified is how a HALT
 # came to be retried in the first place.
 phase_exit_is_retryable() {
-    [ "${1:-}" = "$PHASE_EXIT_REMEDIATED" ]
+    [ "${1:-}" = "$PHASE_EXIT_REMEDIATED" ] || [ "${1:-}" = "$PHASE_EXIT_TESTS_STRENGTHENED" ]
+}
+
+# phase_exit_retry_args <code> — the arguments a retry of this outcome re-runs the phase with, one per line.
+# REMEDIATED changed what the stories must do, so they are reset and re-written; TESTS_STRENGTHENED changed only
+# the tests, so the stories keep their work and the phase re-judges it.
+phase_exit_retry_args() {
+    case "${1:-}" in
+        "$PHASE_EXIT_REMEDIATED") printf '%s\n' '--reset' ;;
+        *) ;;
+    esac
 }
 
 # phase_exit_describe <code>
@@ -46,6 +63,7 @@ phase_exit_describe() {
     case "${1:-}" in
         "$PHASE_EXIT_OK")          echo "completed" ;;
         "$PHASE_EXIT_REMEDIATED")  echo "gate remediation applied — a retry is expected to help" ;;
+        "$PHASE_EXIT_TESTS_STRENGTHENED") echo "the test-writer strengthened the tests a gate found insufficient — the gates re-run on that commit" ;;
         "$PHASE_EXIT_HALT_REVIEW") echo "HALT: the reviewer never approved the change and the ladder is exhausted — human review required, a retry cannot help" ;;
         *)                         echo "failed (exit ${1:-?})" ;;
     esac

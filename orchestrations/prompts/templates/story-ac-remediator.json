@@ -6,7 +6,12 @@
     "reached it as command substitutions inside the heredoc: the role instructions, piped out of",
     "profiles.json through python, and the story's existing ACs, pulled with jq. Both are inputs,",
     "and both were being assembled by shell pipelines that fail to an empty string in silence --",
-    "so a remediator could be asked to revise criteria it had not been shown."
+    "so a remediator could be asked to revise criteria it had not been shown.",
+    "",
+    "2026-10-14 (AMSD-2974 live L2): on the 7.x line the remediator wrote an AC requiring jest-axe, which that line",
+    "does not declare — an AC no writer can satisfy without adding a dependency to a release line. It is now given",
+    "what the codeline's manifest declares (dependency-contract-plugin checkPackageAvailability, the same answer the",
+    "agents' dependency_available tool gives)."
   ],
   "description": "Drafts replacement acceptance criteria that remediate a confirmed gate finding.",
   "id": "story-ac-remediator",
@@ -17,8 +22,9 @@
     "__PROFILE__",
     "__FINDING_JSON__",
     "__STORY_ID__",
-    "__EXISTING_ACS__"
+    "__EXISTING_ACS__",
+    "__DECLARED_PACKAGES__"
   ],
-  "version": 1,
-  "body": "__PROFILE__\n\n## Finding to remediate\n```json\n__FINDING_JSON__\n```\n\nStory to update: __STORY_ID__\n\n## Story's existing acceptanceCriteria\n__EXISTING_ACS__\n\nDraft the new ACs now and emit ONLY the JSON summary — do not write any files yourself; the orchestrator applies your proposed ACs to the PRD deterministically."
+  "version": 2,
+  "body": "__PROFILE__\n\n## Finding to remediate\n```json\n__FINDING_JSON__\n```\n\nStory to update: __STORY_ID__\n\n## Story's existing acceptanceCriteria\n__EXISTING_ACS__\n\n## What this codeline's manifest declares\n```json\n__DECLARED_PACKAGES__\n```\nAn AC must be satisfiable with the packages listed in `declared`. Never write an AC whose verification needs a package that is not listed there (when `manifestRead` is false, none is known to be declared): a writer cannot satisfy it without adding a dependency, and adding one is not this finding's remedy.\n\nDraft the new ACs now and emit ONLY the JSON summary — do not write any files yourself; the orchestrator applies your proposed ACs to the PRD deterministically."
 }

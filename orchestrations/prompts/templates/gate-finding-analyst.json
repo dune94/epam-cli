@@ -5,7 +5,12 @@
     "Turns a QA gate finding into an actionable diagnosis. The role instructions arrive as a",
     "value now; they used to be a command substitution piping profiles.json through python",
     "inside the heredoc, which is prompt assembly performed by a shell pipeline -- unreviewable",
-    "as prose, and silently empty when the file or the key is missing."
+    "as prose, and silently empty when the file or the key is missing.",
+    "",
+    "2026-10-14 (AMSD-2974 live L2): the finding now carries `work`, the analyst's judgement of WHO can resolve it.",
+    "Every finding used to go to the AC remediator and back to the code writer — including a surviving mutant in",
+    "correct code, which only a test can kill. The code writer is forbidden to touch tests, committed nothing, and",
+    "the phase looped. `tests` routes the finding to the test-writer (brownfield, where it owns the tests)."
   ],
   "description": "Analyses one QA gate finding and reports what it means, quoting the log line that proves it.",
   "id": "gate-finding-analyst",
@@ -19,6 +24,6 @@
     "__PRD_FILE__",
     "__PHASE_ID__"
   ],
-  "version": 1,
-  "body": "__PROFILE__\n\nGate: __GATE_LABEL__\nGate log file: __GATE_LOG__\nPRD file: __PRD_FILE__\nCurrent phase: __PHASE_ID__\n\nRun your analysis now. Paste the verbatim log line proving the finding, then emit the JSON output."
+  "version": 2,
+  "body": "__PROFILE__\n\nGate: __GATE_LABEL__\nGate log file: __GATE_LOG__\nPRD file: __PRD_FILE__\nCurrent phase: __PHASE_ID__\n\n## Who can resolve it\nAdd one more field to the JSON, `\"work\"`, with your judgement of what must change for this finding to be resolved:\n- `\"tests\"` — the product code already does what the finding requires, and only the tests are insufficient: they do not exercise, observe or distinguish the behaviour the finding names (for example a mutation that survives because no assertion can tell the mutant from the original, or a branch no test reaches).\n- `\"code\"` — the product code itself must change.\nDecide from the log and the code it names, not from the gate's name.\n\nRun your analysis now. Paste the verbatim log line proving the finding, then emit the JSON output."
 }

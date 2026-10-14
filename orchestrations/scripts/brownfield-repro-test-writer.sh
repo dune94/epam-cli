@@ -149,8 +149,21 @@ while IFS=$'\t' read -r _verdict _cf; do
     [ -n "$_cf" ] || continue
     if [ "$_verdict" = "TEST" ]; then TEST_FILES+=("$_cf"); else FIX_FILES+=("$_cf"); fi
 done <<< "$_ccf_out"
+# A GATE FOUND THE TEST INSUFFICIENT (EPAM_TEST_FINDING_FILE, from lib/gates-testing.sh). AMSD-2974 live L2,
+# 2026-10-14: the gate-finding-analyst judged a mutant-hunter finding test work — the code was right, the test could
+# not tell a mutant from it. This writer then strengthens the test the change already carries, rather than standing
+# down because one exists. Its commit is what the gates re-run on, so producing no change is a failure here.
+_FINDING_FILE="${EPAM_TEST_FINDING_FILE:-}"
+_FINDING_GATE="${EPAM_TEST_FINDING_GATE:-}"
+if [ -n "$_FINDING_FILE" ]; then
+    [ -s "$_FINDING_FILE" ] || { warning "the gate finding to address is missing or empty: ${_FINDING_FILE}"; exit 1; }
+    [ -n "$_FINDING_GATE" ] && [ -s "${EPAM_TEST_FINDING_LOG:-}" ] || { warning "the gate finding names no gate, or its gate report is unreadable (${EPAM_TEST_FINDING_LOG:-unset})"; exit 1; }
+    [ "${#FIX_FILES[@]}" -gt 0 ] || { warning "a ${_FINDING_GATE} finding was judged test work, but this change carries no source for a test to exercise"; exit 1; }
+    log "a ${_FINDING_GATE} finding was judged test work — strengthening the change's test"
+else
 [ "${#TEST_FILES[@]}" -gt 0 ] && { log "a test already accompanies the change (${TEST_FILES[0]}) — nothing to write"; exit 0; }
 [ "${#FIX_FILES[@]}" -gt 0 ] || { log "no fix files in the diff — nothing to test"; exit 0; }
+fi
 
 # ── Detect the repo's test convention so the gate can actually RUN the test ──
 # Dominant extension (.spec.ts vs .test.ts), a real example test to mirror style,
@@ -253,9 +266,21 @@ _choose_target() {
     warning "target choice '"'"'$_ans'"'"' is not among the files this change touched — ignoring"
     return 1
 }
-if [ -n "$PRD_FILE" ] && [ -f "$PRD_FILE" ] && [ "${EPAM_TEST_TARGET_ASK:-1}" = "1" ]; then
+# A gate finding names its own file (below): the ask is for a change that has no test yet.
+if [ -z "$_FINDING_FILE" ] && [ -n "$PRD_FILE" ] && [ -f "$PRD_FILE" ] && [ "${EPAM_TEST_TARGET_ASK:-1}" = "1" ]; then
     _primary_fix="$(_choose_target || echo "")"
     [ -n "$_primary_fix" ] && log "target chosen by the agent from the plan and the criteria: $_primary_fix"
+fi
+# 1b. THE FILE THE GATE FINDING NAMES. A test the change carries is the test to strengthen; a source the change
+# touched is the source, and the change's test at one of the plugin's conventional locations for it is the test.
+_finding_test=""
+if [ -n "$_FINDING_FILE" ]; then
+    _ff=$(jq -r '.file // ""' "$_FINDING_FILE" 2>/dev/null || echo "")
+    for f in "${TEST_FILES[@]}"; do [ "$f" = "$_ff" ] && _finding_test="$f"; done
+    if [ -z "$_finding_test" ]; then
+        for f in "${FIX_FILES[@]}"; do [ "$f" = "$_ff" ] && _is_testable_source "$f" && _primary_fix="$f"; done
+    fi
+    [ -n "$_primary_fix" ] && log "target from the ${_FINDING_GATE} finding: $_primary_fix"
 fi
 # 2. THE DETECTIVE'S FIX SITE — deterministic, and it outranks diff order.
 #
@@ -318,6 +343,26 @@ _ntp_out=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/new-test-path.js" "$PRO
 _target_rel=$(printf '%s\n' "$_ntp_out" | sed -n 's/^TARGET=//p' | head -1)
 _example_rel=$(printf '%s\n' "$_ntp_out" | sed -n 's/^EXAMPLE=//p' | head -1)
 [ -n "$_target_rel" ] || { warning "[repro-test-writer] the plugin returned no target path"; exit 1; }
+if [ -n "$_FINDING_FILE" ] && [ -z "$_finding_test" ]; then
+    # The change's own test for the source, wherever the repository keeps it.
+    # One this change carries first; else one the branch already had.
+    mapfile -t _fcands < <("${NODE_BIN:-node}" -e '
+      const p = require(process.argv[1]);
+      for (const c of p.candidateTestPaths(process.argv[2], process.argv[3])) console.log(c);
+    ' "$AUTOMATION_DIR/plugins/codeline-context-plugin.js" "$PROJECT_ROOT" "$_primary_fix" 2>/dev/null)
+    for _cand in "${_fcands[@]}"; do
+        for f in "${TEST_FILES[@]}"; do [ "$f" = "$_cand" ] && { _finding_test="$f"; break 2; }; done
+    done
+    if [ -z "$_finding_test" ]; then
+        for _cand in "${_fcands[@]}"; do
+            git -C "$PROJECT_ROOT" cat-file -e "HEAD:${_cand}" 2>/dev/null && { _finding_test="$_cand"; break; }
+        done
+    fi
+fi
+if [ -n "$_finding_test" ]; then
+    _target_rel="$_finding_test"
+    log "the test to strengthen: $_target_rel"
+fi
 _ext="${_target_rel##*.}"
 _example_block=""
 if [ -n "$_example_rel" ] && [ -f "$PROJECT_ROOT/$_example_rel" ]; then
@@ -376,6 +421,10 @@ else
     _commit_noun="bug-reproducing test"
 fi
 
+if [ -n "$_FINDING_FILE" ]; then
+    _log_noun="strengthened test (${_FINDING_GATE} finding)"
+    _commit_noun="strengthened test for the ${_FINDING_GATE} finding"
+fi
 log "writing ${_log_noun} for $STORY_ID (kind: ${_story_kind:-unclassified}) → $_target_rel (convention: .$_ext, example: ${_example_rel:-none})"
 
 # Activity emit — the test-writer is a first-class agent and MUST be visible in
@@ -457,6 +506,19 @@ _prompt=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
     exit 1
 }
 rm -f "$_prompt_values"
+if [ -n "$_FINDING_FILE" ]; then
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/test-gate-finding-vals-XXXXXX.json")
+    jq_vals \
+          --arg gate_label "$_FINDING_GATE" \
+          --arg finding "$(cat "$_FINDING_FILE")" \
+          --arg gate_evidence "$(head -c "$(evidence_window gateLogChars)" "$EPAM_TEST_FINDING_LOG")" \
+          --arg target_rel "$_target_rel" \
+          '{"__GATE_LABEL__":$gate_label,"__FINDING__":$finding,"__GATE_EVIDENCE__":$gate_evidence,"__TARGET_REL__":$target_rel}' > "$_cp_vals"
+    _finding_section="$(render_engine_prompt test-gate-finding "$_cp_vals" prompt)" || {
+        rm -f "$_cp_vals"; log "FATAL: the gate finding did not render — refusing to invoke a test writer without it"; exit 1; }
+    rm -f "$_cp_vals"
+    _prompt="${_prompt}${_finding_section}"
+fi
 
 # ── HIGH-ladder helpers (glm-5.1 → kimi-k3), same maps the detective/reviewer use ──
 # B31: a ladder that does not escalate must say WHY. Empty previously collapsed
@@ -672,6 +734,16 @@ _commit_written_test() {
     git -C "$PROJECT_ROOT" add "$rel" 2>/dev/null || true
     if git -C "$PROJECT_ROOT" diff --cached --quiet 2>/dev/null; then
         log "nothing staged for $rel — nothing to commit"
+        # A gate finding is addressed by a change to the test; the test as it was committed is what failed the gate.
+        if [ -n "$_FINDING_FILE" ]; then
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/test-gate-finding-vals-XXXXXX.json")
+            jq_vals --arg gate_label "$_FINDING_GATE" --arg target_rel "$rel" \
+                  '{"__GATE_LABEL__":$gate_label,"__TARGET_REL__":$target_rel}' > "$_cp_vals"
+            _hook_feedback="$(render_engine_prompt test-gate-finding "$_cp_vals" unchanged)"
+            rm -f "$_cp_vals"
+            _commit_fail_class="unchanged"
+            return 1
+        fi
         return 0
     fi
     local _commit_output _commit_rc
@@ -686,6 +758,7 @@ _commit_written_test() {
         [ -f "$SCRIPT_DIR/codegraph-reindex.sh" ] && bash "$SCRIPT_DIR/codegraph-reindex.sh" "$PROJECT_ROOT" "post-commit repro-test ${STORY_ID}" || true
         return 0
     fi
+    _commit_fail_class="commit_rejected"
     warning "the repository refused to commit $rel — the hook's output is the next attempt's brief:"
     warning "$_commit_output"
     # Leave the file in place for the next attempt to correct; unstage so a later `git status`
@@ -847,11 +920,17 @@ for _attempt in $(seq 1 "$_max_attempts"); do
                    _test_validated=1
                    break
                fi
-               _fclass_override="commit_rejected" ;;
+               _fclass_override="${_commit_fail_class:-commit_rejected}" ;;
             *) log "attempt ${_attempt}: test was written but does NOT parse/run — discarding it (class=invalid_test)"
                # Remove it so a later attempt starts clean and no stale broken file
                # can ever reach the commit step.
-               rm -f "$PROJECT_ROOT/$_target_rel" 2>/dev/null || true
+               # A test the branch already carries is restored to its committed content — deleting it would
+               # remove the change's test (a gate finding's rewrite, 2026-10-14).
+               if git -C "$PROJECT_ROOT" cat-file -e "HEAD:${_target_rel}" 2>/dev/null; then
+                   git -C "$PROJECT_ROOT" checkout -q HEAD -- "$_target_rel" 2>/dev/null || true
+               else
+                   rm -f "$PROJECT_ROOT/$_target_rel" 2>/dev/null || true
+               fi
                _fclass_override="invalid_test" ;;
         esac
     fi
@@ -872,6 +951,7 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     # WHY this attempt was refused, from what this loop decided above — the analyst's first fact.
     case "$_fclass" in
         invalid_test)    _freason="the test it wrote at ${_target_rel} does not parse or run, so it was discarded; the test runner's error is in its output" ;;
+        unchanged)       _freason="the test at ${_target_rel} is unchanged from what was committed, so the ${_FINDING_GATE} finding it was asked to address is not addressed" ;;
         commit_rejected) _freason="its test at ${_target_rel} parsed and ran, but the repository refused to commit it; the refusal is in its output" ;;
         max_iterations)  _freason="it reached its iteration limit before writing a valid test at ${_target_rel}" ;;
         *)               _freason="this attempt wrote no test at the required path ${_target_rel}" ;;

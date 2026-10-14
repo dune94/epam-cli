@@ -392,18 +392,20 @@ run_phase() {
   # new (remediation stays on: AMSD-2974 run 9, 2026-10-14, a second, different finding could not heal on a one-shot retry).
   if phase_exit_is_retryable "$phase_exit"; then
     while phase_exit_is_retryable "$phase_exit"; do
-      info "  Self-healing: gate remediation applied — retrying phase '$phase' with what the gates added..."
+      info "  Self-healing: $(phase_exit_describe "$phase_exit") — retrying phase '$phase'..."
       if [ "${EPAM_BROWNFIELD:-0}" != "1" ]; then
         bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" --phase "$phase" --mid-phase-retry \
           2>&1 | tee -a "$LOG_FILE" || true
         echo ""
       fi
+      local _rroot _rmark _rargs=()
+      # A test-only remediation keeps the stories' work (lib/phase-exit.sh phase_exit_retry_args).
+      mapfile -t _rargs < <(phase_exit_retry_args "$phase_exit")
       phase_exit=0
-      local _rroot _rmark
       _rroot=$(jq -r '.project.outputDir // empty' "$PRD_FILE" 2>/dev/null); _rmark=$(phase_retry_mark "${_rroot:-.}")
       bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
         --phase "$phase" \
-        --reset \
+        ${_rargs[@]+"${_rargs[@]}"} \
         2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}
       echo ""
       # THE PIPELINE NEVER LOOPS (lib/phase-exit.sh): a retry that changed nothing in the codeline is not repeated.

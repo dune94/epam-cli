@@ -4,6 +4,10 @@
 # are in scope exactly as they were. A move, not an edit: every body is byte-identical to
 # the golden recorded at the move (see the identity test).
 
+# What a phase's exit code means (PHASE_EXIT_TESTS_STRENGTHENED is returned below).
+# shellcheck source=phase-exit.sh
+declare -F phase_exit_is_retryable >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/phase-exit.sh"
+
 # _emit_agent <start|complete|fail> <role> [message]
 # Thin wrapper so QA/system agents appear in agent-activity.jsonl.
 # story_id is intentionally left empty (these are pipeline-level agents, not
@@ -1513,6 +1517,8 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
             # profile fix — the more common outcome of this pipeline in
             # practice — never led to a retry, only a hard stop).
             local _profile_remediation_applied=0
+            # Set when the test-writer committed a strengthened test for a finding only tests can resolve.
+            local _tests_strengthened=0
             local _rem_log="$LOG_DIR/gate-remediation-${phase_id}.log"
 
             for i in "${!_failing_logs[@]}"; do
@@ -1636,6 +1642,36 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 fi
                 info "  [gate-finding-analyst] Finding mapped to story: ${_story_id}"
 
+                # ── WHO CAN RESOLVE IT — the analyst's judgement, `work` ────────────
+                # AMSD-2974 live L2 (2026-10-14): a surviving mutant in correct code went to the AC remediator and
+                # back to the CODE writer, who is forbidden to touch tests (prompts/templates/test-ownership.json),
+                # committed nothing, and the phase looped. A finding the analyst judges `tests` goes to the agent
+                # that owns the tests — in brownfield, the test-writer; in greenfield the implementer owns its tests
+                # and the finding takes the route below. The test-writer commits the strengthened test, and the phase
+                # re-runs on that commit (PHASE_EXIT_TESTS_STRENGTHENED, lib/phase-exit.sh) with the stories' work kept.
+                local _finding_obj _finding_work
+                _finding_obj=$(printf '%s' "$_finding_json" | python3 "$SCRIPT_DIR/lib/handlers/gate-finding-object.py" 2>/dev/null || true)
+                _finding_work=$(printf '%s' "$_finding_obj" | jq -r '.work // ""' 2>/dev/null || true)
+                if [ "$_finding_work" = "tests" ] && [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+                    info "  [gate-finding-analyst] the ${_glabel} finding is test work — routed to the test-writer, not the code writer"
+                    local _tf_file _tf_base_src _tf_rc
+                    _tf_file="$LOG_DIR/gate-finding-${phase_id}-${_glabel}.json"
+                    printf '%s\n' "$_finding_obj" > "$_tf_file"
+                    _tf_base_src=$(repro_writer_baseline "$PROJECT_ROOT")
+                    PROJECT_ROOT="$PROJECT_ROOT" PRD_FILE="$PRD_FILE" LOG_DIR="$LOG_DIR" \
+                    JIRA_BASELINE_BRANCH="${_tf_base_src%%$'\t'*}" \
+                    EPAM_TEST_FINDING_FILE="$_tf_file" EPAM_TEST_FINDING_GATE="$_glabel" EPAM_TEST_FINDING_LOG="$_glog" \
+                        bash "$SCRIPT_DIR/brownfield-repro-test-writer.sh" "$_story_id" 2>&1 | tee -a "$_rem_log"
+                    _tf_rc=${PIPESTATUS[0]}
+                    if [ "${_tf_rc:-1}" -eq 0 ]; then
+                        success "  [repro-test-writer] committed a strengthened test for the ${_glabel} finding on ${_story_id}"
+                        _tests_strengthened=1
+                    else
+                        warning "  [repro-test-writer] could not strengthen the test for the ${_glabel} finding (exit ${_tf_rc}) — this finding is not remediated"
+                    fi
+                    continue
+                fi
+
                 # The story's OWN agentRole — ground truth for which agent
                 # actually wrote the offending code, used below by
                 # profile-augmentor instead of guessing from the gate name
@@ -1678,7 +1714,11 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                       --arg finding_json "$_finding_json" \
                       --arg story_id "$_story_id" \
                       --arg existing_acs "$(jq -c --arg id "$_story_id" '.stories[] | select(.id == $id) | (.acceptanceCriteria // []) | map(.)' "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")" \
-                      '{"__PROFILE__":$profile,"__FINDING_JSON__":$finding_json,"__STORY_ID__":$story_id,"__EXISTING_ACS__":$existing_acs}' > "$_fp_vals"
+                      --arg declared_packages "$("${NODE_BIN:-node}" -e '
+                          const r = require(process.argv[1]).checkPackageAvailability(process.argv[2], []);
+                          process.stdout.write(JSON.stringify({ manifestFile: r.manifestFile, manifestRead: r.manifestRead, declared: r.declared }));
+                      ' "$AUTOMATION_DIR/plugins/dependency-contract-plugin.js" "$PROJECT_ROOT" 2>/dev/null)" \
+                      '{"__PROFILE__":$profile,"__FINDING_JSON__":$finding_json,"__STORY_ID__":$story_id,"__EXISTING_ACS__":$existing_acs,"__DECLARED_PACKAGES__":$declared_packages}' > "$_fp_vals"
                 _ac_prompt="$(render_engine_prompt story-ac-remediator "$_fp_vals")"
                 rm -f "$_fp_vals"
                 local _ac_result="" _acr_attempt=0
@@ -1915,6 +1955,11 @@ $_prof_prompt"
                 error "  Remediation log: $_rem_log"
                 error "  Bypass (skip remediation): SKIP_GATE_REMEDIATION=1 $0 --phase $phase_id"
                 return 2  # exit code 2 = "remediated, retry the phase"
+            fi
+            if [ "$_tests_strengthened" = "1" ]; then
+                warning "Step 4.2: Testing gates FAILED — the test-writer strengthened the tests; the gates re-run on that commit"
+                error "  Remediation log: $_rem_log"
+                return "$PHASE_EXIT_TESTS_STRENGTHENED"
             fi
         fi
 

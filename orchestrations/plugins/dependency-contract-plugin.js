@@ -358,6 +358,8 @@ function checkPackageAvailability(projectRoot, packages) {
     results,
     unavailable,
     allAvailable: unavailable.length === 0,
+    // Every package the manifest declares — what an agent may prescribe without adding a dependency.
+    declared: [...declaredSet].sort(),
   };
 }
 

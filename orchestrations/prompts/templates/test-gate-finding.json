@@ -1,0 +1,26 @@
+{
+  "$why": [
+    "2026-10-14, AMSD-2974 live run L2: the 7.x line's mutant-hunter found mutations that survive because the test",
+    "cannot tell the mutant from the original (its mock returned top === bottom). The code was right; the test was",
+    "not. Every gate finding went to the AC remediator and back to the CODE writer, who is forbidden to touch tests",
+    "(test-ownership.json), committed nothing, and the phase looped. The gate-finding-analyst now judges whether a",
+    "finding is test work; when it is, the test-writer receives this section after its own prompt and strengthens",
+    "the test the change already carries. Its commit is what the gates re-run on.",
+    "",
+    "A fragment composed into the repro-test-writer's prompt: no seam declares it, so it renders from the engine",
+    "layer and takes its project content from the values below."
+  ],
+  "description": "Tells the test-writer that a QA gate found the change's test insufficient, and what the gate found.",
+  "id": "test-gate-finding",
+  "version": 1,
+  "placeholders": [
+    "__GATE_LABEL__",
+    "__FINDING__",
+    "__GATE_EVIDENCE__",
+    "__TARGET_REL__"
+  ],
+  "bodies": {
+    "prompt": "\n\n## THIS TURN: A QUALITY GATE FOUND THE TEST INSUFFICIENT\nThe change above is committed and its test at __TARGET_REL__ already exists and passes. The __GATE_LABEL__ gate then judged that test insufficient, and its analyst judged that the product code is right and only the test must change. This is the finding:\n```json\n__FINDING__\n```\nThe gate's own report:\n```\n__GATE_EVIDENCE__\n```\nStrengthen the test at __TARGET_REL__ so that what the gate found is no longer true: add or sharpen the cases that would fail if the behaviour the finding names were broken. Keep every existing case, and keep them passing — rewrite the file in full with the existing cases and yours. Do not change any source file. Everything above about framework, typechecking and mocks still applies.",
+    "unchanged": "\n\n## YOUR PREVIOUS ATTEMPT LEFT THE TEST UNCHANGED\nThe file at __TARGET_REL__ is byte-for-byte what was already committed, so nothing the __GATE_LABEL__ gate found has been addressed. Add the cases the finding requires and write the file again."
+  }
+}

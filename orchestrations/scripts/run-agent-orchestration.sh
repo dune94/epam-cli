@@ -3375,11 +3375,10 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-
     # project whose trunk is named anything else it resolved nothing and the writer compared
     # against an empty baseline. The project declares it; otherwise take the repository's own
     # current branch, which is at least true.
-    _tw_baseline="${JIRA_BASELINE_BRANCH:-}"
-    if [ -z "$_tw_baseline" ]; then
-        _tw_baseline=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-        [ "$_tw_baseline" = "HEAD" ] && _tw_baseline=""
-        [ -n "$_tw_baseline" ] && warning "Step 3.54: no JIRA_BASELINE_BRANCH declared — diffing against the checked-out branch '$_tw_baseline'"
+    _tw_baseline_src=$(repro_writer_baseline "$PROJECT_ROOT")
+    _tw_baseline="${_tw_baseline_src%%$'\t'*}"
+    if [ "${_tw_baseline_src#*$'\t'}" = "checked-out" ]; then
+        warning "Step 3.54: no JIRA_BASELINE_BRANCH declared — diffing against the checked-out branch '$_tw_baseline'"
     fi
     if [ -z "$_tw_baseline" ]; then
         error "Step 3.54: no baseline branch declared and none resolvable — skipping the reproducing-test writer rather than diffing against nothing. Step 3.55 will block these stories."

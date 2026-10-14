@@ -1211,7 +1211,9 @@ _run_codeline_loop() {
       # ended the line). Exit 2 means a gate added something new to the story; the remediator adds nothing already
       # covered, so the loop ends when there is nothing new to fix (or the story's own budget does).
       while phase_exit_is_retryable "$_pex"; do
-        log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying the phase with what the gates added"
+        log "[orch] '${_phase}' ('${_cl}'): $(phase_exit_describe "$_pex") — retrying the phase"
+        # A test-only remediation keeps the stories' work (lib/phase-exit.sh phase_exit_retry_args).
+        _rargs=(); mapfile -t _rargs < <(phase_exit_retry_args "$_pex")
         _pex=0; _rmark=$(phase_retry_mark "$_wt")
         JIRA_CODELINE_RUN=1 \
       EPAM_CODELINE="$_cl" \
@@ -1223,7 +1225,7 @@ _run_codeline_loop() {
         OUTPUT_DIR="$_wt" \
         PHASE="$_phase" \
         CROSS_CODELINE_PRD="${CROSS_CODELINE_PRD:-}" \
-        bash "$0" --reset 2>&1 | tee -a "$_log_file"
+        bash "$0" ${_rargs[@]+"${_rargs[@]}"} 2>&1 | tee -a "$_log_file"
         _pex=${PIPESTATUS[0]}
         if [ "$_pex" -eq 0 ]; then
           log "[orch] Self-healing retry succeeded for '${_phase}' ('${_cl}')"
@@ -1456,7 +1458,9 @@ _run_codeline_loop() {
       # ended the line). Exit 2 means a gate added something new to the story; the remediator adds nothing already
       # covered, so the loop ends when there is nothing new to fix (or the story's own budget does).
       while phase_exit_is_retryable "$_pex"; do
-        log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying the phase with what the gates added"
+        log "[orch] '${_phase}' ('${_cl}'): $(phase_exit_describe "$_pex") — retrying the phase"
+        # A test-only remediation keeps the stories' work (lib/phase-exit.sh phase_exit_retry_args).
+        _rargs=(); mapfile -t _rargs < <(phase_exit_retry_args "$_pex")
         _pex=0; _rmark=$(phase_retry_mark "$_wt")
         JIRA_CODELINE_RUN=1 \
         EPAM_CODELINE="$_cl" \
@@ -1468,7 +1472,7 @@ _run_codeline_loop() {
         OUTPUT_DIR="$_wt" \
         PHASE="$_phase" \
         CROSS_CODELINE_PRD="${CROSS_CODELINE_PRD:-}" \
-        bash "$0" --reset 2>&1 | tee -a "$_log_file"
+        bash "$0" ${_rargs[@]+"${_rargs[@]}"} 2>&1 | tee -a "$_log_file"
         _pex=${PIPESTATUS[0]}
         if [ "$_pex" -eq 0 ]; then
           log "[orch] Self-healing retry succeeded for '${_phase}' ('${_cl}')"

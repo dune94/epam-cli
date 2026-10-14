@@ -11,6 +11,8 @@
  * always answers exit 2, on a real git repository:
  *   - committing nothing: exactly one retry, then the site fails;
  *   - NEGATIVE: committing every round, then answering 0: the site keeps retrying and succeeds.
+ * And a test-only remediation (exit 4, lib/phase-exit.sh PHASE_EXIT_TESTS_STRENGTHENED) is retried WITHOUT --reset, so
+ * the stories keep their approved work and the gates re-judge the test-writer's commit; exit 2 still resets.
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync, execFileSync } from 'node:child_process';
@@ -28,15 +30,17 @@ function estate(exits: number[], commits: boolean) {
   const git = (...a: string[]) => execFileSync('git', ['-C', repo, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { encoding: 'utf8' });
   writeFileSync(join(repo, 'f.txt'), '0\n'); git('init', '-q'); git('add', '.'); git('commit', '-qm', 'base');
   const n = join(d, 'n'); writeFileSync(n, '0');
+  const argsFile = join(d, 'args'); writeFileSync(argsFile, '');
   const phase = join(d, 'phase.sh');
   writeFileSync(phase, `#!/bin/bash
-i=$(cat ${JSON.stringify(n)}); echo $((i+1)) > ${JSON.stringify(n)}
+i=$(cat ${JSON.stringify(n)}); echo $((i+1)) > ${JSON.stringify(n)}; echo "[$*]" >> ${JSON.stringify(argsFile)}
 ${commits ? `echo "$i" > ${JSON.stringify(join(repo, 'f.txt'))}; git -C ${JSON.stringify(repo)} -c user.email=t@t -c user.name=t commit -qam "round $i"` : ''}
 codes=(${exits.join(' ')}); exit \${codes[$i]:-\${codes[\${#codes[@]}-1]}}
 `);
   chmodSync(phase, 0o755);
   const calls = () => Number(readFileSync(n, 'utf8').trim());
-  return { d, repo, phase, calls };
+  const args = () => readFileSync(argsFile, 'utf8').trim().split('\n');
+  return { d, repo, phase, calls, args };
 }
 
 /** The lines from `while phase_exit_is_retryable "$<var>"` through its `done`, the nth such loop in the file. */
@@ -54,13 +58,13 @@ describe('the pipeline never loops', () => {
     const run = (exits: number[], commits: boolean) => {
       const e = estate(exits, commits);
       const scripts = join(e.d, 'scripts'); mkdirSync(join(scripts, 'lib'), { recursive: true });
-      writeFileSync(join(scripts, 'run-agent-orchestration.sh'), `#!/bin/bash\nexec ${JSON.stringify(e.phase)}\n`);
+      writeFileSync(join(scripts, 'run-agent-orchestration.sh'), `#!/bin/bash\nexec ${JSON.stringify(e.phase)} "$@"\n`);
       const prd = join(e.d, 'prd.json'); writeFileSync(prd, JSON.stringify({ project: { outputDir: e.repo } }));
       const src = readFileSync(join(S, 'orchestrate.sh'), 'utf8');
       const a = src.indexOf('run_phase() {'); const fn = src.slice(a, src.indexOf('\n}\n', a) + 3);
       // The launcher's own shell options (orchestrate.sh: set -euo pipefail) — its exit capture through `| tee` relies on pipefail.
       const r = spawnSync('bash', ['-c', `set -uo pipefail\n${LOGS}\nSCRIPT_DIR=${JSON.stringify(scripts)}; REPO_ROOT=${JSON.stringify(e.d)}; PRD_FILE=${JSON.stringify(prd)}; LOG_FILE=/dev/null; EPAM_BROWNFIELD=1\n. ${JSON.stringify(join(S, 'lib/phase-exit.sh'))}\n${fn}\nrun_phase core; echo "RC=$?"`], { encoding: 'utf8', timeout: 60000 });
-      return { out: r.stdout + r.stderr, calls: e.calls() };
+      return { out: r.stdout + r.stderr, calls: e.calls(), args: e.args() };
     };
     it('a retry that committed nothing is not repeated — two calls, then the phase fails', () => {
       const r = run([2], false);
@@ -72,15 +76,30 @@ describe('the pipeline never loops', () => {
       expect(r.calls, r.out).toBe(3);
       expect(r.out).toContain('Self-healing retry succeeded');
     });
+    it('a test-only remediation (4) is retried without --reset; a remediation (2) is retried with it', () => {
+      const t = run([4, 0], true);
+      expect(t.calls, t.out).toBe(2);
+      expect(t.args[1], t.out).not.toContain('--reset');
+      expect(t.args[1]).toContain('--phase core');
+      const c = run([2, 0], true);
+      expect(c.args[1], c.out).toContain('--reset');
+    });
   });
 
   describe('a release line (lib/release-lines.sh)', () => {
     const run = (exits: number[], commits: boolean) => {
       const e = estate(exits, commits);
       const loop = loopSlice('lib/release-lines.sh', 0);
-      const r = spawnSync('bash', ['-c', `${LOGS}\n. ${JSON.stringify(join(S, 'lib/phase-exit.sh'))}\nf(){ _wt=${JSON.stringify(e.repo)}; _phase=core; _cl=lib; _line=1.x; _line_phase(){ ${JSON.stringify(e.phase)}; }; _pex=0; _line_phase || _pex=$?\n${loop}\necho "PEX=$_pex"; }; f`], { encoding: 'utf8', timeout: 60000 });
-      return { out: r.stdout + r.stderr, calls: e.calls(), pex: Number((r.stdout.match(/PEX=(\d+)/) || [])[1]) };
+      const r = spawnSync('bash', ['-c', `${LOGS}\n. ${JSON.stringify(join(S, 'lib/phase-exit.sh'))}\nf(){ _wt=${JSON.stringify(e.repo)}; _phase=core; _cl=lib; _line=1.x; _line_phase(){ ${JSON.stringify(e.phase)} "$@"; }; _pex=0; _line_phase || _pex=$?\n${loop}\necho "PEX=$_pex"; }; f`], { encoding: 'utf8', timeout: 60000 });
+      return { out: r.stdout + r.stderr, calls: e.calls(), args: e.args(), pex: Number((r.stdout.match(/PEX=(\d+)/) || [])[1]) };
     };
+    it('a test-only remediation (4) is retried without --reset; a remediation (2) is retried with it', () => {
+      const t = run([4, 0], true);
+      expect(t.calls, t.out).toBe(2);
+      expect(t.pex).toBe(0);
+      expect(t.args[1], t.out).not.toContain('--reset');
+      expect(run([2, 0], true).args[1]).toContain('--reset');
+    });
     it('a retry that committed nothing is not repeated — two calls, the line fails', () => {
       const r = run([2], false);
       expect(r.calls, r.out).toBe(2);
@@ -101,8 +120,15 @@ describe('the pipeline never loops', () => {
         const loop = loopSlice('lib/codeline-lanes.sh', nth);
         // The loop re-invokes the phase as `bash "$0" --reset`: $0 is the stand-in.
         const r = spawnSync('bash', ['-c', `${LOGS}\n. ${JSON.stringify(join(S, 'lib/phase-exit.sh'))}\n_wt=${JSON.stringify(e.repo)}; _phase=core; _cl=lib; _lane_log_dir=${JSON.stringify(e.d)}; _cl_prd=/dev/null; _log_file=/dev/null\nbash "$0"; _pex=$?\n${loop}\necho "PEX=$_pex"`, e.phase], { encoding: 'utf8', timeout: 60000 });
-        return { out: r.stdout + r.stderr, calls: e.calls(), pex: Number((r.stdout.match(/PEX=(\d+)/) || [])[1]) };
+        return { out: r.stdout + r.stderr, calls: e.calls(), args: e.args(), pex: Number((r.stdout.match(/PEX=(\d+)/) || [])[1]) };
       };
+      it('a test-only remediation (4) is retried without --reset; a remediation (2) is retried with it', () => {
+        const t = run([4, 0], true);
+        expect(t.calls, t.out).toBe(2);
+        expect(t.pex).toBe(0);
+        expect(t.args[1], t.out).not.toContain('--reset');
+        expect(run([2, 0], true).args[1]).toContain('--reset');
+      });
       it('a retry that committed nothing is not repeated — two calls, the lane fails', () => {
         const r = run([2], false);
         expect(r.calls, r.out).toBe(2);

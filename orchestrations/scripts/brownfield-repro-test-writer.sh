@@ -422,8 +422,13 @@ else
 fi
 
 if [ -n "$_FINDING_FILE" ]; then
-    _log_noun="strengthened test (${_FINDING_GATE} finding)"
-    _commit_noun="strengthened test for the ${_FINDING_GATE} finding"
+    # The words are template prose (prompts/templates/test-gate-finding.json), never literals here.
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/test-gate-finding-vals-XXXXXX.json")
+    jq_vals --arg gate_label "$_FINDING_GATE" '{"__GATE_LABEL__":$gate_label}' > "$_cp_vals"
+    _log_noun="$(render_engine_prompt test-gate-finding "$_cp_vals" logNoun)" \
+        && _commit_noun="$(render_engine_prompt test-gate-finding "$_cp_vals" commitNoun)" \
+        || { rm -f "$_cp_vals"; log "FATAL: the gate finding's wording did not render"; exit 1; }
+    rm -f "$_cp_vals"
 fi
 log "writing ${_log_noun} for $STORY_ID (kind: ${_story_kind:-unclassified}) → $_target_rel (convention: .$_ext, example: ${_example_rel:-none})"
 

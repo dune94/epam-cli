@@ -8,10 +8,9 @@
     "and both were being assembled by shell pipelines that fail to an empty string in silence --",
     "so a remediator could be asked to revise criteria it had not been shown.",
     "",
-    "2026-10-14 (AMSD-2974 live L2): on the 7.x line the remediator wrote an AC requiring jest-axe, which that line",
-    "does not declare — an AC no writer can satisfy without adding a dependency to a release line. It is now given",
-    "what the codeline's manifest declares (dependency-contract-plugin checkPackageAvailability, the same answer the",
-    "agents' dependency_available tool gives)."
+    "The remediator is given what the codeline's manifest declares (dependency-contract-plugin checkPackageAvailability,",
+    "the same answer the agents' dependency_available tool gives): a criterion requiring a package the codeline does",
+    "not declare cannot be satisfied without adding a dependency, which is not a finding's remedy."
   ],
   "description": "Drafts replacement acceptance criteria that remediate a confirmed gate finding.",
   "id": "story-ac-remediator",

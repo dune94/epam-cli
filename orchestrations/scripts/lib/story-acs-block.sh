@@ -16,13 +16,23 @@
 # A CRITERION THE REMEDIATOR ADDED SAYS SO (operator, 2026-10-14: a reviewer may retire one that cannot be met — never
 # one of the plan's). The remediators (ac-apply.py, lint-ac.py) write {text, status, origin: "remediation"}; before the
 # origin field they wrote exactly {text, status}, which nothing else writes. The plan's criteria are strings.
-# The marker, ONCE: lib/review-cycle.sh hands it to retire-criteria.py, which accepts a criterion named with it.
-STORY_ACS_REMEDIATION_MARK="[added by remediation — not the plan]"
+# THE MARKER IS TEMPLATE PROSE (prompts/templates/criterion-origin.json) — never a literal here. The criteria block renders
+# it, the reviewer's contract names it (story_criterion_mark_values), and retire-criteria.py accepts a name copied with it.
+# shellcheck source=render-engine-prompt.sh
+declare -F render_engine_prompt >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/render-engine-prompt.sh"
+story_criterion_mark() {
+    local _v _m; _v=$(mktemp "${TMPDIR:-/tmp}/criterion-origin-XXXXXX.json"); echo '{}' > "$_v"
+    _m=$(render_engine_prompt criterion-origin "$_v" remediation); rm -f "$_v"; printf '%s' "$_m"
+}
+# story_criterion_mark_values — the mark as a values object for a template that names it (__REMEDIATION_MARK__).
+story_criterion_mark_values() {
+    jq -cn --arg m "$(story_criterion_mark)" '{"__REMEDIATION_MARK__": $m}'
+}
 story_acs_block() {
     local _prd="${1:-}" _id="${2:-}" _heading="${3:-ACCEPTANCE CRITERIA:}"
     [ -n "$_prd" ] && [ -f "$_prd" ] && [ -n "$_id" ] || return 0
     local _list
-    _list=$(jq -r --arg id "$_id" --arg mark "$STORY_ACS_REMEDIATION_MARK" \
+    _list=$(jq -r --arg id "$_id" --arg mark "$(story_criterion_mark)" \
         '.stories[] | select(.id == $id) | .acceptanceCriteria // [] | map(select(. != null and . != "")) | to_entries
          | map("AC\(.key+1): " + (if (.value | type) == "object" then
                    (.value.text // (.value | tostring))

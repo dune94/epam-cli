@@ -7,10 +7,10 @@
     "inside the heredoc, which is prompt assembly performed by a shell pipeline -- unreviewable",
     "as prose, and silently empty when the file or the key is missing.",
     "",
-    "2026-10-14 (AMSD-2974 live L2): the finding now carries `work`, the analyst's judgement of WHO can resolve it.",
-    "Every finding used to go to the AC remediator and back to the code writer — including a surviving mutant in",
-    "correct code, which only a test can kill. The code writer is forbidden to touch tests, committed nothing, and",
-    "the phase looped. `tests` routes the finding to the test-writer (brownfield, where it owns the tests)."
+    "The finding carries `work`, the analyst's judgement of WHO can resolve it. Every finding used to go to the AC",
+    "remediator and back to the code writer — including a surviving mutation in correct code, which only a test can",
+    "kill; the code writer may not touch tests, committed nothing, and the phase looped. `tests` routes the finding to",
+    "the test-writer (brownfield, where it owns the tests)."
   ],
   "description": "Analyses one QA gate finding and reports what it means, quoting the log line that proves it.",
   "id": "gate-finding-analyst",

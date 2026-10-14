@@ -72,7 +72,7 @@ _remediate_review_rejection() {
 # shellcheck source=phase-exit.sh
 declare -F phase_retry_mark >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/phase-exit.sh"
 # shellcheck source=story-acs-block.sh
-[ -n "${STORY_ACS_REMEDIATION_MARK:-}" ] || . "$(dirname "${BASH_SOURCE[0]}")/story-acs-block.sh"
+declare -F story_criterion_mark >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/story-acs-block.sh"
 # shellcheck source=repro-baseline.sh
 declare -F repro_writer_baseline >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/repro-baseline.sh"
 
@@ -89,7 +89,7 @@ _route_review_findings() {
     local _fb="$1" _sid="$2" _prd="${MAIN_PRD_FILE:-$PRD_FILE}"
     REVIEW_RETIRED=0; REVIEW_CODE_ISSUES=0
     [ -f "$_fb" ] || return 0
-    REVIEW_RETIRED=$(python3 "$SCRIPT_DIR/lib/handlers/retire-criteria.py" "$_prd" "$_sid" "$_fb" "${STORY_ACS_REMEDIATION_MARK:-}" 2>/dev/null || echo 0)
+    REVIEW_RETIRED=$(python3 "$SCRIPT_DIR/lib/handlers/retire-criteria.py" "$_prd" "$_sid" "$_fb" "$(story_criterion_mark)" 2>/dev/null || echo 0)
     [ "${REVIEW_RETIRED:-0}" -gt 0 ] 2>/dev/null && log "  [review-routing] ${_sid}: ${REVIEW_RETIRED} criterion(s) the remediator added retired — the reviewer found them impossible here"
     local _tests
     _tests=$(jq -c '[(.issues // [])[] | select((.work // "") == "tests")]' "$_fb" 2>/dev/null || echo '[]')

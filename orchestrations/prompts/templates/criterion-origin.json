@@ -1,0 +1,15 @@
+{
+  "$why": [
+    "2026-10-14 (operator: \"You are not permitted to hard code engine prose\"). The words that mark a criterion the",
+    "pipeline's remediator added — so the reviewer may retire it when it cannot be met, and never one of the plan's —",
+    "were a string in lib/story-acs-block.sh. One definition: the criteria block renders it beside such a criterion,",
+    "the reviewer's contract (review-finding-routing) names it, and retire-criteria.py accepts a name copied with it."
+  ],
+  "description": "How a criterion the remediator added is marked wherever criteria are shown to an agent.",
+  "id": "criterion-origin",
+  "version": 1,
+  "placeholders": [],
+  "bodies": {
+    "remediation": "[added by remediation — not the plan]"
+  }
+}

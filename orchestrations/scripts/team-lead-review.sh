@@ -917,6 +917,15 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
     STORY_VERDICT=$(echo "$REVIEW_JSON" | jq -r '.verdict // "changes_requested"' 2>/dev/null || echo "changes_requested")
     STORY_ISSUE_COUNT=$(echo "$REVIEW_JSON" | jq '.issues | length' 2>/dev/null || echo "0")
     STORY_SUMMARY=$(echo "$REVIEW_JSON" | jq -r '.summary // ""' 2>/dev/null || true)
+    # EVERY REVIEWER FINDING IS ACTED ON (operator, 2026-10-14: "reviewer findings are critical and must be acted
+    # on ... until it passes clean"). An approval that still carries findings deleted them below — AMSD-2974's
+    # reviewer raised the English-only close label on bilingual sites four times as an advisory note, every
+    # approval threw it away, and the writer never saw it. A review with findings is a request for changes.
+    if [ "$STORY_VERDICT" = "approved" ] && [ "${STORY_ISSUE_COUNT:-0}" -gt 0 ]; then
+        warning "  Review: approved with $STORY_ISSUE_COUNT finding(s) — every finding is acted on, so the writer gets them"
+        STORY_VERDICT="changes_requested"
+        REVIEW_JSON=$(printf '%s' "$REVIEW_JSON" | jq -c '.verdict = "changes_requested"' 2>/dev/null || printf '%s' "$REVIEW_JSON")
+    fi
 
     if [ "$STORY_VERDICT" = "changes_requested" ] && [ "${STORY_ISSUE_COUNT:-0}" -gt 0 ]; then
         warning "  Review: changes_requested ($STORY_ISSUE_COUNT issue(s)) — $STORY_SUMMARY"

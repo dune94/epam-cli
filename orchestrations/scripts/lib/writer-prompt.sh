@@ -403,7 +403,7 @@ build_implementation_prompt() {
           | ($all | map(select((.severity // "") == "blocker"))) as $blockers
           | ($all | map(select((.severity // "") != "blocker"))) as $rest
           | (if ($blockers | length) > 0 then "### BLOCKERS — this attempt is REJECTED until every one is resolved\n" + ($blockers | render) + "\n" else "" end)
-          + (if ($rest | length) > 0 then "### Advisory — apply where it makes the change smaller or clearer\n" + ($rest | render) else "" end)
+          + (if ($rest | length) > 0 then "### Every other finding — resolve each one too; the review passes only when it finds nothing\n" + ($rest | render) else "" end)
           ' "$_review_feedback_file" 2>/dev/null || echo "")
         # A REVIEW FROM BEFORE THIS RUN IS HISTORY, NOT A VERDICT ON THIS ATTEMPT. The file carries
         # no run of its own; when it was written (its mtime) is compared with this run's start
@@ -418,7 +418,7 @@ build_implementation_prompt() {
             review_feedback_earlier_run="$(date -u -d "@$_rf_written" +%Y-%m-%dT%H:%MZ 2>/dev/null)"
             review_feedback=$(printf '%s' "$review_feedback" | sed \
                 -e 's/^### BLOCKERS — this attempt is REJECTED until every one is resolved$/### What that review called blocking (then — check each against the code as it is now)/' \
-                -e 's/^### Advisory — apply where it makes the change smaller or clearer$/### What that review advised (then)/')
+                -e 's/^### Every other finding — resolve each one too; the review passes only when it finds nothing$/### What else that review found (then)/')
         fi
     fi
 

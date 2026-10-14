@@ -131,6 +131,9 @@ review_stands() {
     _incomplete=$(printf '%s' "$_review" | jq -r '.reviewIncomplete // false')
     _reviewed=$(printf '%s' "$_review" | jq -r '.timestamp // empty')
     [ "$_verdict" = "approved" ] && [ "$_incomplete" = "false" ] && [ -n "$_reviewed" ] || return 1
+    # AN APPROVAL WITH FINDINGS DOES NOT STAND: every finding is acted on (team-lead-review.sh). Records written
+    # before that rule carry `approved` beside their findings.
+    [ "$(printf '%s' "$_review" | jq -r '(.issues // []) | length')" = "0" ] || return 1
     # WHAT THE REVIEWER JUDGED INCLUDES THE STORY'S PLAN (AMSD-2974 run 8, 2026-10-08): the 7.x back-port, approved
     # before the plan said the line carries the whole 8.x change, stood "unchanged" and was never judged against it.
     if [ -n "${PRD_FILE:-}" ] && [ -f "${PRD_FILE:-}" ]; then

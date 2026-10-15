@@ -319,7 +319,6 @@ _obs_compose() {
 # docker, where it is meaningful and cheap.
 _obs_replace_agent_monitor() {
   EPAM_OBS_SUBNET="${OBS_SUBNET:-}" \
-  EPAM_OBS_CLICKHOUSE_PORT="${OBS_CLICKHOUSE_PORT:-}" \
   EPAM_OBS_LANGFUSE_PORT="${OBS_LANGFUSE_PORT:-}" \
   EPAM_OBS_DASHBOARD_PORT="${OBS_DASHBOARD_PORT:-}" \
   EPAM_OBS_GRAFANA_PORT="${OBS_GRAFANA_PORT:-}" \
@@ -327,7 +326,6 @@ _obs_replace_agent_monitor() {
   _obs_compose -f "$COMPOSE_BASE" -f "$COMPOSE_OVERRIDE" -p "$OBS_PROJECT" \
     rm -sf agent-monitor >/dev/null 2>&1 || true
   EPAM_OBS_SUBNET="${OBS_SUBNET:-}" \
-  EPAM_OBS_CLICKHOUSE_PORT="${OBS_CLICKHOUSE_PORT:-}" \
   EPAM_OBS_LANGFUSE_PORT="${OBS_LANGFUSE_PORT:-}" \
   EPAM_OBS_DASHBOARD_PORT="${OBS_DASHBOARD_PORT:-}" \
   EPAM_OBS_GRAFANA_PORT="${OBS_GRAFANA_PORT:-}" \

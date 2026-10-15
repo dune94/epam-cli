@@ -190,7 +190,7 @@ pkill -f tier3-.*-run.sh ; pkill -f run-agent-orchestration.sh
 # stop this install's services
 bash orchestrations-installer/pipeline-services.sh --stop --dest &lt;install&gt;</code></pre>
 <div class="warn"><strong>Killing the run is not the whole job.</strong> The observability and
-launch stacks keep running — postgres, clickhouse, langfuse, grafana, the dashboards, the launch
+launch stacks keep running — postgres, langfuse, grafana, the dashboards, the launch
 UI. They hold memory, and their networks hold subnets that the next install needs. Stop the
 services as well.</div>
 

@@ -95,7 +95,7 @@ stop)
             [ -f "$_FILE" ] || continue
             [ -n "$_PROJECT" ] || { _warn "no saved project name for $_FILE — was it ever brought up?"; continue; }
             # NEVER -v, NEVER --rmi: this is a pause, not an uninstall. Volumes (Langfuse's
-            # postgres/clickhouse, launch-api's own sqlite) and built images both survive.
+            # postgres, launch-api's own sqlite) and built images both survive.
             if (cd "$(dirname "$_FILE")" && container_compose -f "$(basename "$_FILE")" -p "$_PROJECT" down --remove-orphans) >/dev/null 2>&1; then
                 _ok "stopped $_PROJECT (data preserved)"
             else
@@ -145,7 +145,6 @@ start)
     else
         if [ -f "$OBS_COMPOSE" ] && [ -n "${OBS_PROJECT:-}" ]; then
             if (cd "$ROOT" && EPAM_OBS_SUBNET="${OBS_SUBNET:-}" \
-                    EPAM_OBS_CLICKHOUSE_PORT="${OBS_CLICKHOUSE_PORT:-}" \
                     EPAM_OBS_LANGFUSE_PORT="${OBS_LANGFUSE_PORT:-}" \
                     EPAM_OBS_DASHBOARD_PORT="${OBS_DASHBOARD_PORT:-}" \
                     EPAM_OBS_GRAFANA_PORT="${OBS_GRAFANA_PORT:-}" \

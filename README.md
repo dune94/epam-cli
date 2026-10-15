@@ -173,7 +173,7 @@ EPAM CLI v1 uses a **bridge model** for provider authentication (see [DEC-005](.
 Self-hosted Langfuse captures every LLM call with full tracing:
 
 ```bash
-# Start infrastructure (includes Langfuse + ClickHouse) — done automatically by
+# Start infrastructure (includes Langfuse) — done automatically by
 # orchestrations-installer/install.sh (or npx amsd-pipeline); by hand instead:
 docker compose -f docker-compose.observability.yml up -d
 

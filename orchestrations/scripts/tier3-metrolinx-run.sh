@@ -529,9 +529,9 @@ elif [ "${OBSERVABILITY_PREFLIGHT:-1}" = "1" ]; then
   if [ -n "$_obs_failed" ]; then
     error "Observability preflight FAILED: ${_obs_failed}— aborting before any spend."
     error "  The stack is usually down because the host restarted. Bring it back with:"
-    error "    docker compose -f docker-compose.observability.yml up -d postgres redis clickhouse"
+    error "    docker compose -f docker-compose.observability.yml up -d postgres redis"
     error "    docker compose -f docker-compose.observability.yml up -d langfuse-server grafana"
-    error "  langfuse-server crash-loops until postgres/clickhouse/redis are healthy, so start them first."
+    error "  langfuse-server crash-loops until postgres/redis are healthy, so start them first."
     error "  Set OBSERVABILITY_PREFLIGHT=0 to launch without tracing (the run's cost will not be recoverable)."
     exit 1
   fi

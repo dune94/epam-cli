@@ -103,7 +103,8 @@ describe('pre-run-reset.sh restarts agent-monitor with the SAME subnet/ports the
     const log = existsSync(f.dockerLog) ? readFileSync(f.dockerLog, 'utf8') : '';
     const envLine = forceRecreateLine(log);
     expect(envLine, `no ENV: line recorded for the force-recreate call:\n${log}`).toBeTruthy();
-    expect(envLine).toBe('ENV: SUBNET=172.25.0.0/16 CH=8123 LF=3100 DASH=8092 GRAF=3001');
+    // No ClickHouse port is handed over (2026-10-15: the stack carries no ClickHouse), even with one in an older state file.
+    expect(envLine).toBe('ENV: SUBNET=172.25.0.0/16 CH= LF=3100 DASH=8092 GRAF=3001');
   });
 
   it('leaves the subnet/ports unset (compose-file defaults) when no state file exists — the dev-checkout path', () => {

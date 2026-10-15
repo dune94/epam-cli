@@ -337,7 +337,7 @@ If you skip this, the install still reports ready, and the run dies at the launc
 - With a container runtime, the observability stack
   (`docker-compose.observability.yml`) and `launch-dashboard/docker-compose.yml` are up, each under
   a project name and subnet unique to this install so two installs cannot collide. Baseline ports —
-  Langfuse `3100`, dashboards `8092`, ClickHouse `8123`, Grafana `3001`, launch UI `8099` — are kept
+  Langfuse `3100`, dashboards `8092`, Grafana `3001`, launch UI `8099` — are kept
   exactly on a normal single-install machine, and stepped by +10 per retry only on a real collision.
   The identity that was actually used is written to `<install>/.pipeline-services-state.env`.
 - Two **host** daemons started (neither is dockerized): `snapshot-watch.js` and, when the launch

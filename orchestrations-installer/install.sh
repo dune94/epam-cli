@@ -823,7 +823,7 @@ compose_up() {
 
     for _subnet in $(isolated_subnet_candidates "$ROOT"); do
         # ATTEMPT 0 KEEPS THE WELL-KNOWN PORTS EXACTLY (offset 0) — a normal single-install machine
-        # sees no change at all, still :3100, :8092, :8123, :3001. Only a genuine collision (this
+        # sees no change at all, still :3100, :8092, :3001. Only a genuine collision (this
         # exact stack already running, or a second install) steps to the next attempt's offset, so
         # no manual port flag is ever required for this to just work.
         local _off=$((_i * 10))
@@ -833,13 +833,11 @@ compose_up() {
         # it exited 0 over six containers stuck in `created` with "address already in use", so
         # nothing discovered the clash at all. Each service takes the first genuinely free port
         # at or after its candidate, so another install holding 3100 costs one step, not a run.
-        local _p_ch _p_lf _p_dash _p_graf
-        _p_ch="$(find_free_port $((8123 + _off)))"   || { _bad "no free port for clickhouse"; return 1; }
+        local _p_lf _p_dash _p_graf
         _p_lf="$(find_free_port $((3100 + _off)))"   || { _bad "no free port for langfuse"; return 1; }
         _p_dash="$(find_free_port $((8092 + _off)))" || { _bad "no free port for the dashboard"; return 1; }
         _p_graf="$(find_free_port $((3001 + _off)))" || { _bad "no free port for grafana"; return 1; }
         if (cd "$ROOT" && EPAM_OBS_SUBNET="$_subnet" \
-                EPAM_OBS_CLICKHOUSE_PORT="$_p_ch" \
                 EPAM_OBS_LANGFUSE_PORT="$_p_lf" \
                 EPAM_OBS_DASHBOARD_PORT="$_p_dash" \
                 EPAM_OBS_GRAFANA_PORT="$_p_graf" \
@@ -858,7 +856,7 @@ compose_up() {
         # every candidate, burning through all of them and hiding the real error behind repeats.
         grep -qiE 'overlap|pool|port is already allocated|address already in use' "$_log" || break
         # TEAR DOWN BEFORE THE NEXT ATTEMPT. A failed `up -d` still CREATES whatever services it
-        # got to before the failing one — found live: postgres/redis/clickhouse started fine on
+        # got to before the failing one — found live: postgres/redis started fine on
         # attempt 0, agent-monitor's port collision failed the overall command, and attempt 1's
         # NEW port env was silently ignored for the already-Created containers, which stayed bound
         # to attempt 0's (colliding) ports. Compose does not cleanly re-resolve an already-created
@@ -884,7 +882,6 @@ compose_up() {
         # (find_free_port), so an offset that was occupied yields a different port — recording
         # the formula instead of the result would make this file name ports no container listens
         # on, and service_url()/langfuse-emit.js read it to find this install's own services.
-        printf 'OBS_CLICKHOUSE_PORT=%s\n' "$_p_ch"
         printf 'OBS_LANGFUSE_PORT=%s\n' "$_p_lf"
         printf 'OBS_DASHBOARD_PORT=%s\n' "$_p_dash"
         printf 'OBS_GRAFANA_PORT=%s\n' "$_p_graf"

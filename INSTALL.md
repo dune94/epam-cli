@@ -109,9 +109,9 @@ Without `--dest`, `install.sh` only ever configures the tree it is already sitti
 ### 2b. Into a new folder, from a tagged ref (what everyone else uses)
 
 ```bash
-./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.77
+./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.78
 # or, with no checkout at all — install.sh self-clones:
-npx amsd-pipeline --dest ~/amsd-pipeline --ref v2.0.77
+npx amsd-pipeline --dest ~/amsd-pipeline --ref v2.0.78
 ```
 
 `--dest` is what makes the installer useful to anyone who is not this checkout: it packages the
@@ -179,9 +179,9 @@ Two things to know about that file:
 So the first install of a stack with required credentials is a two-step operation:
 
 ```bash
-./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.77   # creates .env, then fails
+./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.78   # creates .env, then fails
 $EDITOR ~/amsd-pipeline/.env                                              # fill it in
-./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.77  # re-run — now it completes
+./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.78  # re-run — now it completes
 ```
 
 On the default `claude` stack, which declares no required credentials, an install can complete with

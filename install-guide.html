@@ -212,7 +212,7 @@ changed since it started</code>). Nothing else restarts daemons: not by hand, no
 ./orchestrations-installer/install.sh --stack codemie     # install for a specific stack
 ./orchestrations-installer/install.sh --no-docker         # skip dashboards entirely
 ./orchestrations-installer/install.sh --check             # verify an existing install, change nothing
-./orchestrations-installer/install.sh --dest ~/somewhere --ref v2.0.77   # package that ref into a NEW tree, then install it</code></pre>
+./orchestrations-installer/install.sh --dest ~/somewhere --ref v2.0.78   # package that ref into a NEW tree, then install it</code></pre>
 
 <p><code>npx amsd-pipeline</code> is the very same script — <code>bin/amsd-pipeline.js</code> does
 nothing but <code>spawnSync('bash', [install.sh, ...argv])</code>, so every flag below works
@@ -248,9 +248,9 @@ running</code> — and then <strong>checks the values, not just the file</strong
 stack declares a required credential that is still empty, the install FAILS with
 <code>✗ the '&lt;stack&gt;' stack needs these, still empty in .env: OPENROUTER_API_KEY ...</code>.
 So:</p>
-<pre><code>./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.77   # creates .env, then fails
+<pre><code>./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.78   # creates .env, then fails
 $EDITOR ~/amsd-pipeline/.env                                              # fill it in
-./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.77  # re-run — now it completes</code></pre>
+./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v2.0.78  # re-run — now it completes</code></pre>
 <p>On the default <code>claude</code> stack, which declares no required credentials, an install can
 complete with an empty <code>.env</code> — the file is still created, and still needs the Jira
 values before a brownfield run will start.</p>

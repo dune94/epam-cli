@@ -9,8 +9,6 @@
 #                                      in .env or the environment — recording without them is
 #                                      silent, and a run not recorded can never be replayed)
 #   ./install.sh --check              verify an existing install, change nothing
-#   ./install.sh --workflows [file.tgz]  also install the Claude workflows (amsd-pipeline-workflow) into claude-workflows/,
-#                                     the version orchestrations/config/claude-workflows.json pins, or a local package
 #   ./install.sh --dest ~/somewhere --ref v1.7   package that ref into a NEW tree, then install it
 #
 # --dest IS THE WHOLE POINT FOR ANYONE WHO IS NOT THIS CHECKOUT. Without it, install.sh only ever
@@ -57,7 +55,7 @@ CONTAINER_RUNTIME="${EPAM_CONTAINER_RUNTIME:-}"
 # without it can never be replayed, because the turns were never captured. Off by default — 2.36GB
 # of images is not a silent opt-in — but the consequence is one-way, so it is STATED either way.
 REPLAY_MODE="${EPAM_REPLAY:-off}"
-DEST=""; REF=""; REPO_URL=""; UNINSTALL=0; WORKFLOWS=""
+DEST=""; REF=""; REPO_URL=""; UNINSTALL=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --dest)      DEST="${2:-}"; shift 2 ;;
@@ -81,10 +79,8 @@ while [ $# -gt 0 ]; do
             esac
             shift 2 ;;
         --check)     CHECK_ONLY=1; shift ;;
-        --workflows)
-            if [ -n "${2:-}" ] && [ "${2#--}" = "${2}" ]; then WORKFLOWS="$2"; shift 2; else WORKFLOWS=pinned; shift; fi ;;
         --uninstall) UNINSTALL=1; shift ;;
-        --help|-h)   sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --help|-h)   sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *)           _bad "unknown option '$1'"; exit 1 ;;
     esac
 done
@@ -686,12 +682,6 @@ else
 fi
 
 # ── Container runtime ─────────────────────────────────────────────────────────
-if [ -n "$WORKFLOWS" ]; then
-    _head "Claude workflows"
-    . "$INSTALLER_DIR/lib/claude-workflows.sh"
-    install_claude_workflows "$ROOT" "$WORKFLOWS" "$CHECK_ONLY" || FAILED=1
-fi
-
 _head "Container runtime"
 # ONE RESOLVER, ASKED — not a third copy of the rule. The installer, dashboard-health-check.sh and
 # pre-run-reset.sh each had their own idea of which runtime to use, and only this one had ever

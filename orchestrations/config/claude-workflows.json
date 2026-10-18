@@ -1,5 +1,0 @@
-{
-  "_": "The Claude workflows package this pipeline release installs with install.sh --workflows (orchestrations-installer/lib/claude-workflows.sh): the version it was tested with.",
-  "package": "amsd-pipeline-workflow",
-  "version": "0.1.0"
-}

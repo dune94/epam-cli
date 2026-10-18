@@ -145,6 +145,3 @@ test-results/
 
 # CodeMie web provider state: plugin keys (0600), assistant ids, plugin logs. Never committed.
 .codemie-web/
-
-# the Claude workflows, installed by install.sh --workflows
-/claude-workflows/

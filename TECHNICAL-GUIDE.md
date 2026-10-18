@@ -431,7 +431,7 @@ Each main-branch story attempt also runs inside a **scope guard** (files outside
 ### Orchestration Scripts
 - `orchestrations/scripts/pipeline` — **the one-command entry point**: `pipeline --jira ABC-1234` (`--list`, `--dry-run`). Resolves the project from the ticket prefix, checks prerequisites, then `exec`s `orchestrate.sh` — a wrapper, never a second implementation of the run.
 - `orchestrations/scripts/orchestrate.sh` — the tested generic launcher (`--project <name> [--yes] [--phase <phase>]`); loads `.env` → project `config.env` → the declared `SECRETS_FILE` → project config again.
-- `orchestrations-installer/install.sh` — the installer (`--dest`, `--ref`, `--stack`, `--replay on|off`, `--docker`/`--no-docker`, `--check`, `--uninstall`, `--repo`, `--workflows` — the Claude workflows, `orchestrations-installer/lib/claude-workflows.sh`); see `INSTALL.md`.
+- `orchestrations-installer/install.sh` — the installer (`--dest`, `--ref`, `--stack`, `--replay on|off`, `--docker`/`--no-docker`, `--check`, `--uninstall`, `--repo`); see `INSTALL.md`.
 - `orchestrations/scripts/run-agent-orchestration.sh` — master orchestrator (`--sandbox`, `--allow-network` flags added).
 - `orchestrations/scripts/claude.sh` — story agent invocation wrapper; handles constitutions, schemas, artifacts.
 - `orchestrations/scripts/spec-mode-runner.js` — specification coordinator (baseline snapshot + OpenSpec/Speckit execution).

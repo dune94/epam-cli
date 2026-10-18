@@ -246,7 +246,7 @@ npx amsd-pipeline --dest ~/amsd-pipeline
 ```
 
 Run `npx amsd-pipeline --help` for flags. The full flag list (`--dest`, `--ref`, `--stack`,
-`--replay on|off`, `--docker`/`--no-docker`, `--check`, `--uninstall`, `--repo`), the prerequisites
+`--replay on|off`, `--docker`/`--no-docker`, `--check`, `--uninstall`, `--repo`, `--workflows`), the prerequisites
 the installer actually checks, the two-step `.env` first install, the Jira-credentials gotcha, and
 how to run a ticket afterwards are all in **[INSTALL.md](INSTALL.md)**.
 

@@ -146,6 +146,7 @@ Read from `install.sh`'s own argument parser — this is the complete list:
 | `--docker` | Require a container runtime — fails if none is running (`auto` merely warns). |
 | `--replay on\|off` | Default `off`. `on` installs/uses Langfuse as the **recorder** so a run can be replayed later for $0. Also settable as `EPAM_REPLAY`. An invalid value is rejected, never silently downgraded to `off`. Recorded runs are archived to `orchestrations/cassettes/<project>-<run-id>/` by the cassette watcher that `pipeline-services.sh --start` runs; it reads the Langfuse keys from the install's `.env`. |
 | `--check` | Verify an existing install, change nothing. |
+| `--workflows [file.tgz]` | Also install the Claude workflows (`amsd-pipeline-workflow`) into `claude-workflows/` — the version `orchestrations/config/claude-workflows.json` pins, or a local package. With `--check`, verifies them. Run them with `claude-workflows/bin/amsd-pipeline-workflow.js run …`. |
 | `--uninstall` | Remove **only** this install's docker footprint (containers, network, volumes, images it built) plus the host daemons. **Never deletes files** — your `.env` and run evidence stay. Accepts `--dest`. |
 | `--help`, `-h` | Prints the header comment. |
 

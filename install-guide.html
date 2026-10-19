@@ -276,6 +276,19 @@ copy keeps your value, and every key the new ref adds arrives.</p>
 <code>jq</code>, <code>node</code> (version <strong>unchecked by the installer</strong>, but 20 is
 required), <code>python3</code>, and the declared stack's own runner.</p>
 
+<h3 id="shared">2d. The shared components and the Claude workflows (after the install)</h3>
+<p>The Claude workflows (<code>amsd-pipeline-workflow</code>) need the shared components (<code>amsd-pipeline-shared</code>) in the same install. Both are installed <strong>after</strong> the pipeline, into it:</p>
+<pre><code>npx amsd-pipeline --dest ~/amsd-pipeline --ref v2.0.80
+npx amsd-pipeline-shared@0.2.0 install --into ~/amsd-pipeline
+npx amsd-pipeline-shared@0.2.0 verify  --into ~/amsd-pipeline
+npx amsd-pipeline-workflow@0.1.5 install --into ~/amsd-pipeline</code></pre>
+<ul>
+<li><code>amsd-pipeline-shared</code> replaces a file only when the install holds the released copy, or a copy an earlier version of it laid down; anything else is refused, with the list, before a byte is written. The replaced copies are kept, and <code>npx amsd-pipeline-shared revert --into ~/amsd-pipeline</code> puts the released bytes back exactly.</li>
+<li>It carries the model-call gateway fix (backlog B56: a failed <code>claude</code> / <code>codemie-claude</code> call is retried, climbs the agent's ladder and records its self-heal episode, instead of returning as an empty success), the Writer reviewer's failed-call handling, and agent-to-agent messages.</li>
+<li>Re-running <code>npx amsd-pipeline --dest</code> over the install puts the released copies back: install <code>amsd-pipeline-shared</code> again after it, and check with <code>verify</code>.</li>
+<li><code>amsd-pipeline-workflow install</code> writes only <code>~/amsd-pipeline/claude-workflows/</code>.</li>
+</ul>
+
 <h2 id="docker">3. Docker or Podman — no Docker Desktop license needed</h2>
 <p><code>install.sh</code> discovers whichever is on <code>PATH</code> — Docker first, Podman as a
 fallback (<code>EPAM_CONTAINER_RUNTIME</code> to force one). Docker <em>Desktop</em> requires a paid

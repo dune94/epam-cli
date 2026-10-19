@@ -270,6 +270,28 @@ epam --version
 epam chat
 ```
 
+### The shared components and the Claude workflows
+
+The Claude workflows (`amsd-pipeline-workflow`) need the shared components (`amsd-pipeline-shared`) in the same
+install. Both are installed **after** the pipeline, into it:
+
+```bash
+npx amsd-pipeline --dest ~/amsd-pipeline --ref v2.0.80
+npx amsd-pipeline-shared@0.2.0 install --into ~/amsd-pipeline
+npx amsd-pipeline-shared@0.2.0 verify  --into ~/amsd-pipeline
+npx amsd-pipeline-workflow@0.1.5 install --into ~/amsd-pipeline
+```
+
+- `amsd-pipeline-shared` replaces a file only when the install holds the released copy, or a copy an earlier version of
+  it laid down; anything else is refused, with the list, before a byte is written. The replaced copies are kept, and
+  `npx amsd-pipeline-shared revert --into ~/amsd-pipeline` puts the released bytes back exactly.
+- It carries the model-call gateway fix (backlog B56: a failed `claude` / `codemie-claude` call is retried, climbs the
+  agent's ladder and records its self-heal episode, instead of returning as an empty success), the Writer reviewer's
+  failed-call handling, and agent-to-agent messages.
+- Re-running `npx amsd-pipeline --dest` over the install (the update path above) puts the released copies back: install
+  `amsd-pipeline-shared` again after it, and check with `verify`.
+- `amsd-pipeline-workflow install` writes only `~/amsd-pipeline/claude-workflows/`.
+
 ## Quick Start
 
 1. Initialize project scaffolding:

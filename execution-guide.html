@@ -213,7 +213,7 @@ pkill -f tier3-.*-run.sh ; pkill -f run-agent-orchestration.sh
 # stop this install's services
 bash orchestrations-installer/pipeline-services.sh --stop --dest &lt;install&gt;</code></pre>
 <div class="warn"><strong>Killing the run is not the whole job.</strong> The observability and
-launch stacks keep running — postgres, langfuse, grafana, the dashboards, the launch UI (and, on a 2.0.80 install, ClickHouse, which
+launch stacks keep running — postgres, langfuse, grafana, the dashboards, the launch UI (and, on a 2.0.80 install only, ClickHouse, which
 is not used — see <a href="install-guide.html#no-clickhouse">install guide 2d</a>). They hold memory, and their networks hold subnets that the next install needs. Stop the
 services as well.</div>
 
@@ -232,7 +232,7 @@ individual call.</p>
 <tr><td><code>no provider configured</code></td><td>No provider set resolved. Set <code>EPAM_PROVIDER_SET</code>, or run from an install whose project config declares one.</td></tr>
 <tr><td><code>JIRA_CODELINE_ROOT: unbound variable</code></td><td>Export it, pointing at the directory holding the codelines.</td></tr>
 <tr><td><code>refusing to launch: the dependency manifest is not valid</code></td><td>The project's <code>dependency-check.json</code> failed review. The message names the issue; nothing was reset and nothing installed.</td></tr>
-<tr><td>Pre-flight <code>✗ langfuse: NOT serving</code></td><td>The stack is down or still starting. On a 2.0.80 install <code>pipeline-services.sh --start</code> also starts ClickHouse, which is not used: start postgres and redis, then the Langfuse server on its own (<a href="install-guide.html#no-clickhouse">install guide 2d</a>), and re-check.</td></tr>
+<tr><td>Pre-flight <code>✗ langfuse: NOT serving</code></td><td>The stack is down or still starting. On a 2.0.80 install (2.0.81 no longer has it) <code>pipeline-services.sh --start</code> also starts ClickHouse, which is not used: start postgres and redis, then the Langfuse server on its own (<a href="install-guide.html#no-clickhouse">install guide 2d</a>), and re-check.</td></tr>
 <tr><td>Pre-launch <code>✗ cache</code></td><td>The seeded codeline's cache lacks per-prompt entries, so those prompts would be rebuilt (paid). Carry the recorded run's entries into the cache; or, to accept a named few, launch with <code>--max-rebuild &lt;n&gt;</code>.</td></tr>
 <tr><td>Pre-launch <code>✗ seed</code></td><td>The seeded prompts or agent files are not the launched ticket's. Seed the codeline again (<a href="install-guide.html#seed">install guide 2d</a>).</td></tr>
 <tr><td>Pre-launch <code>✗ alone</code></td><td>Another process is working against the install. Let it finish, or stop it, then re-check.</td></tr>

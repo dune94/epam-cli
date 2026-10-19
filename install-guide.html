@@ -278,13 +278,13 @@ required), <code>python3</code>, and the declared stack's own runner.</p>
 
 <h3 id="shared">2d. The shared components and the Claude workflows (after the install)</h3>
 <p>The Claude workflows (<code>amsd-pipeline-workflow</code>) need the shared components (<code>amsd-pipeline-shared</code>) in the same install. Both are installed <strong>after</strong> the pipeline, into it:</p>
-<pre><code>npx amsd-pipeline --dest ~/amsd-pipeline --ref v2.0.80
+<pre><code>npx amsd-pipeline --dest ~/amsd-pipeline --ref v2.0.81
 npx amsd-pipeline-shared@0.4.5 install --into ~/amsd-pipeline
 npx amsd-pipeline-shared@0.4.5 verify  --into ~/amsd-pipeline
 npx amsd-pipeline-workflow@0.1.8 install --into ~/amsd-pipeline</code></pre>
 <ul>
 <li><code>amsd-pipeline-shared</code> replaces a file only when the install holds the released copy, or a copy an earlier version of it laid down; anything else is refused, with the list, before a byte is written. The replaced copies are kept, and <code>npx amsd-pipeline-shared revert --into ~/amsd-pipeline</code> puts the released bytes back exactly.</li>
-<li>It carries: the model-call gateway fix (backlog B56: a failed <code>claude</code> / <code>codemie-claude</code> call is retried, climbs the agent's ladder and records its self-heal episode), the Writer reviewer's failed-call handling, agent-to-agent messages, the <strong>shared pre-launch</strong> that every launch runs before any model call (see the <a href="execution-guide.html#prelaunch">execution guide</a>), codeline discovery's rule that a repository's reason describes the repository and not the work, and the prices of Claude Sonnet 5 and Opus 5.5.</li>
+<li>It carries: the model-call gateway fix (backlog B56: a failed <code>claude</code> / <code>codemie-claude</code> call is retried, climbs the agent's ladder and records its self-heal episode), the Writer reviewer's failed-call handling, agent-to-agent messages, the <strong>shared pre-launch</strong> that every launch runs before any model call (see the <a href="execution-guide.html#prelaunch">execution guide</a>), codeline discovery's rule that a repository's reason describes the repository and not the work, and the prices of Claude Sonnet 5, Opus 5.5 and Haiku 4.5.</li>
 <li>Re-running <code>npx amsd-pipeline --dest</code> over the install puts the released copies back: install <code>amsd-pipeline-shared</code> again after it, and check with <code>verify</code>.</li>
 <li><code>amsd-pipeline-workflow install</code> writes only <code>~/amsd-pipeline/claude-workflows/</code>, and with <code>--codeline-cache &lt;dir&gt;</code> the codeline cache entries that folder holds.</li>
 </ul>
@@ -294,7 +294,7 @@ npx amsd-pipeline-workflow@0.1.8 install --into ~/amsd-pipeline</code></pre>
   bash -c '. ~/amsd-pipeline/orchestrations/scripts/lib/prompt-variant.sh; codeline_minted_restore &lt;codeline&gt;'</code></pre>
 <p>The codeline's cache comes from a recorded run (<code>amsd-pipeline-workflow install --into … --codeline-cache &lt;dir&gt;</code>) and carries both layers: the prompt set and the per-prompt entries the prompt builder reuses one by one. The pre-launch checks both, and that the seeded files are the launched ticket's.</p>
 <h4 id="no-clickhouse">ClickHouse is not used</h4>
-<p>Langfuse runs on postgres and redis only. ClickHouse is not started. The 2.0.80 compose files still declare it (its removal is not yet released), so on a 2.0.80 install <code>pipeline-services.sh --start</code> and <code>docker compose up</code> on the observability stack start it again — restart the Langfuse server on its own instead.</p>
+<p>Langfuse runs on postgres and redis only. From 2.0.81 the compose files, the installer and <code>pipeline-services.sh</code> no longer declare or start ClickHouse. A 2.0.80 install still declares it, and <code>pipeline-services.sh --start</code> or <code>docker compose up</code> on its observability stack starts it again: install 2.0.81, or on 2.0.80 start postgres and redis, then the Langfuse server on its own.</p>
 
 <h2 id="docker">3. Docker or Podman — no Docker Desktop license needed</h2>
 <p><code>install.sh</code> discovers whichever is on <code>PATH</code> — Docker first, Podman as a

@@ -276,7 +276,7 @@ The Claude workflows (`amsd-pipeline-workflow`) need the shared components (`ams
 install. Both are installed **after** the pipeline, into it:
 
 ```bash
-npx amsd-pipeline --dest ~/amsd-pipeline --ref v2.0.80
+npx amsd-pipeline --dest ~/amsd-pipeline --ref v2.0.81
 npx amsd-pipeline-shared@0.4.5 install --into ~/amsd-pipeline
 npx amsd-pipeline-shared@0.4.5 verify  --into ~/amsd-pipeline
 npx amsd-pipeline-workflow@0.1.8 install --into ~/amsd-pipeline
@@ -288,7 +288,7 @@ npx amsd-pipeline-workflow@0.1.8 install --into ~/amsd-pipeline
 - It carries: the model-call gateway fix (backlog B56: a failed `claude` / `codemie-claude` call is retried, climbs the
   agent's ladder and records its self-heal episode), the Writer reviewer's failed-call handling, agent-to-agent messages,
   the **shared pre-launch** that every launch runs before any model call (see the execution guide), codeline discovery's
-  rule that a repository's reason describes the repository and not the work, and the prices of Claude Sonnet 5 and Opus 5.5.
+  rule that a repository's reason describes the repository and not the work, and the prices of Claude Sonnet 5, Opus 5.5 and Haiku 4.5.
 - Re-running `npx amsd-pipeline --dest` over the install (the update path above) puts the released copies back: install
   `amsd-pipeline-shared` again after it, and check with `verify`.
 - `amsd-pipeline-workflow install` writes only `~/amsd-pipeline/claude-workflows/`, and with `--codeline-cache <dir>` the
@@ -310,9 +310,10 @@ checks both, and that the seeded files are the launched ticket's.
 
 #### ClickHouse is not used
 
-Langfuse runs on postgres and redis only. ClickHouse is not started. The 2.0.80 compose files still declare it (its
-removal is not yet released), so on a 2.0.80 install `pipeline-services.sh --start` and `docker compose up` on the
-observability stack start it again — restart the Langfuse server on its own instead.
+Langfuse runs on postgres and redis only. From 2.0.81 the compose files, the installer and `pipeline-services.sh` no
+longer declare or start ClickHouse. A 2.0.80 install still declares it, and `pipeline-services.sh --start` or
+`docker compose up` on its observability stack starts it again: install 2.0.81, or on 2.0.80 start postgres and redis,
+then the Langfuse server on its own.
 
 ## Quick Start
 

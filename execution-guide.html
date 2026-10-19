@@ -114,6 +114,29 @@ three things that the installer does not supply for you:</p>
 <div class="warn"><strong>Check before spending.</strong> <code>--dry-run</code> resolves the
 ticket, the project and the stack, and reports what is missing, without making a model call.</div>
 
+<h3 id="prelaunch">The pre-launch — what every launch checks first</h3>
+<p>With the shared components installed (<a href="install-guide.html#shared">install guide 2d</a>), every launch runs the
+shared pre-launch before any model call: the bash launchers through <code>require_preflight</code> (after the pipeline's
+own pre-flight), the Claude workflows from their launch. Any red stops the launch; nothing is spent. The checks:</p>
+<table>
+<tr><th>Check</th><th>Green when</th></tr>
+<tr><td>preflight</td><td>the pipeline's own pre-flight passes, unchanged (runner, PRD, ladders, dashboards, self-heal routing, project readiness)</td></tr>
+<tr><td>langfuse</td><td>Langfuse answers, and a launch trace is written and read back under the run's session id</td></tr>
+<tr><td>seed</td><td>every seeded prompt and agent file is byte-identical to a recorded run of the launched ticket, and none names another ticket</td></tr>
+<tr><td>cache</td><td>the seeded codeline's cache has its prompt set, agent files, completion marker and per-prompt entries; prompts without an entry are named and are at most the launch's <code>--max-rebuild</code> (0 when unstated)</td></tr>
+<tr><td>cost</td><td>the ledger records a priced call, and every model on the active ladders has a price</td></tr>
+<tr><td>alone</td><td>nothing else is working against the install (its own registered services excepted)</td></tr>
+<tr><td>memory</td><td>available memory, less 3 GB kept for the host, covers the run</td></tr>
+<tr><td>no-timeout</td><td>no time limit above the launch can cut an agent off</td></tr>
+<tr><td>checklist</td><td>the 12-item run checklist has no red item (items decided later in the run are "not yet")</td></tr>
+</table>
+<p>The report is <code>&lt;run&gt;/prelaunch-leg-1/prelaunch.json</code>. To run it on its own:</p>
+<pre><code>npx amsd-pipeline-shared prelaunch --install &lt;install&gt; --project &lt;project&gt; --run-id &lt;id&gt; --out &lt;dir&gt; \
+  [--ticket &lt;KEY&gt; --runs &lt;a recorded run's runs dir&gt;] [--codeline &lt;codeline&gt;] [--max-rebuild &lt;n&gt;] [--prd &lt;file&gt;]</code></pre>
+<div class="warn"><strong>Right before launching, look at the machine.</strong> The memory check reads one moment. If
+another memory-heavy job is running or about to start — another pipeline, a flow, a <code>claude -p</code>, a test suite
+or a build — wait for it to finish.</div>
+
 <h2 id="run">2. Run a ticket</h2>
 <pre><code>cd &lt;install&gt;
 
@@ -190,8 +213,8 @@ pkill -f tier3-.*-run.sh ; pkill -f run-agent-orchestration.sh
 # stop this install's services
 bash orchestrations-installer/pipeline-services.sh --stop --dest &lt;install&gt;</code></pre>
 <div class="warn"><strong>Killing the run is not the whole job.</strong> The observability and
-launch stacks keep running — postgres, clickhouse, langfuse, grafana, the dashboards, the launch
-UI. They hold memory, and their networks hold subnets that the next install needs. Stop the
+launch stacks keep running — postgres, langfuse, grafana, the dashboards, the launch UI (and, on a 2.0.80 install, ClickHouse, which
+is not used — see <a href="install-guide.html#no-clickhouse">install guide 2d</a>). They hold memory, and their networks hold subnets that the next install needs. Stop the
 services as well.</div>
 
 <h2 id="cost">7. What a run cost</h2>
@@ -209,7 +232,11 @@ individual call.</p>
 <tr><td><code>no provider configured</code></td><td>No provider set resolved. Set <code>EPAM_PROVIDER_SET</code>, or run from an install whose project config declares one.</td></tr>
 <tr><td><code>JIRA_CODELINE_ROOT: unbound variable</code></td><td>Export it, pointing at the directory holding the codelines.</td></tr>
 <tr><td><code>refusing to launch: the dependency manifest is not valid</code></td><td>The project's <code>dependency-check.json</code> failed review. The message names the issue; nothing was reset and nothing installed.</td></tr>
-<tr><td>Pre-flight <code>✗ langfuse: NOT serving</code></td><td>The stack is down or still starting. <code>pipeline-services.sh --start</code>, then re-check.</td></tr>
+<tr><td>Pre-flight <code>✗ langfuse: NOT serving</code></td><td>The stack is down or still starting. On a 2.0.80 install <code>pipeline-services.sh --start</code> also starts ClickHouse, which is not used: start postgres and redis, then the Langfuse server on its own (<a href="install-guide.html#no-clickhouse">install guide 2d</a>), and re-check.</td></tr>
+<tr><td>Pre-launch <code>✗ cache</code></td><td>The seeded codeline's cache lacks per-prompt entries, so those prompts would be rebuilt (paid). Carry the recorded run's entries into the cache; or, to accept a named few, launch with <code>--max-rebuild &lt;n&gt;</code>.</td></tr>
+<tr><td>Pre-launch <code>✗ seed</code></td><td>The seeded prompts or agent files are not the launched ticket's. Seed the codeline again (<a href="install-guide.html#seed">install guide 2d</a>).</td></tr>
+<tr><td>Pre-launch <code>✗ alone</code></td><td>Another process is working against the install. Let it finish, or stop it, then re-check.</td></tr>
+<tr><td>Pre-launch <code>✗ cost</code></td><td>A model on the active ladders has no price in <code>config/model-pricing.json</code>. Add the vendor's price (the file says where it came from).</td></tr>
 </table>
 
 <footer>

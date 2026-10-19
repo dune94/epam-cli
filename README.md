@@ -277,20 +277,42 @@ install. Both are installed **after** the pipeline, into it:
 
 ```bash
 npx amsd-pipeline --dest ~/amsd-pipeline --ref v2.0.80
-npx amsd-pipeline-shared@0.2.0 install --into ~/amsd-pipeline
-npx amsd-pipeline-shared@0.2.0 verify  --into ~/amsd-pipeline
-npx amsd-pipeline-workflow@0.1.5 install --into ~/amsd-pipeline
+npx amsd-pipeline-shared@0.4.4 install --into ~/amsd-pipeline
+npx amsd-pipeline-shared@0.4.4 verify  --into ~/amsd-pipeline
+npx amsd-pipeline-workflow@0.1.7 install --into ~/amsd-pipeline
 ```
 
 - `amsd-pipeline-shared` replaces a file only when the install holds the released copy, or a copy an earlier version of
   it laid down; anything else is refused, with the list, before a byte is written. The replaced copies are kept, and
   `npx amsd-pipeline-shared revert --into ~/amsd-pipeline` puts the released bytes back exactly.
-- It carries the model-call gateway fix (backlog B56: a failed `claude` / `codemie-claude` call is retried, climbs the
-  agent's ladder and records its self-heal episode, instead of returning as an empty success), the Writer reviewer's
-  failed-call handling, and agent-to-agent messages.
+- It carries: the model-call gateway fix (backlog B56: a failed `claude` / `codemie-claude` call is retried, climbs the
+  agent's ladder and records its self-heal episode), the Writer reviewer's failed-call handling, agent-to-agent messages,
+  the **shared pre-launch** that every launch runs before any model call (see the execution guide), codeline discovery's
+  rule that a repository's reason describes the repository and not the work, and the prices of Claude Sonnet 5 and Opus 5.5.
 - Re-running `npx amsd-pipeline --dest` over the install (the update path above) puts the released copies back: install
   `amsd-pipeline-shared` again after it, and check with `verify`.
-- `amsd-pipeline-workflow install` writes only `~/amsd-pipeline/claude-workflows/`.
+- `amsd-pipeline-workflow install` writes only `~/amsd-pipeline/claude-workflows/`, and with `--codeline-cache <dir>` the
+  codeline cache entries that folder holds.
+
+#### Seed the codeline's agents and prompts (after the install)
+
+A fresh install's project prompts are not the ticket's. Before a launch, put the codeline the ticket's work belongs to
+in place with the pipeline's own restore — its recorded agents and its reviewed prompt set:
+
+```bash
+EPAM_PROJECT_CONFIG_DIR=~/amsd-pipeline/orchestrations/projects/<project> \
+  bash -c '. ~/amsd-pipeline/orchestrations/scripts/lib/prompt-variant.sh; codeline_minted_restore <codeline>'
+```
+
+The codeline's cache comes from a recorded run (`amsd-pipeline-workflow install --into … --codeline-cache <dir>`) and
+carries both layers: the prompt set and the per-prompt entries the prompt builder reuses one by one. The pre-launch
+checks both, and that the seeded files are the launched ticket's.
+
+#### ClickHouse is not used
+
+Langfuse runs on postgres and redis only. ClickHouse is not started. The 2.0.80 compose files still declare it (its
+removal is not yet released), so on a 2.0.80 install `pipeline-services.sh --start` and `docker compose up` on the
+observability stack start it again — restart the Langfuse server on its own instead.
 
 ## Quick Start
 

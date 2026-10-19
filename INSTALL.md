@@ -166,7 +166,7 @@ install. Both are installed **after** the pipeline, into it:
 npx amsd-pipeline --dest ~/amsd-pipeline --ref v2.0.80
 npx amsd-pipeline-shared@0.4.4 install --into ~/amsd-pipeline
 npx amsd-pipeline-shared@0.4.4 verify  --into ~/amsd-pipeline
-npx amsd-pipeline-workflow@0.1.7 install --into ~/amsd-pipeline
+npx amsd-pipeline-workflow@0.1.8 install --into ~/amsd-pipeline
 ```
 
 - `amsd-pipeline-shared` replaces a file only when the install holds the released copy, or a copy an earlier version of

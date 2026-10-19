@@ -281,7 +281,7 @@ required), <code>python3</code>, and the declared stack's own runner.</p>
 <pre><code>npx amsd-pipeline --dest ~/amsd-pipeline --ref v2.0.80
 npx amsd-pipeline-shared@0.4.4 install --into ~/amsd-pipeline
 npx amsd-pipeline-shared@0.4.4 verify  --into ~/amsd-pipeline
-npx amsd-pipeline-workflow@0.1.7 install --into ~/amsd-pipeline</code></pre>
+npx amsd-pipeline-workflow@0.1.8 install --into ~/amsd-pipeline</code></pre>
 <ul>
 <li><code>amsd-pipeline-shared</code> replaces a file only when the install holds the released copy, or a copy an earlier version of it laid down; anything else is refused, with the list, before a byte is written. The replaced copies are kept, and <code>npx amsd-pipeline-shared revert --into ~/amsd-pipeline</code> puts the released bytes back exactly.</li>
 <li>It carries: the model-call gateway fix (backlog B56: a failed <code>claude</code> / <code>codemie-claude</code> call is retried, climbs the agent's ladder and records its self-heal episode), the Writer reviewer's failed-call handling, agent-to-agent messages, the <strong>shared pre-launch</strong> that every launch runs before any model call (see the <a href="execution-guide.html#prelaunch">execution guide</a>), codeline discovery's rule that a repository's reason describes the repository and not the work, and the prices of Claude Sonnet 5 and Opus 5.5.</li>

@@ -279,8 +279,8 @@ required), <code>python3</code>, and the declared stack's own runner.</p>
 <h3 id="shared">2d. The shared components and the Claude workflows (after the install)</h3>
 <p>The Claude workflows (<code>amsd-pipeline-workflow</code>) need the shared components (<code>amsd-pipeline-shared</code>) in the same install. Both are installed <strong>after</strong> the pipeline, into it:</p>
 <pre><code>npx amsd-pipeline --dest ~/amsd-pipeline --ref v2.0.80
-npx amsd-pipeline-shared@0.4.4 install --into ~/amsd-pipeline
-npx amsd-pipeline-shared@0.4.4 verify  --into ~/amsd-pipeline
+npx amsd-pipeline-shared@0.4.5 install --into ~/amsd-pipeline
+npx amsd-pipeline-shared@0.4.5 verify  --into ~/amsd-pipeline
 npx amsd-pipeline-workflow@0.1.8 install --into ~/amsd-pipeline</code></pre>
 <ul>
 <li><code>amsd-pipeline-shared</code> replaces a file only when the install holds the released copy, or a copy an earlier version of it laid down; anything else is refused, with the list, before a byte is written. The replaced copies are kept, and <code>npx amsd-pipeline-shared revert --into ~/amsd-pipeline</code> puts the released bytes back exactly.</li>

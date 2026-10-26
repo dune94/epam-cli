@@ -39,7 +39,7 @@ cp "$L/codeline-discovery.json" "$LOG_DIR/"
 const path = require('path'), fs = require('fs');
 const [scripts, repo, cfg, discFile, id, work] = process.argv.slice(2);
 const spec = require(path.join(scripts, 'spec-mode-runner.js'));
-const { buildProjectPrompts } = require(path.join(scripts, 'lib/project-prompt-builder.js'));
+const { buildProjectPrompts, useCaseContext } = require(path.join(scripts, 'lib/project-prompt-builder.js'));
 const { promptBuildCalls } = require(path.join(scripts, 'lib/prompt-build-calls.js'));
 const { buildCodelineContext } = require(path.join(scripts, 'lib/codeline-context.js'));
 const { readOnlyToolGrant } = require(path.join(scripts, 'lib/agent-tools.js'));
@@ -68,7 +68,10 @@ const lines = [];
     const built = await buildProjectPrompts({
       templatesDir: path.join(repo, promptsLib.TEMPLATE_DIR_REL), bootstrapFile: path.join(work, 'bootstrap.json'),
       registryFile: path.join(work, 'registry.json'), projectConfigDir: cfg, mode: 'generate', attempts: 5,
-      projectContext: `Project: metrolinx\nTickets in scope: ${stories.map((t) => `${t.jiraKey || t.id}: ${t.title || ''}`).join(' | ')}`,
+      // THE PROJECT CONTEXT AS THE PIPELINE BUILDS IT (lib/project-prompt-builder.js useCaseContext: the kind of project, each codeline's state, tickets COUNTED and never
+      // named — operator 2026-10-24). This harness named the ticket and its title here (written 2026-10-09), so its generated prompts carried the
+      // ticket's subject by the harness's own hand (B103 proof, 2026-10-26: "toast notification behavior" in team-lead-review with clean facts).
+      projectContext: typeof useCaseContext === 'function' ? useCaseContext({ projectConfigDir: cfg, stories, codelines, env: process.env }) : `Project: metrolinx\nTickets reaching these codelines: ${stories.length}`,
       codelineContext, mintedRoles: '(none minted this run)', ...calls, log: (m) => lines.push(m),
     });
     console.log(`RESULT installed=${(built.generated || []).includes(id) ? 'yes' : 'NO'}`);

@@ -81,7 +81,7 @@ const withClaims = (list) => ({ ...base, body: `${base.body}\n\n# How this proje
 const vfile = path.join(process.env.LOG_DIR, 'prompt-review-verdicts.jsonl');
 const lastVerdict = () => { const l = fs.readFileSync(vfile, 'utf8').trim().split('\n').pop(); return JSON.parse(l).verdict; };
 const norm = (t) => String(t).toLowerCase().replace(/[^a-z0-9^@./]+/g, ' ').replace(/[.]+(\s|$)/g, ' ').trim();
-const quoted = (v) => (v.falseClaims || []).map((c) => norm(typeof c === 'string' ? c : c.claim || ''));
+const quoted = (v) => ((v && v.falseClaims) || []).map((c) => norm(typeof c === 'string' ? c : c.claim || ''));
 const struck = (v, claim) => { const k = norm(claim).split(' ').slice(-4).join(' '); return quoted(v).some((q) => q.includes(k)); };
 (async () => {
   let fp = 0, otherFindings = 0, caught = 0, missed = 0;

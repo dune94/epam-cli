@@ -20,7 +20,7 @@ P="$INSTALL/orchestrations/projects/metrolinx"; L="$INSTALL/orchestrations/logs"
 [ -f "$L/codeline-discovery.json" ] || { echo "RESULT setup=no discovery artefact at $L"; exit 0; }
 
 C="$W/project"; mkdir -p "$C/prompts"
-for f in config.env config.copilot.env llm-settings.json manifest.json plugins.json codeline-facts.json prd.json; do [ -e "$P/$f" ] && cp -a "$P/$f" "$C/"; done
+for f in config.env $(cd "$P" && ls config.*.env 2>/dev/null) llm-settings.json manifest.json plugins.json codeline-facts.json prd.json; do [ -e "$P/$f" ] && cp -a "$P/$f" "$C/"; done   # every set's config file: load_project_env loads config.<EPAM_PROVIDER_SET>.env
 # The project's own prompts as the run had them (its reviewer prompt among them) — all but the one under test.
 for f in "$P"/prompts/*.json; do [ "$(basename "$f" .json)" = "$ID" ] || cp -a "$f" "$C/prompts/"; done
 # GEN_FACTS: the codeline facts to generate from (default: the install's, as the last run left them).

@@ -16,7 +16,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; REPO_ROOT="$(cd "$HERE/../
 SCRIPT_DIR="$REPO_ROOT/orchestrations/scripts"; NODE="${NODE_BIN:-$(command -v node)}"
 P="$INSTALL/orchestrations/projects/metrolinx"; L="$INSTALL/orchestrations/logs"
 C="$W/project"; mkdir -p "$C"
-for f in config.env config.copilot.env llm-settings.json manifest.json plugins.json codeline-facts.json prd.json prompts; do [ -e "$P/$f" ] && cp -a "$P/$f" "$C/"; done
+for f in config.env $(cd "$P" && ls config.*.env 2>/dev/null) llm-settings.json manifest.json plugins.json codeline-facts.json prd.json prompts; do [ -e "$P/$f" ] && cp -a "$P/$f" "$C/"; done
 export EPAM_PROVIDER_SET="${LIVE_SET:-copilot}"   # LIVE_SET: the provider set under test (copilot when these harnesses were written, 2026-10-09; claude is the run set since 10-14)
 [ "$EPAM_PROVIDER_SET" = copilot ] && export COPILOT_GITHUB_TOKEN="$("$NODE" -e 'const s=require("fs").readFileSync(process.env.HOME+"/.copilot/config.json","utf8").split("\n").filter(l=>!/^\s*\/\//.test(l)).join("\n");process.stdout.write(JSON.parse(s).copilotTokens["https://github.com:dune94"]||"")')"
 # shellcheck source=/dev/null

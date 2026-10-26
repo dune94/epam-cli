@@ -25,7 +25,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; REPO_ROOT="$(cd "$HERE/../
 SCRIPT_DIR="$REPO_ROOT/orchestrations/scripts"; NODE="${NODE_BIN:-$(command -v node)}"
 INSTALL="${2:-${REMEDIATION_INSTALL:-$HOME/projects/tests/installs/amsd-2974-20260930T1455}}"
 P="$INSTALL/orchestrations/projects/metrolinx"; L="$INSTALL/orchestrations/logs/lanes/cxshared"
-CHK="$P/runs/20261010T043322Z/lanes/cxshared/checkpoint/prd.json"
+CHK="$P/runs/${LIVE_RUN_ID:-20261010T043322Z}/lanes/cxshared/checkpoint/prd.json"   # LIVE_RUN_ID: the run whose records the harness reads (run 9 by default; its install is gone 2026-10-24)
 OUT="$L/messages/outbox"; STORY=AMSD-2974
 for f in "$CHK" "$OUT/msg-1791696958849.json"; do [ -f "$f" ] || { echo "RESULT setup=missing $f"; exit 0; }; done
 _before=$(md5sum "$CHK" "$P"/kb/*.json* 2>/dev/null | md5sum | cut -c1-32)

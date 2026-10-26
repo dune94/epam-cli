@@ -26,8 +26,8 @@ for f in "$P"/prompts/*.json; do [ "$(basename "$f" .json)" = "$ID" ] || cp -a "
 # GEN_FACTS: the codeline facts to generate from (default: the install's, as the last run left them).
 [ -n "${GEN_FACTS:-}" ] && cp "$GEN_FACTS" "$C/codeline-facts.json" && echo "RESULT facts_from=$GEN_FACTS"
 _before=$(md5sum "$P/codeline-facts.json" "$P/prompts/$ID.json" 2>/dev/null | cut -c1-32 | tr '\n' ' ')
-export EPAM_PROVIDER_SET=copilot
-export COPILOT_GITHUB_TOKEN="$("$NODE" -e 'const s=require("fs").readFileSync(process.env.HOME+"/.copilot/config.json","utf8").split("\n").filter(l=>!/^\s*\/\//.test(l)).join("\n");process.stdout.write(JSON.parse(s).copilotTokens["https://github.com:dune94"]||"")')"
+export EPAM_PROVIDER_SET="${LIVE_SET:-copilot}"   # LIVE_SET: the provider set under test (copilot when these harnesses were written, 2026-10-09; claude is the run set since 10-14)
+[ "$EPAM_PROVIDER_SET" = copilot ] && export COPILOT_GITHUB_TOKEN="$("$NODE" -e 'const s=require("fs").readFileSync(process.env.HOME+"/.copilot/config.json","utf8").split("\n").filter(l=>!/^\s*\/\//.test(l)).join("\n");process.stdout.write(JSON.parse(s).copilotTokens["https://github.com:dune94"]||"")')"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/lib/env-file.sh"; load_project_env "$C" || { echo "RESULT setup=project env failed"; exit 0; }
 export EPAM_PROJECT_CONFIG_DIR="$C" LOG_DIR="$W/logs" ACTIVITY_FILE="$W/logs/agent-activity.jsonl" EPAM_AGENT_REPLY_LOG_DIR="$W/replies"
